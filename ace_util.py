@@ -9,6 +9,7 @@ import numpy as np
 import poselib
 import torch
 from scipy.spatial.transform import Rotation
+from tqdm import tqdm
 
 
 def get_pixel_grid(subsampling_factor):
@@ -37,13 +38,17 @@ def read_nvm_file(file_name, return_rgb=False):
     image2pose = {}
     image2name = {}
     unique_names = []
-    for i in range(nb_cameras):
+    for i in tqdm(range(nb_cameras), desc="Reading cameras"):
         cam_info = lines[3 + i]
-        img_name, info = cam_info.split("\t")
-        focal, qw, qx, qy, qz, tx, ty, tz, radial, _ = map(float, info.split(" "))
+        if "\t" in cam_info:
+            img_name, info = cam_info.split("\t")
+            focal, qw, qx, qy, qz, tx, ty, tz, radial, _ = map(float, info.split(" "))
+        else:
+            img_name, focal, qw, qx, qy, qz, tx, ty, tz, radial, _ = cam_info.split(" ")
+            focal, qw, qx, qy, qz, tx, ty, tz, radial = map(float, [focal, qw, qx, qy, qz, tx, ty, tz, radial])
         image2name[i] = img_name
-        # assert img_name not in unique_names
-        # unique_names.append(img_name)
+        assert img_name not in unique_names
+        unique_names.append(img_name)
         image2info[i] = [focal, radial]
         image2pose[i] = [qw, qx, qy, qz, tx, ty, tz]
     nb_points = int(lines[4 + nb_cameras])
@@ -51,7 +56,7 @@ def read_nvm_file(file_name, return_rgb=False):
     image2uvs = {}
     xyz_arr = np.zeros((nb_points, 3), np.float64)
     rgb_arr = np.zeros((nb_points, 3), np.uint8)
-    for j in range(nb_points):
+    for j in tqdm(range(nb_points), desc="Reading points"):
         point_info = lines[5 + nb_cameras + j].split(" ")
         x, y, z, r, g, b, nb_features = map(float, point_info[:7])
         xyz_arr[j] = [x, y, z]

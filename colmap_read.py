@@ -34,7 +34,7 @@ import collections
 import numpy as np
 import struct
 import argparse
-
+from tqdm import tqdm
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"]
@@ -137,7 +137,7 @@ def read_cameras_binary(path_to_model_file):
     cameras = {}
     with open(path_to_model_file, "rb") as fid:
         num_cameras = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_cameras):
+        for _ in tqdm(range(num_cameras), desc="Reading camera binary"):
             camera_properties = read_next_bytes(
                 fid, num_bytes=24, format_char_sequence="iiQQ"
             )
@@ -243,7 +243,7 @@ def read_images_binary(path_to_model_file):
     images = {}
     with open(path_to_model_file, "rb") as fid:
         num_reg_images = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_reg_images):
+        for _ in tqdm(range(num_reg_images), desc="Reading image binary"):
             binary_image_properties = read_next_bytes(
                 fid, num_bytes=64, format_char_sequence="idddddddi"
             )
@@ -376,7 +376,7 @@ def read_points3D_binary(path_to_model_file):
     points3D = {}
     with open(path_to_model_file, "rb") as fid:
         num_points = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_points):
+        for _ in tqdm(range(num_points), desc="Reading points3D binary"):
             binary_point_line_properties = read_next_bytes(
                 fid, num_bytes=43, format_char_sequence="QdddBBBd"
             )

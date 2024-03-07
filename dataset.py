@@ -19,6 +19,7 @@ from torchvision import transforms
 
 import ace_util
 import colmap_read
+import dd_utils
 from ace_network import Regressor
 from skimage.transform import rotate as ski_rotate
 from skimage.transform import resize as ski_resize
@@ -26,13 +27,6 @@ from os import listdir
 from os.path import isfile, join
 
 _logger = logging.getLogger(__name__)
-
-
-def augment_mask(mask, angle, shape):
-    mask = ski_resize(mask, shape, order=0)
-    if angle != 0:
-        mask = ski_rotate(mask, angle, order=0, mode="constant", cval=0)
-    return mask
 
 
 class CamLocDataset(Dataset):
@@ -267,29 +261,6 @@ class CamLocDataset(Dataset):
         image = torch.from_numpy(image).permute(2, 0, 1).float()
         return image
 
-    def run_feature_detection(self):
-        from hloc import extract_features
-
-        # feature_conf = extract_features.confs["sift"]
-        feature_conf = {
-            "output": "feats-sift",
-            "model": {"name": "dog"},
-            "preprocessing": {
-                "grayscale": True,
-                # "resize_max": 1600
-            },
-        }
-        images = Path("/".join(str(self.rgb_files[0]).split("/")[:-1]))
-        ds_name = str(self.root_dir).split("/")[-2]
-        outputs = Path(f"output/{ds_name}")
-        feature_path = extract_features.main(feature_conf, images, outputs)
-        self.image_name2uv = {}
-        with h5py.File(feature_path, "r") as f:
-            for name in f:
-                uv = np.array(f[name]["keypoints"])
-                # print(np.array(f[name]["descriptors"]).shape)
-                self.image_name2uv[name] = uv
-
     def _cluster(self, num_clusters):
         """
         Clusters the dataset using hierarchical kMeans.
@@ -454,64 +425,6 @@ class CamLocDataset(Dataset):
         pose = ace_util.return_pose_mat(qvec, tvec)
         pose = torch.from_numpy(pose).float()
         return pose
-
-    def _get_single_item_for_solver(self, idx, image_height):
-        # Apply index indirection.
-        idx = self.valid_file_indices[idx]
-
-        # Load image.
-        image = self._load_image(idx)
-
-        # Load intrinsics.
-        k = np.loadtxt(self.calibration_files[idx])
-        if k.size == 1:
-            focal_length = float(k)
-            centre_point = None
-        elif k.shape == (3, 3):
-            k = k.tolist()
-            focal_length = [k[0][0], k[1][1]]
-            centre_point = [k[0][2], k[1][2]]
-        else:
-            raise Exception(
-                "Calibration file must contain either a 3x3 camera \
-                intrinsics matrix or a single float giving the focal length \
-                of the camera."
-            )
-
-        # The image will be scaled to image_height, adjust focal length as well.
-        f_scale_factor = image_height / image.shape[0]
-        if centre_point:
-            centre_point = [c * f_scale_factor for c in centre_point]
-            focal_length = [f * f_scale_factor for f in focal_length]
-        else:
-            focal_length *= f_scale_factor
-
-        # Load pose.
-        pose = self._load_pose(idx)
-
-        # Invert the pose.
-        pose_inv = pose.inverse()
-
-        # Create the intrinsics matrix.
-        intrinsics = torch.eye(3)
-
-        # Hardcode the principal point to the centre of the image unless otherwise specified.
-        if centre_point:
-            intrinsics[0, 0] = focal_length[0]
-            intrinsics[1, 1] = focal_length[1]
-            intrinsics[0, 2] = centre_point[0]
-            intrinsics[1, 2] = centre_point[1]
-        else:
-            intrinsics[0, 0] = focal_length
-            intrinsics[1, 1] = focal_length
-            intrinsics[0, 2] = image.shape[2] / 2
-            intrinsics[1, 2] = image.shape[1] / 2
-
-        return (
-            pose_inv,
-            intrinsics,
-            idx,
-        )
 
     def _get_single_item(self, idx, image_height):
         # Apply index indirection.
@@ -686,50 +599,32 @@ class CamLocDataset(Dataset):
             return self._get_single_item(idx, image_height)
 
 
-class CamLocDatasetAug(Dataset):
-    """Camera localization dataset.
+def read_intrinsic(file_name):
+    with open(file_name) as file:
+        lines = [line.rstrip() for line in file]
+    name2params = {}
+    for line in lines:
+        img_name, cam_type, w, h, f, cx, cy, k = line.split(" ")
+        f, cx, cy, k = map(float, [f, cx, cy, k])
+        w, h = map(int, [w, h])
+        name2params[img_name] = [cam_type, w, h, f, cx, cy, k]
+    return name2params
 
-    Access to image, calibration and ground truth data given a dataset directory.
-    """
 
-    def __init__(
-        self,
-        root_dir,
-        ds_name,
-        sfm_model_dir=None,
-        mode=0,
-        sparse=False,
-        augment=False,
-        aug_black_white=0.1,
-        aug_color=0.3,
-        image_height=480,
-        use_half=True,
-        num_clusters=None,
-        cluster_idx=None,
-    ):
-        self.using_sfm_poses = True
-        self.sfm_model_dir = sfm_model_dir
+class AachenDataset(Dataset):
+    def __init__(self, ds_dir="../aachen/aachen_v1_1", train=True):
+        self.ds_type = "aachen"
+        self.ds_dir = ds_dir
+        self.model_dir = f"{ds_dir}/3D-models/aachen_v_1_1/aachen_v_1_1.nvm"
+        self.sfm_model_dir = f"{ds_dir}/3D-models/aachen_v_1_1"
+        self.images_dir = Path("../aachen/database_and_query_images/images_upright")
+        self.images_dir2 = Path(f"{self.ds_dir}/images_upright")
 
-        self.use_half = use_half
+        self.train = train
+        self.day_intrinsic_file = "../aachen/day_time_queries_with_intrinsics.txt"
+        self.night_intrinsic_file = f"{self.ds_dir}/queries/night_time_queries_with_intrinsics.txt"
+        if self.train:
 
-        self.init = mode == 1
-        self.sparse = sparse
-        self.eye = mode == 2
-
-        self.image_height = image_height
-
-        self.augment = augment
-        self.aug_black_white = aug_black_white
-        self.aug_color = aug_color
-
-        self.num_clusters = num_clusters
-        self.cluster_idx = cluster_idx
-
-        self.using_sfm_poses = False
-        self.image_name2id = None
-        if self.sfm_model_dir is not None:
-            self.using_sfm_poses = True
-            _logger.info(f"Reading SFM poses from {self.sfm_model_dir}")
             self.recon_images = colmap_read.read_images_binary(
                 f"{self.sfm_model_dir}/images.bin"
             )
@@ -740,283 +635,126 @@ class CamLocDatasetAug(Dataset):
                 f"{self.sfm_model_dir}/points3D.bin"
             )
             self.image_name2id = {}
-            root_dir_str = str(root_dir)
             for image_id, image in self.recon_images.items():
-                if "test" in image.name and "test" not in root_dir_str:
-                    continue
-                elif "train" in image.name and "train" not in root_dir_str:
-                    continue
-                if "wayspots" in str(root_dir):
-                    self.image_name2id[image.name.split("/")[-1]] = image_id
-                if "7scenes" in str(root_dir):
-                    self.image_name2id[image.name.replace("/", "-")] = image_id
+                self.image_name2id[image.name] = image_id
+            self.image_id2points = {}
+            for img_id in self.recon_images:
+                pid_arr = self.recon_images[img_id].point3D_ids
+                pid_arr = pid_arr[pid_arr >= 0]
+                xyz_arr = np.zeros((pid_arr.shape[0], 3))
+                for idx, pid in enumerate(pid_arr):
+                    xyz_arr[idx] = self.recon_points[pid].xyz
+                self.image_id2points[img_id] = xyz_arr
+            # self.im_names = list(self.image_name2id.keys())
+            self.img_ids = list(self.image_name2id.values())
+        else:
+            name2params1 = read_intrinsic(self.day_intrinsic_file)
+            name2params2 = read_intrinsic(self.night_intrinsic_file)
+            self.name2params = {**name2params1, **name2params2}
+            self.img_ids = list(self.name2params.keys())
+            "/home/n11373598/work/aachen/database_and_query_images/images_upright/query/night"
+        return
 
-        if self.num_clusters is not None:
-            if self.num_clusters < 1:
-                raise ValueError("num_clusters must be at least 1")
+    def _load_image(self, img_id):
+        name = self.recon_images[img_id].name
+        if "db" in name:
+            name2 = str(self.images_dir / name)
+        elif "sequences" in name:
+            name2 = str(self.images_dir2 / name)
+        else:
+            name2 = None
 
-            if self.cluster_idx is None:
-                raise ValueError(
-                    "cluster_idx needs to be specified when num_clusters is set"
-                )
-
-            if self.cluster_idx < 0 or self.cluster_idx >= self.num_clusters:
-                raise ValueError(
-                    f"cluster_idx needs to be between 0 and {self.num_clusters - 1}"
-                )
-
-        # Setup data paths.
-        self.root_dir = Path(root_dir)
-        self.gt_poses = np.load(f"output/{ds_name}/aug_gt_poses.npy")
-        self.intrinsics = np.load(f"output/{ds_name}/aug_intrinsics.npy")
-
-        # Find all images. The assumption is that it only contains image files.
-        self.rgb_files = [f for f in listdir(root_dir) if isfile(join(root_dir, f))]
-
-        # Image transformations. Excluding scale since that can vary batch-by-batch.
-        self.image_transform = transforms.Compose(
-            [
-                # transforms.Grayscale(),
-                transforms.ColorJitter(
-                    brightness=self.aug_black_white, contrast=self.aug_black_white
-                ),
-                # saturation=self.aug_color, hue=self.aug_color),  # Disable colour augmentation.
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[
-                        0.4
-                    ],  # statistics calculated over 7scenes training set, should generalize fairly well
-                    std=[0.25],
-                ),
-            ]
-        )
-
-        # We use this to iterate over all frames. If clustering is enabled this is used to filter them.
-        self.valid_file_indices = np.arange(len(self.rgb_files))
-
-        # If clustering is enabled.
-        if self.num_clusters is not None:
-            _logger.info(
-                f"Clustering the {len(self.rgb_files)} into {num_clusters} clusters."
-            )
-            _, _, cluster_labels = self._cluster(num_clusters)
-
-            self.valid_file_indices = np.flatnonzero(cluster_labels == cluster_idx)
-            _logger.info(
-                f"After clustering, chosen cluster: {cluster_idx}, Using {len(self.valid_file_indices)} images."
-            )
-
-        # Calculate mean camera center (using the valid frames only).
-        self.root_dir = str(root_dir)
-        self.image_name2uv = None
-
-    def _cluster(self, num_clusters):
-        """
-        Clusters the dataset using hierarchical kMeans.
-        Initialization:
-            Put all images in one cluster.
-        Interate:
-            Pick largest cluster.
-            Split with kMeans and k=2.
-            Input for kMeans is the 3D median scene coordiante per image.
-        Terminate:
-            When number of target clusters has been reached.
-        Returns:
-            cam_centers: For each cluster the mean (not median) scene coordinate
-            labels: For each image the cluster ID
-        """
-        num_images = len(self.pose_files)
-        _logger.info(
-            f"Clustering a dataset with {num_images} frames into {num_clusters} clusters."
-        )
-
-        # A tensor holding all camera centers used for clustering.
-        cam_centers = np.zeros((num_images, 3), dtype=np.float32)
-        for i in range(num_images):
-            pose = self._load_pose(i)
-            cam_centers[i] = pose[:3, 3]
-
-        # Setup kMEans
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
-        flags = cv2.KMEANS_PP_CENTERS
-
-        # Label of next cluster.
-        label_counter = 0
-
-        # Initialise list of clusters with all images.
-        clusters = []
-        clusters.append((cam_centers, label_counter, np.zeros(3)))
-
-        # All images belong to cluster 0.
-        labels = np.zeros(num_images)
-
-        # iterate kMeans with k=2
-        while len(clusters) < num_clusters:
-            # Select largest cluster (list is sorted).
-            cur_cluster = clusters.pop(0)
-            label_counter += 1
-
-            # Split cluster.
-            cur_error, cur_labels, cur_centroids = cv2.kmeans(
-                cur_cluster[0], 2, None, criteria, 10, flags
-            )
-
-            # Update cluster list.
-            cur_mask = (cur_labels == 0)[:, 0]
-            cur_cam_centers0 = cur_cluster[0][cur_mask, :]
-            clusters.append((cur_cam_centers0, cur_cluster[1], cur_centroids[0]))
-
-            cur_mask = (cur_labels == 1)[:, 0]
-            cur_cam_centers1 = cur_cluster[0][cur_mask, :]
-            clusters.append((cur_cam_centers1, label_counter, cur_centroids[1]))
-
-            cluster_labels = labels[labels == cur_cluster[1]]
-            cluster_labels[cur_mask] = label_counter
-            labels[labels == cur_cluster[1]] = cluster_labels
-
-            # Sort updated list.
-            clusters = sorted(
-                clusters, key=lambda cluster: cluster[0].shape[0], reverse=True
-            )
-
-        # clusters are sorted but cluster indices are random, remap cluster indices to sorted indices
-        remapped_labels = np.zeros(num_images)
-        remapped_clusters = []
-
-        for cluster_idx_new, cluster in enumerate(clusters):
-            cluster_idx_old = cluster[1]
-            remapped_labels[labels == cluster_idx_old] = cluster_idx_new
-            remapped_clusters.append((cluster[0], cluster_idx_new, cluster[2]))
-
-        labels = remapped_labels
-        clusters = remapped_clusters
-
-        cluster_centers = np.zeros((num_clusters, 3))
-        cluster_sizes = np.zeros((num_clusters, 1))
-
-        for cluster in clusters:
-            # Compute distance of each cam to the center of the cluster.
-            cam_num = cluster[0].shape[0]
-            cam_data = np.zeros((cam_num, 3))
-            cam_count = 0
-
-            # First compute the center of the cluster (mean).
-            for i, cam_center in enumerate(cam_centers):
-                if labels[i] == cluster[1]:
-                    cam_data[cam_count] = cam_center
-                    cam_count += 1
-
-            cluster_centers[cluster[1]] = cam_data.mean(0)
-
-            # Compute the distance of each cam from the cluster center. Then average and square.
-            cam_dists = np.broadcast_to(
-                cluster_centers[cluster[1]][np.newaxis, :], (cam_num, 3)
-            )
-            cam_dists = cam_data - cam_dists
-            cam_dists = np.linalg.norm(cam_dists, axis=1)
-            cam_dists = cam_dists**2
-
-            cluster_sizes[cluster[1]] = cam_dists.mean()
-
-            _logger.info(
-                "Cluster %i: %.1fm, %.1fm, %.1fm, images: %i, mean squared dist: %f"
-                % (
-                    cluster[1],
-                    cluster_centers[cluster[1]][0],
-                    cluster_centers[cluster[1]][1],
-                    cluster_centers[cluster[1]][2],
-                    cluster[0].shape[0],
-                    cluster_sizes[cluster[1]],
-                )
-            )
-
-        _logger.info("Clustering done.")
-
-        return cluster_centers, cluster_sizes, labels
-
-    def _load_image(self, name):
-        image = io.imread(name)
+        image = io.imread(name2)
 
         if len(image.shape) < 3:
             # Convert to RGB if needed.
             image = color.gray2rgb(image)
 
-        return image
-
-    def __getitem__(self, idx):
-        if not isinstance(idx, int):
-            assert len(idx) == 1
-            idx = idx[0]
-
-        img_name = self.rgb_files[idx]
-        img_id = int(re.match(r"im(\d+)\.png", img_name).group(1))
-
-        # Load image.
-        image = self._load_image(f"{self.root_dir}/{img_name}")
-
-        image_ori = np.copy(np.array(image))
-
-        # Create mask of the same size as the resized image (it's a PIL image at this point).
-        image_mask = torch.ones((1, image.shape[0], image.shape[1]))
-
-        # Apply remaining transforms.
-        image = self.image_transform(Image.fromarray(image))
-
-        # Load pose.
-        pose = self.gt_poses[img_id]
-        pose = torch.from_numpy(pose).float()
-
-        # Convert to half if needed.
-        if self.use_half and torch.cuda.is_available():
-            image = image.half()
-
-        # Binarize the mask.
-        image_mask = image_mask > 0
-
-        # Invert the pose.
-        pose_inv = pose.inverse()
-
-        # Create the intrinsics matrix.
-        intrinsics = self.intrinsics[img_id]
-        intrinsics = torch.from_numpy(intrinsics).float()
-
-        # Also need the inverse.
-        intrinsics_inv = intrinsics.inverse()
-
-        return (
-            image.unsqueeze(0),
-            image_ori,
-            image_mask.unsqueeze(0),
-            pose.unsqueeze(0),
-            pose_inv.unsqueeze(0),
-            0,
-            intrinsics.unsqueeze(0),
-            intrinsics_inv.unsqueeze(0),
-            0,
-            [str(self.rgb_files[idx])],
-            idx,
-            0,
-            0,
-        )
+        return image, name2
 
     def __len__(self):
-        return len(self.valid_file_indices)
+        return len(self.img_ids)
+
+    def _get_single_item(self, idx):
+        if self.train:
+            img_id = self.img_ids[idx]
+
+            image, image_name = self._load_image(img_id)
+            camera_id = self.recon_images[img_id].camera_id
+            camera = self.recon_cameras[camera_id]
+            focal, cx, cy, k = camera.params
+            intrinsics = torch.eye(3)
+
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            qvec = self.recon_images[img_id].qvec
+            tvec = self.recon_images[img_id].tvec
+            # pose = utils.return_pose_mat(qvec, tvec)
+            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+
+            xyz_gt = self.image_id2points[img_id]
+            pid_list = self.recon_images[img_id].point3D_ids
+            mask = pid_list >= 0
+            pid_list = pid_list[mask]
+            uv_gt = self.recon_images[img_id].xys[mask]
+            # from ace_util import project_using_pose
+            # uv_proj = project_using_pose(torch.from_numpy(pose_inv).unsqueeze(0).cuda().float(),
+            #                    intrinsics.unsqueeze(0).cuda().float(), xyz_gt)
+
+            pose_inv = torch.from_numpy(pose_inv)
+        else:
+            name1 = self.img_ids[idx]
+            if "nexus5x_additional_night" in name1:
+                image_name = self.images_dir2 / name1
+            else:
+                image_name = self.images_dir / name1
+            import pycolmap
+            pycolmap.Camera()
+
+            cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
+            camera = pycolmap.Camera(
+                model=cam_type, width=int(width),
+                height=int(height), params=[focal, cx, cy, k]
+            )
+
+            intrinsics = torch.eye(3)
+
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            image = None
+            img_id = name1
+            pid_list = []
+            pose_inv = None
+            xyz_gt = None
+            uv_gt = None
+            return (
+                image,
+                image_name,
+                img_id,
+                pid_list,
+                pose_inv,
+                intrinsics,
+                camera,
+                xyz_gt,
+                uv_gt,
+            )
+
+
+    def __getitem__(self, idx):
+        if type(idx) == list:
+            # Whole batch.
+            tensors = [self._get_single_item(i) for i in idx]
+            return default_collate(tensors)
+        else:
+            # Single element.
+            return self._get_single_item(idx)
 
 
 if __name__ == "__main__":
-    testset = CamLocDataset(
-        Path("datasets/Cambridge_GreatCourt") / "test",
-        mode=0,  # Default for ACE, we don't need scene coordinates/RGB-D.
-        image_height=480,
-    )
-    testset[0]
-
-    scene_path = Path("output/Cambridge_GreatCourt/aug_images")
-    testset = CamLocDatasetAug(
-        scene_path,
-        "Cambridge_GreatCourt",
-        mode=0,  # Default for ACE, we don't need scene coordinates/RGB-D.
-        image_height=480,
-        augment=True,
-    )
-    testset[0]
+    testset = AachenDataset(train=False)
+    for t in testset:
+        continue
