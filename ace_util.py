@@ -45,7 +45,9 @@ def read_nvm_file(file_name, return_rgb=False):
             focal, qw, qx, qy, qz, tx, ty, tz, radial, _ = map(float, info.split(" "))
         else:
             img_name, focal, qw, qx, qy, qz, tx, ty, tz, radial, _ = cam_info.split(" ")
-            focal, qw, qx, qy, qz, tx, ty, tz, radial = map(float, [focal, qw, qx, qy, qz, tx, ty, tz, radial])
+            focal, qw, qx, qy, qz, tx, ty, tz, radial = map(
+                float, [focal, qw, qx, qy, qz, tx, ty, tz, radial]
+            )
         image2name[i] = img_name
         assert img_name not in unique_names
         unique_names.append(img_name)
@@ -261,7 +263,15 @@ def get_patch(image, center, patch_size, padding=False):
         right_pad = max(0, x + w // 2 - image.shape[1])
 
         # Pad the image
-        image = cv2.copyMakeBorder(image, top_pad, bottom_pad, left_pad, right_pad, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        image = cv2.copyMakeBorder(
+            image,
+            top_pad,
+            bottom_pad,
+            left_pad,
+            right_pad,
+            cv2.BORDER_CONSTANT,
+            value=(0, 0, 0),
+        )
 
         # Adjust the center coordinates
         x += left_pad
@@ -296,7 +306,7 @@ def read_and_preprocess(name, conf):
     else:
         image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
     image = image / 255.0
-    return image
+    return image, scale
 
 
 def project_using_pose(gt_pose_inv_B44, intrinsics_B33, xyz):

@@ -3,6 +3,8 @@ import math
 import random
 import re
 from pathlib import Path
+
+import pycolmap
 from PIL import Image
 import cv2
 import h5py
@@ -612,19 +614,21 @@ def read_intrinsic(file_name):
 
 
 class AachenDataset(Dataset):
-    def __init__(self, ds_dir="../aachen/aachen_v1_1", train=True):
+    def __init__(self, ds_dir="datasets/aachen_v1.1", train=True):
         self.ds_type = "aachen"
         self.ds_dir = ds_dir
-        self.model_dir = f"{ds_dir}/3D-models/aachen_v_1_1/aachen_v_1_1.nvm"
         self.sfm_model_dir = f"{ds_dir}/3D-models/aachen_v_1_1"
-        self.images_dir = Path("../aachen/database_and_query_images/images_upright")
-        self.images_dir2 = Path(f"{self.ds_dir}/images_upright")
+        self.images_dir = Path(f"{self.ds_dir}/images_upright")
 
         self.train = train
-        self.day_intrinsic_file = "../aachen/day_time_queries_with_intrinsics.txt"
-        self.night_intrinsic_file = f"{self.ds_dir}/queries/night_time_queries_with_intrinsics.txt"
-        if self.train:
+        self.day_intrinsic_file = (
+            f"{self.ds_dir}/queries/day_time_queries_with_intrinsics.txt"
+        )
+        self.night_intrinsic_file = (
+            f"{self.ds_dir}/queries/night_time_queries_with_intrinsics.txt"
+        )
 
+        if self.train:
             self.recon_images = colmap_read.read_images_binary(
                 f"{self.sfm_model_dir}/images.bin"
             )
@@ -652,18 +656,11 @@ class AachenDataset(Dataset):
             name2params2 = read_intrinsic(self.night_intrinsic_file)
             self.name2params = {**name2params1, **name2params2}
             self.img_ids = list(self.name2params.keys())
-            "/home/n11373598/work/aachen/database_and_query_images/images_upright/query/night"
         return
 
     def _load_image(self, img_id):
         name = self.recon_images[img_id].name
-        if "db" in name:
-            name2 = str(self.images_dir / name)
-        elif "sequences" in name:
-            name2 = str(self.images_dir2 / name)
-        else:
-            name2 = None
-
+        name2 = str(self.images_dir / name)
         image = io.imread(name2)
 
         if len(image.shape) < 3:
@@ -699,24 +696,19 @@ class AachenDataset(Dataset):
             mask = pid_list >= 0
             pid_list = pid_list[mask]
             uv_gt = self.recon_images[img_id].xys[mask]
-            # from ace_util import project_using_pose
-            # uv_proj = project_using_pose(torch.from_numpy(pose_inv).unsqueeze(0).cuda().float(),
-            #                    intrinsics.unsqueeze(0).cuda().float(), xyz_gt)
 
             pose_inv = torch.from_numpy(pose_inv)
+
         else:
             name1 = self.img_ids[idx]
-            if "nexus5x_additional_night" in name1:
-                image_name = self.images_dir2 / name1
-            else:
-                image_name = self.images_dir / name1
-            import pycolmap
-            pycolmap.Camera()
+            image_name = self.images_dir / name1
 
             cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
             camera = pycolmap.Camera(
-                model=cam_type, width=int(width),
-                height=int(height), params=[focal, cx, cy, k]
+                model=cam_type,
+                width=int(width),
+                height=int(height),
+                params=[focal, cx, cy, k],
             )
 
             intrinsics = torch.eye(3)
@@ -731,18 +723,136 @@ class AachenDataset(Dataset):
             pose_inv = None
             xyz_gt = None
             uv_gt = None
-            return (
-                image,
-                image_name,
-                img_id,
-                pid_list,
-                pose_inv,
-                intrinsics,
-                camera,
-                xyz_gt,
-                uv_gt,
+
+        return (
+            image,
+            image_name,
+            img_id,
+            pid_list,
+            pose_inv,
+            intrinsics,
+            camera,
+            xyz_gt,
+            uv_gt,
+        )
+
+    def __getitem__(self, idx):
+        if type(idx) == list:
+            # Whole batch.
+            tensors = [self._get_single_item(i) for i in idx]
+            return default_collate(tensors)
+        else:
+            # Single element.
+            return self._get_single_item(idx)
+
+
+class RobotCarDataset(Dataset):
+    def __init__(self, ds_dir="datasets/robotcar", train=True):
+        self.ds_type = "robotcar"
+        self.ds_dir = ds_dir
+        self.sfm_model_dir = f"{ds_dir}/3D-models/all-merged/all.nvm"
+        self.images_dir = Path(f"{self.ds_dir}/images")
+        self.pose_file = f"{ds_dir}/robotcar_v2_train.txt"
+        self.train = train
+
+        if self.train:
+            self.xyz_arr, self.image2points, self.image2name = ace_util.read_nvm_file(
+                self.sfm_model_dir
+            )
+            self.img_ids = list(self.image2name.keys())
+            self._read_train_poses()
+        else:
+            name2params1 = read_intrinsic(self.day_intrinsic_file)
+            name2params2 = read_intrinsic(self.night_intrinsic_file)
+            self.name2params = {**name2params1, **name2params2}
+            self.img_ids = list(self.name2params.keys())
+        return
+
+    def _read_train_poses(self):
+        with open(self.pose_file) as file:
+            lines = [line.rstrip() for line in file]
+        name2mat = {}
+        for line in lines:
+            print(line)
+            break
+
+    def _load_image(self, img_id):
+        name = self.image2name[img_id].split("./")[-1]
+        name2 = str(self.images_dir / name).replace(".png", ".jpg")
+        image = io.imread(name2)
+
+        if len(image.shape) < 3:
+            # Convert to RGB if needed.
+            image = color.gray2rgb(image)
+
+        return image, name2
+
+    def __len__(self):
+        return len(self.img_ids)
+
+    def _get_single_item(self, idx):
+        if self.train:
+            img_id = self.img_ids[idx]
+            image, image_name = self._load_image(img_id)
+
+            camera_id = self.recon_images[img_id].camera_id
+            camera = self.recon_cameras[camera_id]
+            focal, cx, cy, k = camera.params
+            intrinsics = torch.eye(3)
+
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            qvec = self.recon_images[img_id].qvec
+            tvec = self.recon_images[img_id].tvec
+            # pose = utils.return_pose_mat(qvec, tvec)
+            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+
+            xyz_gt = self.image_id2points[img_id]
+            pid_list = self.recon_images[img_id].point3D_ids
+            mask = pid_list >= 0
+            pid_list = pid_list[mask]
+            uv_gt = self.recon_images[img_id].xys[mask]
+
+            pose_inv = torch.from_numpy(pose_inv)
+
+        else:
+            name1 = self.img_ids[idx]
+            image_name = self.images_dir / name1
+
+            cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
+            camera = pycolmap.Camera(
+                model=cam_type,
+                width=int(width),
+                height=int(height),
+                params=[focal, cx, cy, k],
             )
 
+            intrinsics = torch.eye(3)
+
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            image = None
+            img_id = name1
+            pid_list = []
+            pose_inv = None
+            xyz_gt = None
+            uv_gt = None
+
+        return (
+            image,
+            image_name,
+            img_id,
+            pid_list,
+            pose_inv,
+            intrinsics,
+            camera,
+            xyz_gt,
+            uv_gt,
+        )
 
     def __getitem__(self, idx):
         if type(idx) == list:
@@ -755,6 +865,6 @@ class AachenDataset(Dataset):
 
 
 if __name__ == "__main__":
-    testset = AachenDataset(train=False)
+    testset = RobotCarDataset(train=True)
     for t in testset:
         continue

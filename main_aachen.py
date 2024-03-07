@@ -3,43 +3,24 @@ import logging
 import math
 import os
 import pickle
-import random
 import sys
-import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import cv2
 import faiss
 import numpy as np
+import pycolmap
 import torch
-import torch.optim as optim
-import torchvision.transforms.functional as TF
-from ace_loss import ReproLoss
-from ace_network import Regressor, Head
-from ace_util import read_and_preprocess
 from hloc import extractors
 from hloc.utils.base_model import dynamic_load
 from pykdtree.kdtree import KDTree
-from torch.cuda.amp import GradScaler, autocast
-from torch.utils.data import DataLoader
-from torch.utils.data import sampler
 from tqdm import tqdm
-import pycolmap
 
-import colmap_read
-from ace_util import (
-    get_pixel_grid,
-    to_homogeneous,
-    read_nvm_file,
-    localize_pose_lib,
-    localize_pose_lib_light
-)
-
-from ace_util import normalize_shape
-from ace_util import set_seed, _strtobool
+from ace_util import _strtobool
+from ace_util import localize_pose_lib
+from ace_util import read_and_preprocess
 from dataset import AachenDataset
-from scipy.spatial.transform import Rotation as Rotation
 
 _logger = logging.getLogger(__name__)
 sys.path.append("../MixVPR")
@@ -406,10 +387,14 @@ class TrainerACE:
         self.encoder_global.load_state_dict(state_dict)
         self.encoder_global.eval()
         self.image2desc = self.collect_image_descriptors()
-        self.pid2mean_desc, self.all_pid_in_train_set, self.pid2ind = self.collect_descriptors(
-            conf_ns
+        (
+            self.pid2mean_desc,
+            self.all_pid_in_train_set,
+            self.pid2ind,
+        ) = self.collect_descriptors(conf_ns)
+        self.all_ind_in_train_set = np.array(
+            [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
         )
-        self.all_ind_in_train_set = np.array([self.pid2ind[pid] for pid in self.all_pid_in_train_set])
         self.ind2pid = {v: k for k, v in self.pid2ind.items()}
 
     def collect_image_descriptors(self):
@@ -440,7 +425,7 @@ class TrainerACE:
             image2desc[name] = all_desc[idx]
         return image2desc
 
-    def collect_descriptors(self, conf):
+    def collect_descriptors(self, conf, vis=False):
         file_name1 = f"output/{self.ds_name}/codebook_r2d2.npy"
         file_name2 = f"output/{self.ds_name}/all_pids_r2d2.npy"
         file_name3 = f"output/{self.ds_name}/pid2ind.pkl"
@@ -454,7 +439,7 @@ class TrainerACE:
             pid2descriptors = {}
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collect point descriptors"):
-                    image = read_and_preprocess(example[1], conf)
+                    image, scale = read_and_preprocess(example[1], conf)
 
                     pred = self.encoder(
                         {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
@@ -465,13 +450,23 @@ class TrainerACE:
 
                     keypoints = pred["keypoints"]
                     descriptors = pred["descriptors"].T
+                    keypoints /= scale
                     pid_list = example[3]
                     uv = example[-1]
                     selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
                     idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                    if vis:
+                        image = cv2.imread(example[1])
+                        for u, v in uv.astype(int):
+                            cv2.circle(image, (u, v), 5, (255, 0, 0))
+                        for u, v in keypoints.astype(int):
+                            cv2.circle(image, (u, v), 5, (0, 255, 0))
+                        cv2.imwrite(f"debug/test{ind}.png", image)
+
                     selected_descriptors = descriptors[idx_arr]
                     selected_descriptors = 0.5 * (
-                            selected_descriptors + image_descriptor
+                        selected_descriptors + image_descriptor
                     )
 
                     for idx, pid in enumerate(selected_pid[ind2]):
@@ -506,19 +501,8 @@ class TrainerACE:
         selected_pid = np.array(pid_list)[mask]
         return selected_pid, mask, ind
 
-    def save_model(self):
-        head_state_dict = self.regressor.state_dict()
-        torch.save(head_state_dict, self.options.output_map_file)
-        _logger.info(f"Saved trained head weights to: {self.options.output_map_file}")
-        _logger.info(f"Finished training for {str(self.options.scene)}")
-        self.test_model(self.regressor)
-
     def legal_predict(
-        self,
-        uv_arr,
-        features_ori,
-        gpu_index_flat,
-        remove_duplicate=False
+        self, uv_arr, features_ori, gpu_index_flat, remove_duplicate=False
     ):
         distances, feature_indices = gpu_index_flat.search(features_ori, 1)
 
@@ -538,8 +522,12 @@ class TrainerACE:
             uv_arr = np.array([pid2uv[pid][1] for pid in pid2uv])
             feature_indices = [pid for pid in pid2uv]
 
-        pid_pred = [self.ind2pid[ind] for ind in self.all_ind_in_train_set[feature_indices]]
-        pred_scene_coords_b3 = np.array([self.dataset.recon_points[pid].xyz for pid in pid_pred])
+        pid_pred = [
+            self.ind2pid[ind] for ind in self.all_ind_in_train_set[feature_indices]
+        ]
+        pred_scene_coords_b3 = np.array(
+            [self.dataset.recon_points[pid].xyz for pid in pid_pred]
+        )
 
         return uv_arr, pred_scene_coords_b3
 
@@ -555,7 +543,6 @@ class TrainerACE:
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
         result_file = open(f"output/{self.ds_name}/Aachen_v1_1_eval_dd.txt", "w")
         with torch.no_grad():
-
             for example in tqdm(test_set, desc="Computing pose for test set"):
                 image_name = example[1]
                 image = read_and_preprocess(image_name, self.conf)
@@ -584,25 +571,40 @@ class TrainerACE:
                     gpu_index_flat,
                 )
 
-                # pairs = []
-                # for j, (x, y) in enumerate(uv_arr):
-                #     xy = [x, y]
-                #     xyz = xyz_pred[j]
-                #     pairs.append((xy, xyz))
+                pairs = []
+                for j, (x, y) in enumerate(uv_arr):
+                    xy = [x, y]
+                    xyz = xyz_pred[j]
+                    pairs.append((xy, xyz))
 
-                camera = example[6]
-                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
-                qx, qy, qz, qw = res["qvec"]
-                tx, ty, tz = res["tvec"]
+                # xyz_all = np.array([self.dataset.recon_points[p].xyz for p in self.dataset.recon_points])
+                # import open3d as o3d
+                # point_cloud = o3d.geometry.PointCloud(
+                #     o3d.utility.Vector3dVector(xyz_all)
+                # )
+                # cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5)
+                #
+                # vis = o3d.visualization.Visualizer()
+                # vis.create_window(width=1920, height=1025)
+                # vis.add_geometry(cl)
+                # vis.run()
+                # vis.destroy_window()
 
-                # pose, info = localize_pose_lib(pairs, focal_length, ppX, ppY)
+                # camera = example[6]
+                # res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
+                # qx, qy, qz, qw = res["qvec"]
+                # tx, ty, tz = res["tvec"]
+
+                pose, info = localize_pose_lib(pairs, focal_length, ppX, ppY)
                 # pose_mat = torch.from_numpy(np.vstack([pose.Rt, np.array([0, 0, 0, 1])])).inverse()
                 #
                 # qx, qy, qz, qw = Rotation.from_matrix(pose_mat.numpy()[:3, :3]).as_quat()
-                # qx, qy, qz, qw = pose.q
-                # tx, ty, tz = pose_mat[:3, 3].numpy()
+                qx, qy, qz, qw = pose.q
+                tx, ty, tz = pose.t
                 image_id = example[2].split("/")[-1]
-                print(f"{image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz}", file=result_file)
+                print(
+                    f"{image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz}", file=result_file
+                )
 
     def test_model(self):
         rErrs = []

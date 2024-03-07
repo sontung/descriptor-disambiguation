@@ -1154,7 +1154,7 @@ class TrainerACE:
         features_ori,
         gpu_index_flat,
         structured=True,
-        remove_duplicate=False
+        remove_duplicate=False,
     ):
         distances, feature_indices = gpu_index_flat.search(features_ori, 1)
 

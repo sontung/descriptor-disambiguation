@@ -271,7 +271,6 @@ def convert_pose_data(pose_data):
     # create a dict from the poses with file name as key
     pose_dict = {}
     for pose_string in pose_data:
-
         pose_string = pose_string.split()
         file_name = pose_string[0]
 
@@ -314,7 +313,6 @@ def read_pose_data(file_name):
     # create a dict from the poses with file name as key
     pose_dict = {}
     for pose_string in pose_data:
-
         pose_string = pose_string.split()
         file_name = pose_string[0]
 
@@ -1006,9 +1004,7 @@ def point_cloud_cluster():
     all_points_ori = np.load("data/redkitchen/map.npy")
     rank = np.load("data/redkitchen/rank.npy")
     all_points_ori = all_points_ori[rank > 10]
-    point_cloud = o3d.geometry.PointCloud(
-        o3d.utility.Vector3dVector(all_points_ori)
-    )
+    point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(all_points_ori))
     point_cloud.paint_uniform_color((0, 0, 0))
     downpcd = point_cloud.voxel_down_sample(voxel_size=0.05)
     downpcd.paint_uniform_color((1, 0, 0))
@@ -1017,9 +1013,7 @@ def point_cloud_cluster():
     centers = json.load(open("/home/n11373598/Downloads/redkitchen/id2centers.json"))
     centers = np.array(centers).astype(np.float64)
 
-    point_cloud2 = o3d.geometry.PointCloud(
-        o3d.utility.Vector3dVector(centers)
-    )
+    point_cloud2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(centers))
     point_cloud2.paint_uniform_color((0, 1, 0))
 
     np.save("data/redkitchen/centers.npy", centers)
