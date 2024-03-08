@@ -102,26 +102,35 @@ class TrainerACE:
         conf_ns.resize_max = conf["r2d2"]["preprocessing"]["resize_max"]
         self.conf = conf_ns
 
-        self.encoder_global = VPRModel(
-            backbone_arch="resnet50",
-            layers_to_crop=[4],
-            agg_arch="MixVPR",
-            agg_config={
-                "in_channels": 1024,
-                "in_h": 20,
-                "in_w": 20,
-                "out_channels": 64,
-                "mix_depth": 4,
-                "mlp_ratio": 1,
-                "out_rows": 2,
-            },
-        ).cuda()
+        model_dict = conf["netvlad"]["model"]
 
-        state_dict = torch.load(
-            "../MixVPR/resnet50_MixVPR_128_channels(64)_rows(2).ckpt"
-        )
-        self.encoder_global.load_state_dict(state_dict)
-        self.encoder_global.eval()
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        Model = dynamic_load(extractors, model_dict["name"])
+        self.encoder_global = Model(model_dict).eval().to(device)
+        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
+        self.conf_retrieval = conf_ns_retrieval
+
+        # self.encoder_global = VPRModel(
+        #     backbone_arch="resnet50",
+        #     layers_to_crop=[4],
+        #     agg_arch="MixVPR",
+        #     agg_config={
+        #         "in_channels": 1024,
+        #         "in_h": 20,
+        #         "in_w": 20,
+        #         "out_channels": 64,
+        #         "mix_depth": 4,
+        #         "mlp_ratio": 1,
+        #         "out_rows": 2,
+        #     },
+        # ).cuda()
+        #
+        # state_dict = torch.load(
+        #     "../MixVPR/resnet50_MixVPR_128_channels(64)_rows(2).ckpt"
+        # )
+        # self.encoder_global.load_state_dict(state_dict)
+        # self.encoder_global.eval()
         self.image2desc = self.collect_image_descriptors()
         (
             self.pid2mean_desc,
@@ -182,7 +191,12 @@ class TrainerACE:
                     )
 
                     pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-                    image_descriptor = self.image2desc[example[1]]
+                    # image_descriptor = self.image2desc[example[1]]
+
+                    image, _ = read_and_preprocess(example[1], self.conf_retrieval)
+                    image_descriptor = self.encoder_global(
+                        {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                    )["global_descriptor"].cpu().numpy()
 
                     keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
                     descriptors = pred["descriptors"].T
@@ -201,9 +215,9 @@ class TrainerACE:
                         cv2.imwrite(f"debug/test{ind}.png", image)
 
                     selected_descriptors = descriptors[idx_arr]
-                    # selected_descriptors = 0.5 * (
-                    #     selected_descriptors + image_descriptor
-                    # )
+                    selected_descriptors = 0.5 * (
+                        selected_descriptors + image_descriptor[:, :128]
+                    )
 
                     for idx, pid in enumerate(selected_pid[ind2]):
                         pid2descriptors.setdefault(pid, []).append(

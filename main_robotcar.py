@@ -122,6 +122,7 @@ class TrainerACE:
         )
         self.encoder_global.load_state_dict(state_dict)
         self.encoder_global.eval()
+
         self.image2desc = self.collect_image_descriptors()
         (
             self.pid2mean_desc,
@@ -182,6 +183,7 @@ class TrainerACE:
                     )
 
                     pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+
                     image_descriptor = self.image2desc[example[1]]
 
                     keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
@@ -214,7 +216,7 @@ class TrainerACE:
             all_pid = np.array(all_pid)
             desc_dim = pid2descriptors[list(pid2descriptors.keys())[0]][0].shape[0]
             pid2mean_desc = np.zeros(
-                (len(self.dataset.recon_points), desc_dim),
+                (self.dataset.xyz_arr.shape[0], desc_dim),
                 pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
             )
 
