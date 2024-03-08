@@ -27,6 +27,7 @@ from skimage.transform import rotate as ski_rotate
 from skimage.transform import resize as ski_resize
 from os import listdir
 from os.path import isfile, join
+from ace_util import project_using_pose
 
 _logger = logging.getLogger(__name__)
 
@@ -756,11 +757,16 @@ class RobotCarDataset(Dataset):
         self.train = train
 
         if self.train:
-            self.xyz_arr, self.image2points, self.image2name = ace_util.read_nvm_file(
-                self.sfm_model_dir
-            )
+            self.name2mat = self._read_train_poses()
+            (
+                self.xyz_arr,
+                self.image2points,
+                self.image2name,
+                self.image2pose,
+                self.image2info,
+            ) = ace_util.read_nvm_file(self.sfm_model_dir)
+            self.name2image = {v: k for k, v in self.image2name.items()}
             self.img_ids = list(self.image2name.keys())
-            self._read_train_poses()
         else:
             name2params1 = read_intrinsic(self.day_intrinsic_file)
             name2params2 = read_intrinsic(self.night_intrinsic_file)
@@ -773,8 +779,10 @@ class RobotCarDataset(Dataset):
             lines = [line.rstrip() for line in file]
         name2mat = {}
         for line in lines:
-            print(line)
-            break
+            img_name, *matrix = line.split(" ")
+            matrix = np.array(matrix, float).reshape(4, 4)
+            name2mat[img_name] = matrix
+        return name2mat
 
     def _load_image(self, img_id):
         name = self.image2name[img_id].split("./")[-1]
@@ -794,28 +802,31 @@ class RobotCarDataset(Dataset):
         if self.train:
             img_id = self.img_ids[idx]
             image, image_name = self._load_image(img_id)
-
-            camera_id = self.recon_images[img_id].camera_id
-            camera = self.recon_cameras[camera_id]
-            focal, cx, cy, k = camera.params
+            qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
             intrinsics = torch.eye(3)
-
+            focal, radial = self.image2info[img_id]
+            assert image.shape == (1024, 1024, 3)
             intrinsics[0, 0] = focal
             intrinsics[1, 1] = focal
-            intrinsics[0, 2] = cx
-            intrinsics[1, 2] = cy
-            qvec = self.recon_images[img_id].qvec
-            tvec = self.recon_images[img_id].tvec
-            # pose = utils.return_pose_mat(qvec, tvec)
-            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            intrinsics[0, 2] = 512
+            intrinsics[1, 2] = 512
+            pose_mat = dd_utils.return_pose_mat_no_inv([qw, qx, qy, qz], [tx, ty, tz])
 
-            xyz_gt = self.image_id2points[img_id]
-            pid_list = self.recon_images[img_id].point3D_ids
-            mask = pid_list >= 0
-            pid_list = pid_list[mask]
-            uv_gt = self.recon_images[img_id].xys[mask]
+            pid_list = self.image2points[img_id]
+            xyz_gt = self.xyz_arr[pid_list]
+            uv_gt = project_using_pose(
+                torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+                intrinsics.unsqueeze(0).cuda().float(),
+                xyz_gt,
+            )
 
-            pose_inv = torch.from_numpy(pose_inv)
+            pose_inv = torch.from_numpy(pose_mat)
+            camera = pycolmap.Camera(
+                model="SIMPLE_RADIAL",
+                width=1024,
+                height=1024,
+                params=[focal, 512, 512, radial],
+            )
 
         else:
             name1 = self.img_ids[idx]

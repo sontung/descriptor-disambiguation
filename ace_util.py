@@ -30,7 +30,7 @@ def to_homogeneous(input_tensor, dim=1):
     return output
 
 
-def read_nvm_file(file_name, return_rgb=False):
+def read_nvm_file(file_name):
     with open(file_name) as file:
         lines = [line.rstrip() for line in file]
     nb_cameras = int(lines[2])
@@ -83,10 +83,7 @@ def read_nvm_file(file_name, return_rgb=False):
     #     r2 = np.expand_dims(r2, 1)
     #     uvs_undistorted = uvs*(1+r2)
     #     print()
-    if return_rgb:
-        return xyz_arr, image2points, image2name, rgb_arr
-    else:
-        return xyz_arr, image2points, image2name
+    return xyz_arr, image2points, image2name, image2pose, image2info
 
 
 def return_pose_mat(pose_q, pose_t):
