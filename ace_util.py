@@ -295,6 +295,7 @@ def read_and_preprocess(name, conf):
     image = read_image_by_hloc(name, conf.grayscale)
     image = image.astype(np.float32)
     size = image.shape[:2][::-1]
+    scale = 1
 
     if conf.resize_max and (conf.resize_force or max(size) > conf.resize_max):
         scale = conf.resize_max / max(size)
@@ -306,6 +307,7 @@ def read_and_preprocess(name, conf):
     else:
         image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
     image = image / 255.0
+
     return image, scale
 
 

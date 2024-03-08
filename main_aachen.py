@@ -21,6 +21,7 @@ from ace_util import _strtobool
 from ace_util import localize_pose_lib
 from ace_util import read_and_preprocess
 from dataset import AachenDataset
+from scipy.spatial.transform import Rotation as Rotation
 
 _logger = logging.getLogger(__name__)
 sys.path.append("../MixVPR")
@@ -448,11 +449,11 @@ class TrainerACE:
                     pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
                     image_descriptor = self.image2desc[example[1]]
 
-                    keypoints = pred["keypoints"]
+                    keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
                     descriptors = pred["descriptors"].T
-                    keypoints /= scale
+
                     pid_list = example[3]
-                    uv = example[-1]
+                    uv = example[-1]+0.5
                     selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
                     idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
@@ -495,8 +496,8 @@ class TrainerACE:
         return pid2mean_desc, all_pid, pid2ind
 
     def retrieve_pid(self, pid_list, uv_gt, keypoints):
-        tree = KDTree(keypoints)
-        dis, ind = tree.query(uv_gt.astype(np.float32))
+        tree = KDTree(keypoints.astype(uv_gt.dtype))
+        dis, ind = tree.query(uv_gt)
         mask = dis < 5
         selected_pid = np.array(pid_list)[mask]
         return selected_pid, mask, ind
@@ -545,7 +546,73 @@ class TrainerACE:
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):
                 image_name = example[1]
-                image = read_and_preprocess(image_name, self.conf)
+                image, scale = read_and_preprocess(image_name, self.conf)
+                pred = self.encoder(
+                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                )
+                pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+
+                keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
+                descriptors = pred["descriptors"].T
+
+                intrinsics_33 = example[5].cpu()
+                focal_length = intrinsics_33[0, 0].item()
+                ppX = intrinsics_33[0, 2].item()
+                ppY = intrinsics_33[1, 2].item()
+
+                image = load_image_mix_vpr(image_name)
+                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                image_descriptor = image_descriptor.squeeze().cpu().numpy()
+
+                descriptors = 0.5 * (descriptors + image_descriptor)
+
+                uv_arr, xyz_pred = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
+                )
+
+                # pairs = []
+                # for j, (x, y) in enumerate(uv_arr):
+                #     xy = [x, y]
+                #     xyz = xyz_pred[j]
+                #     pairs.append((xy, xyz))
+
+                camera = example[6]
+                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
+                qx, qy, qz, qw = res["qvec"]
+                tx, ty, tz = res["tvec"]
+
+                # pose, info = localize_pose_lib(pairs, focal_length, ppX, ppY)
+                # pose_mat = torch.from_numpy(np.vstack([pose.Rt, np.array([0, 0, 0, 1])])).inverse()
+                #
+                # qx, qy, qz, qw = Rotation.from_matrix(pose_mat.numpy()[:3, :3]).as_quat()
+                # qw, qx, qy, qz = pose.q
+                # tx, ty, tz = pose.t
+                image_id = example[2].split("/")[-1]
+                print(
+                    f"{image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz}", file=result_file
+                )
+
+    def evaluate_with_hloc(self):
+        hloc_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/aachen_v1.1/Aachen-v1.1_hloc_superpoint+superglue_netvlad50.txt"
+        with open(hloc_file) as file:
+            lines = [line.rstrip() for line in file]
+        img2gt = {}
+        for line in lines:
+            img_id, qw, qx, qy, qz, tx, ty, tz = line.split(" ")
+            qw, qx, qy, qz, tx, ty, tz = map(float, [qw, qx, qy, qz, tx, ty, tz])
+            img2gt[img_id] = [qw, qx, qy, qz, tx, ty, tz]
+
+        test_set = AachenDataset(train=False)
+        index = faiss.IndexFlatL2(128)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+        with torch.no_grad():
+            for example in tqdm(test_set, desc="Computing pose for test set"):
+                image_name = example[1]
+                image, scale = read_and_preprocess(image_name, self.conf)
                 pred = self.encoder(
                     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
                 )
@@ -553,6 +620,7 @@ class TrainerACE:
 
                 keypoints = pred["keypoints"]
                 descriptors = pred["descriptors"].T
+                keypoints /= scale
 
                 intrinsics_33 = example[5].cpu()
                 focal_length = intrinsics_33[0, 0].item()
@@ -577,34 +645,37 @@ class TrainerACE:
                     xyz = xyz_pred[j]
                     pairs.append((xy, xyz))
 
-                # xyz_all = np.array([self.dataset.recon_points[p].xyz for p in self.dataset.recon_points])
-                # import open3d as o3d
-                # point_cloud = o3d.geometry.PointCloud(
-                #     o3d.utility.Vector3dVector(xyz_all)
-                # )
-                # cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5)
-                #
-                # vis = o3d.visualization.Visualizer()
-                # vis.create_window(width=1920, height=1025)
-                # vis.add_geometry(cl)
-                # vis.run()
-                # vis.destroy_window()
-
-                # camera = example[6]
-                # res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
+                camera = example[6]
+                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
                 # qx, qy, qz, qw = res["qvec"]
                 # tx, ty, tz = res["tvec"]
 
                 pose, info = localize_pose_lib(pairs, focal_length, ppX, ppY)
-                # pose_mat = torch.from_numpy(np.vstack([pose.Rt, np.array([0, 0, 0, 1])])).inverse()
-                #
-                # qx, qy, qz, qw = Rotation.from_matrix(pose_mat.numpy()[:3, :3]).as_quat()
-                qx, qy, qz, qw = pose.q
-                tx, ty, tz = pose.t
+
                 image_id = example[2].split("/")[-1]
-                print(
-                    f"{image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz}", file=result_file
-                )
+                qw, qx, qy, qz, tx, ty, tz = img2gt[image_id]
+                pose_q = np.array([qx, qy, qz, qw])
+                pose_R = Rotation.from_quat(pose_q).as_matrix()
+
+                gt_pose = np.identity(4)
+                gt_pose[0:3, 0:3] = pose_R
+                gt_pose[0:3, 3] = [tx, ty, tz]
+                gt_pose = torch.from_numpy(gt_pose)
+
+                est_pose = np.vstack([pose.Rt, [0, 0, 0, 1]])
+                est_pose = np.linalg.inv(est_pose)
+                out_pose = torch.from_numpy(est_pose)
+
+                # Calculate translation error.
+                t_err = float(torch.norm(gt_pose[0:3, 3] - out_pose[0:3, 3]))
+
+                gt_R = gt_pose[0:3, 0:3].numpy()
+                out_R = out_pose[0:3, 0:3].numpy()
+
+                r_err = np.matmul(out_R, np.transpose(gt_R))
+                r_err = cv2.Rodrigues(r_err)[0]
+                r_err = np.linalg.norm(r_err) * 180 / math.pi
+                print()
 
     def test_model(self):
         rErrs = []
@@ -623,7 +694,7 @@ class TrainerACE:
         with torch.no_grad():
             for example in tqdm(self.dataset, desc="Computing pose for test set"):
                 image_name = example[1]
-                image = read_and_preprocess(image_name, self.conf)
+                image, scale = read_and_preprocess(image_name, self.conf)
                 pred = self.encoder(
                     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
                 )
@@ -631,6 +702,7 @@ class TrainerACE:
 
                 keypoints = pred["keypoints"]
                 descriptors = pred["descriptors"].T
+                keypoints /= scale
 
                 intrinsics_33 = example[5].cpu()
                 focal_length = intrinsics_33[0, 0].item()
@@ -702,6 +774,7 @@ class TrainerACE:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     trainer = TrainerACE()
+    # trainer.evaluate_with_hloc()
     trainer.evaluate()
     # trainer.test_model()
     # trainer.train()

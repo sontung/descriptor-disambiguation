@@ -637,7 +637,7 @@ class TrainerACE:
             pid2descriptors = {}
             with torch.no_grad():
                 for example in tqdm(testset, desc="Collect point descriptors"):
-                    image = read_and_preprocess(example[-4], conf)
+                    image, scale = read_and_preprocess(example[-4], conf)
 
                     pred = self.encoder(
                         {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
@@ -648,6 +648,7 @@ class TrainerACE:
 
                     keypoints = pred["keypoints"]
                     descriptors = pred["descriptors"].T
+                    keypoints /= scale
 
                     selected_pid, mask, ind = self.retrieve_pid(example, keypoints)
                     idx_arr, ind2 = np.unique(ind[mask], return_index=True)
@@ -1250,7 +1251,7 @@ class TrainerACE:
             ) in tqdm(testset_loader):
                 intrinsics_B33 = intrinsics_B33.to(device, non_blocking=True)
 
-                image = read_and_preprocess(filenames[0], self.conf)
+                image, scale = read_and_preprocess(filenames[0], self.conf)
                 pred = self.encoder(
                     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
                 )
@@ -1258,6 +1259,7 @@ class TrainerACE:
 
                 keypoints = pred["keypoints"]
                 descriptors = pred["descriptors"].T
+                keypoints /= scale
 
                 intrinsics_33 = intrinsics_B33[0].cpu()
                 focal_length = intrinsics_33[0, 0].item()
