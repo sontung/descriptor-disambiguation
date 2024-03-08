@@ -201,9 +201,9 @@ class TrainerACE:
                         cv2.imwrite(f"debug/test{ind}.png", image)
 
                     selected_descriptors = descriptors[idx_arr]
-                    selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor
-                    )
+                    # selected_descriptors = 0.5 * (
+                    #     selected_descriptors + image_descriptor
+                    # )
 
                     for idx, pid in enumerate(selected_pid[ind2]):
                         pid2descriptors.setdefault(pid, []).append(
@@ -295,11 +295,10 @@ class TrainerACE:
                 ppX = intrinsics_33[0, 2].item()
                 ppY = intrinsics_33[1, 2].item()
 
-                image = load_image_mix_vpr(image_name)
-                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                image_descriptor = image_descriptor.squeeze().cpu().numpy()
-
-                descriptors = 0.5 * (descriptors + image_descriptor)
+                # image = load_image_mix_vpr(image_name)
+                # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                # image_descriptor = image_descriptor.squeeze().cpu().numpy()
+                # descriptors = 0.5 * (descriptors + image_descriptor)
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,

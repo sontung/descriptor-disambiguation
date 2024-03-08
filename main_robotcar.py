@@ -188,7 +188,7 @@ class TrainerACE:
                     descriptors = pred["descriptors"].T
 
                     pid_list = example[3]
-                    uv = example[-1] + 0.5
+                    uv = example[-1]
                     selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
                     idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
@@ -198,7 +198,7 @@ class TrainerACE:
                             cv2.circle(image, (u, v), 5, (255, 0, 0))
                         for u, v in keypoints.astype(int):
                             cv2.circle(image, (u, v), 5, (0, 255, 0))
-                        cv2.imwrite(f"debug/test{ind}.png", image)
+                        cv2.imwrite(f"debug/test.png", image)
 
                     selected_descriptors = descriptors[idx_arr]
                     selected_descriptors = 0.5 * (
