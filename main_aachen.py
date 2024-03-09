@@ -214,8 +214,6 @@ class TrainerACE:
                         )
 
                         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-                        image_descriptor = self.image2desc[example[1]]
-
                         keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
                         descriptors = pred["descriptors"].T
                         np.save(str(kp_file), keypoints)
@@ -238,6 +236,7 @@ class TrainerACE:
                     # image_descriptor = self.encoder_global(
                     #     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
                     # )["global_descriptor"].cpu().numpy()
+                    image_descriptor = self.image2desc[example[1]]
 
                     selected_descriptors = descriptors[idx_arr]
                     selected_descriptors = 0.5 * (
