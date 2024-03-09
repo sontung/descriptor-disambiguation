@@ -106,18 +106,18 @@ class TrainerACE:
         conf_ns.resize_max = conf["r2d2"]["preprocessing"]["resize_max"]
         self.conf = conf_ns
 
-        self.encoder_global = load_model_cosplace(
-            "../CosPlace/models/resnet50_128.pth", "ResNet50"
-        )
+        # self.encoder_global = load_model_cosplace(
+        #     "../CosPlace/models/resnet50_128.pth", "ResNet50"
+        # )
 
-        # model_dict = conf["netvlad"]["model"]
-        #
-        # device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Model = dynamic_load(extractors, model_dict["name"])
-        # self.encoder_global = Model(model_dict).eval().to(device)
-        # conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        # conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
-        # self.conf_retrieval = conf_ns_retrieval
+        model_dict = conf["netvlad"]["model"]
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        Model = dynamic_load(extractors, model_dict["name"])
+        self.encoder_global = Model(model_dict).eval().to(device)
+        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
+        self.conf_retrieval = conf_ns_retrieval
 
         # self.encoder_global = VPRModel(
         #     backbone_arch="resnet50",
@@ -217,9 +217,14 @@ class TrainerACE:
                             cv2.circle(image, (u, v), 5, (0, 255, 0))
                         cv2.imwrite(f"debug/test{ind}.png", image)
 
+                    image, _ = read_and_preprocess(example[1], self.conf_retrieval)
+                    image_descriptor = self.encoder_global(
+                        {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                    )["global_descriptor"].cpu().numpy()
+
                     selected_descriptors = descriptors[idx_arr]
                     selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor
+                        selected_descriptors + image_descriptor[:, :128]
                     )
 
                     for idx, pid in enumerate(selected_pid[ind2]):
@@ -312,9 +317,14 @@ class TrainerACE:
                 ppX = intrinsics_33[0, 2].item()
                 ppY = intrinsics_33[1, 2].item()
 
-                image = load_image_cosplace(example[1])
-                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                image_descriptor = image_descriptor.squeeze().cpu().numpy()
+                image, _ = read_and_preprocess(example[1], self.conf_retrieval)
+                image_descriptor = self.encoder_global(
+                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                )["global_descriptor"].squeeze().cpu().numpy()
+
+                # image = load_image_cosplace(example[1])
+                # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                # image_descriptor = image_descriptor.squeeze().cpu().numpy()
 
                 # image = load_image_mix_vpr(image_name)
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
