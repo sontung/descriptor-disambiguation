@@ -106,18 +106,17 @@ class TrainerACE:
         conf_ns.resize_max = conf["r2d2"]["preprocessing"]["resize_max"]
         self.conf = conf_ns
 
-        # self.encoder_global = load_model_cosplace(
-        #     "../CosPlace/models/resnet50_128.pth", "ResNet50"
-        # )
+        self.encoder_global = load_model_cosplace(
+            "../CosPlace/models/resnet50_128.pth", "ResNet50"
+        )
 
-        model_dict = conf["netvlad"]["model"]
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        Model = dynamic_load(extractors, model_dict["name"])
-        self.encoder_global = Model(model_dict).eval().to(device)
-        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
-        self.conf_retrieval = conf_ns_retrieval
+        # model_dict = conf["netvlad"]["model"]
+        # device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Model = dynamic_load(extractors, model_dict["name"])
+        # self.encoder_global = Model(model_dict).eval().to(device)
+        # conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        # conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
+        # self.conf_retrieval = conf_ns_retrieval
 
         # self.encoder_global = VPRModel(
         #     backbone_arch="resnet50",
@@ -139,7 +138,7 @@ class TrainerACE:
         # )
         # self.encoder_global.load_state_dict(state_dict)
         # self.encoder_global.eval()
-        # self.image2desc = self.collect_image_descriptors()
+        self.image2desc = self.collect_image_descriptors()
         (
             self.pid2mean_desc,
             self.all_pid_in_train_set,
@@ -164,7 +163,7 @@ class TrainerACE:
             idx = 0
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collecting image descriptors"):
-                    image = load_image_cosplace(example[1])
+                    image = load_image_cosplace(example[1], resize_test_imgs=True)
                     image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
                     image_descriptor = image_descriptor.squeeze().cpu().numpy()
                     all_desc[idx] = image_descriptor
@@ -190,19 +189,33 @@ class TrainerACE:
             afile.close()
         else:
             pid2descriptors = {}
+            r2d2_kp_path = Path(f"output/{self.ds_name}/r2d2_kp")
+            r2d2_desc_path = Path(f"output/{self.ds_name}/r2d2_desc")
+            r2d2_kp_path.mkdir(parents=True, exist_ok=True)
+            r2d2_desc_path.mkdir(parents=True, exist_ok=True)
+
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collect point descriptors"):
                     image, scale = read_and_preprocess(example[1], conf)
 
-                    pred = self.encoder(
-                        {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                    )
+                    image_id = example[1].split("/")[-1]
+                    kp_file = r2d2_kp_path/f"{image_id}.npy"
+                    desc_file = r2d2_desc_path/f"{image_id}.npy"
+                    if os.path.isfile(kp_file) and os.path.isfile(desc_file):
+                        keypoints = np.load(str(kp_file))
+                        descriptors = np.load(str(desc_file))
+                    else:
+                        pred = self.encoder(
+                            {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                        )
 
-                    pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-                    image_descriptor = self.image2desc[example[1]]
+                        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+                        image_descriptor = self.image2desc[example[1]]
 
-                    keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
-                    descriptors = pred["descriptors"].T
+                        keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
+                        descriptors = pred["descriptors"].T
+                        np.save(str(kp_file), keypoints)
+                        np.save(str(desc_file), descriptors)
 
                     pid_list = example[3]
                     uv = example[-1] + 0.5
@@ -217,14 +230,14 @@ class TrainerACE:
                             cv2.circle(image, (u, v), 5, (0, 255, 0))
                         cv2.imwrite(f"debug/test{ind}.png", image)
 
-                    image, _ = read_and_preprocess(example[1], self.conf_retrieval)
-                    image_descriptor = self.encoder_global(
-                        {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                    )["global_descriptor"].cpu().numpy()
+                    # image, _ = read_and_preprocess(example[1], self.conf_retrieval)
+                    # image_descriptor = self.encoder_global(
+                    #     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                    # )["global_descriptor"].cpu().numpy()
 
                     selected_descriptors = descriptors[idx_arr]
                     selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor[:, :128]
+                        selected_descriptors + image_descriptor
                     )
 
                     for idx, pid in enumerate(selected_pid[ind2]):
@@ -317,14 +330,14 @@ class TrainerACE:
                 ppX = intrinsics_33[0, 2].item()
                 ppY = intrinsics_33[1, 2].item()
 
-                image, _ = read_and_preprocess(example[1], self.conf_retrieval)
-                image_descriptor = self.encoder_global(
-                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                )["global_descriptor"].squeeze().cpu().numpy()
+                # image, _ = read_and_preprocess(example[1], self.conf_retrieval)
+                # image_descriptor = self.encoder_global(
+                #     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                # )["global_descriptor"].squeeze().cpu().numpy()
 
-                # image = load_image_cosplace(example[1])
-                # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                # image_descriptor = image_descriptor.squeeze().cpu().numpy()
+                image = load_image_cosplace(example[1])
+                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                image_descriptor = image_descriptor.squeeze().cpu().numpy()
 
                 # image = load_image_mix_vpr(image_name)
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
