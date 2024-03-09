@@ -165,13 +165,9 @@ class TrainerACE:
     def collect_descriptors(self, conf, vis=False):
         file_name1 = f"output/{self.ds_name}/codebook_r2d2.npy"
         file_name2 = f"output/{self.ds_name}/all_pids_r2d2.npy"
-        file_name3 = f"output/{self.ds_name}/pid2ind.pkl"
         if os.path.isfile(file_name1):
             pid2mean_desc = np.load(file_name1)
             all_pid = np.load(file_name2)
-            afile = open(file_name3, "rb")
-            pid2ind = pickle.load(afile)
-            afile.close()
         else:
             pid2descriptors = {}
             with torch.no_grad():
@@ -220,17 +216,11 @@ class TrainerACE:
                 pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
             )
 
-            pid2ind = {}
-            ind = 0
             for pid in pid2descriptors:
-                pid2mean_desc[ind] = np.mean(pid2descriptors[pid], 0)
-                pid2ind[pid] = ind
-                ind += 1
+                pid2mean_desc[pid] = np.mean(pid2descriptors[pid], 0)
             np.save(file_name1, pid2mean_desc)
             np.save(file_name2, all_pid)
-            with open(file_name3, "wb") as handle:
-                pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        return pid2mean_desc, all_pid, pid2ind
+        return pid2mean_desc, all_pid
 
     def retrieve_pid(self, pid_list, uv_gt, keypoints):
         tree = KDTree(keypoints.astype(uv_gt.dtype))

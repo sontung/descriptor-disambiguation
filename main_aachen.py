@@ -24,9 +24,13 @@ from dataset import AachenDataset
 from scipy.spatial.transform import Rotation as Rotation
 
 _logger = logging.getLogger(__name__)
-sys.path.append("../MixVPR")
-from mix_vpr_main import VPRModel
-from mix_vpr_demo import load_image as load_image_mix_vpr
+sys.path.append("../CosPlace")
+from cosplace_utils import load_image as load_image_cosplace
+from cosplace_utils import load_model as load_model_cosplace
+
+# sys.path.append("../MixVPR")
+# from mix_vpr_main import VPRModel
+# from mix_vpr_demo import load_image as load_image_mix_vpr
 
 
 def compute_pose(uv_arr, xyz_pred, focal_length, ppX, ppY, gt_pose_B44):
@@ -102,14 +106,18 @@ class TrainerACE:
         conf_ns.resize_max = conf["r2d2"]["preprocessing"]["resize_max"]
         self.conf = conf_ns
 
-        model_dict = conf["netvlad"]["model"]
+        self.encoder_global = load_model_cosplace(
+            "../CosPlace/models/resnet50_128.pth", "ResNet50"
+        )
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        Model = dynamic_load(extractors, model_dict["name"])
-        self.encoder_global = Model(model_dict).eval().to(device)
-        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
-        self.conf_retrieval = conf_ns_retrieval
+        # model_dict = conf["netvlad"]["model"]
+        #
+        # device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Model = dynamic_load(extractors, model_dict["name"])
+        # self.encoder_global = Model(model_dict).eval().to(device)
+        # conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        # conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
+        # self.conf_retrieval = conf_ns_retrieval
 
         # self.encoder_global = VPRModel(
         #     backbone_arch="resnet50",
@@ -156,7 +164,7 @@ class TrainerACE:
             idx = 0
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collecting image descriptors"):
-                    image = load_image_mix_vpr(example[1])
+                    image = load_image_cosplace(example[1])
                     image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
                     image_descriptor = image_descriptor.squeeze().cpu().numpy()
                     all_desc[idx] = image_descriptor
@@ -191,12 +199,7 @@ class TrainerACE:
                     )
 
                     pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-                    # image_descriptor = self.image2desc[example[1]]
-
-                    image, _ = read_and_preprocess(example[1], self.conf_retrieval)
-                    image_descriptor = self.encoder_global(
-                        {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                    )["global_descriptor"].cpu().numpy()
+                    image_descriptor = self.image2desc[example[1]]
 
                     keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
                     descriptors = pred["descriptors"].T
@@ -216,7 +219,7 @@ class TrainerACE:
 
                     selected_descriptors = descriptors[idx_arr]
                     selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor[:, :128]
+                        selected_descriptors + image_descriptor
                     )
 
                     for idx, pid in enumerate(selected_pid[ind2]):

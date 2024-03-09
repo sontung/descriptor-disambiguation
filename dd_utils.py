@@ -874,4 +874,3 @@ def plot_histogram(scores):
     plt.hist(scores, bins=bins)
     plt.show()
     # plt.close()
-
