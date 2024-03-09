@@ -139,7 +139,7 @@ class TrainerACE:
         # )
         # self.encoder_global.load_state_dict(state_dict)
         # self.encoder_global.eval()
-        self.image2desc = self.collect_image_descriptors()
+        # self.image2desc = self.collect_image_descriptors()
         (
             self.pid2mean_desc,
             self.all_pid_in_train_set,
