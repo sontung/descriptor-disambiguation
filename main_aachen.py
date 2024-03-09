@@ -312,10 +312,14 @@ class TrainerACE:
                 ppX = intrinsics_33[0, 2].item()
                 ppY = intrinsics_33[1, 2].item()
 
+                image = load_image_cosplace(example[1])
+                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                image_descriptor = image_descriptor.squeeze().cpu().numpy()
+
                 # image = load_image_mix_vpr(image_name)
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
                 # image_descriptor = image_descriptor.squeeze().cpu().numpy()
-                # descriptors = 0.5 * (descriptors + image_descriptor)
+                descriptors = 0.5 * (descriptors + image_descriptor)
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
