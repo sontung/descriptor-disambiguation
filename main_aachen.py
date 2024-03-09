@@ -163,9 +163,7 @@ class TrainerACE:
             idx = 0
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collecting image descriptors"):
-                    image = load_image_cosplace(example[1], resize_test_imgs=True)
-                    image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                    image_descriptor = image_descriptor.squeeze().cpu().numpy()
+                    image_descriptor = self.produce_image_descriptor(example[1])
                     all_desc[idx] = image_descriptor
                     all_names.append(example[1])
                     idx += 1
@@ -176,6 +174,12 @@ class TrainerACE:
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx]
         return image2desc
+
+    def produce_image_descriptor(self, name):
+        image = load_image_cosplace(name, resize_test_imgs=True)
+        image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+        image_descriptor = image_descriptor.squeeze().cpu().numpy()
+        return image_descriptor
 
     def collect_descriptors(self, conf, vis=False):
         file_name1 = f"output/{self.ds_name}/codebook_r2d2.npy"
@@ -335,9 +339,7 @@ class TrainerACE:
                 #     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
                 # )["global_descriptor"].squeeze().cpu().numpy()
 
-                image = load_image_cosplace(example[1])
-                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                image_descriptor = image_descriptor.squeeze().cpu().numpy()
+                image_descriptor = self.produce_image_descriptor(example[1])
 
                 # image = load_image_mix_vpr(image_name)
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
