@@ -153,16 +153,16 @@ class TrainerACE:
         # )
         # self.encoder_global.load_state_dict(state_dict)
         # self.encoder_global.eval()
-        self.image2desc = self.collect_image_descriptors()
-        (
-            self.pid2mean_desc,
-            self.all_pid_in_train_set,
-            self.pid2ind,
-        ) = self.collect_descriptors()
-        self.all_ind_in_train_set = np.array(
-            [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
-        )
-        self.ind2pid = {v: k for k, v in self.pid2ind.items()}
+        # self.image2desc = self.collect_image_descriptors()
+        # (
+        #     self.pid2mean_desc,
+        #     self.all_pid_in_train_set,
+        #     self.pid2ind,
+        # ) = self.collect_descriptors()
+        # self.all_ind_in_train_set = np.array(
+        #     [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
+        # )
+        # self.ind2pid = {v: k for k, v in self.pid2ind.items()}
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_netvlad.npy"
@@ -210,7 +210,7 @@ class TrainerACE:
         image, scale = read_and_preprocess(name, self.conf)
         pred = self.encoder({"image": torch.from_numpy(image).unsqueeze(0).cuda()})
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-        data = {
+        dict_ = {
             "scale": scale,
             "keypoints": pred["keypoints"],
             "descriptors": pred["descriptors"],
@@ -220,7 +220,7 @@ class TrainerACE:
             if name in fd:
                 del fd[name]
             grp = fd.create_group(name)
-            for k, v in data.items():
+            for k, v in dict_.items():
                 grp.create_dataset(k, data=v)
         except OSError as error:
             if "No space left on device" in error.args[0]:
@@ -282,9 +282,10 @@ class TrainerACE:
                 )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
-                    pid2descriptors.setdefault(pid, []).append(
-                        selected_descriptors[idx]
-                    )
+                    if pid not in pid2descriptors:
+                        pid2descriptors[pid] = selected_descriptors[idx]
+                    else:
+                        pid2descriptors[pid] = 0.5*(selected_descriptors[idx]+pid2descriptors[pid])
 
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
@@ -298,7 +299,7 @@ class TrainerACE:
             pid2ind = {}
             ind = 0
             for pid in pid2descriptors:
-                pid2mean_desc[ind] = np.mean(pid2descriptors[pid], 0)
+                pid2mean_desc[ind] = pid2descriptors[pid]
                 pid2ind[pid] = ind
                 ind += 1
             np.save(file_name1, pid2mean_desc)
@@ -314,11 +315,6 @@ class TrainerACE:
         :return:
         """
         test_set = AachenDataset(train=False)
-        index = faiss.IndexFlatL2(512)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
-        result_file = open(f"output/{self.ds_name}/Aachen_v1_1_eval_dd.txt", "w")
 
         features_path = f"output/{self.ds_name}/d2_features_test.h5"
         if not os.path.isfile(features_path):
@@ -327,6 +323,12 @@ class TrainerACE:
                 for example in tqdm(test_set, desc="Detecting testing features"):
                     self.produce_local_descriptors(example[1], features_h5)
             features_h5.close()
+
+        index = faiss.IndexFlatL2(512)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+        result_file = open(f"output/{self.ds_name}/Aachen_v1_1_eval_dd.txt", "w")
 
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):

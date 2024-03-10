@@ -702,7 +702,7 @@ class AachenDataset(Dataset):
 
         else:
             name1 = self.img_ids[idx]
-            image_name = self.images_dir / name1
+            image_name = str(self.images_dir / name1)
 
             cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
             camera = pycolmap.Camera(
@@ -830,7 +830,7 @@ class RobotCarDataset(Dataset):
 
         else:
             name1 = self.img_ids[idx]
-            image_name = self.images_dir / name1
+            image_name = str(self.images_dir / name1)
 
             cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
             camera = pycolmap.Camera(
