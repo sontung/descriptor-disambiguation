@@ -282,9 +282,9 @@ class TrainerACE:
                 # image_descriptor = np.mean(descriptors, 0)
 
                 selected_descriptors = descriptors[idx_arr]
-                selected_descriptors = 0.5 * (
-                    selected_descriptors + image_descriptor[: descriptors.shape[1]]
-                )
+                # selected_descriptors = 0.5 * (
+                #     selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                # )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
                     if pid not in pid2descriptors:
@@ -346,9 +346,10 @@ class TrainerACE:
                 # image = load_image_mix_vpr(image_name)
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
                 # image_descriptor = image_descriptor.squeeze().cpu().numpy()
-                descriptors = 0.5 * (
-                    descriptors + image_descriptor[: descriptors.shape[1]]
-                )
+
+                # descriptors = 0.5 * (
+                #     descriptors + image_descriptor[: descriptors.shape[1]]
+                # )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints, descriptors, gpu_index_flat,
