@@ -61,6 +61,19 @@ def compute_pose(uv_arr, xyz_pred, focal_length, ppX, ppY, gt_pose_B44):
     return t_err, r_err
 
 
+def read_kp_and_desc(name, features_h5):
+    pred = {}
+    grp = features_h5[name]
+    for k, v in grp.items():
+        pred[k] = v
+
+    pred = {k: np.array(v) for k, v in pred.items()}
+    scale = pred["scale"]
+    keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
+    descriptors = pred["descriptors"].T
+    return keypoints, descriptors
+
+
 class TrainerACE:
     def __init__(self):
         self.dataset = AachenDataset()
@@ -153,16 +166,17 @@ class TrainerACE:
         # )
         # self.encoder_global.load_state_dict(state_dict)
         # self.encoder_global.eval()
-        # self.image2desc = self.collect_image_descriptors()
-        # (
-        #     self.pid2mean_desc,
-        #     self.all_pid_in_train_set,
-        #     self.pid2ind,
-        # ) = self.collect_descriptors()
-        # self.all_ind_in_train_set = np.array(
-        #     [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
-        # )
-        # self.ind2pid = {v: k for k, v in self.pid2ind.items()}
+
+        self.image2desc = self.collect_image_descriptors()
+        (
+            self.pid2mean_desc,
+            self.all_pid_in_train_set,
+            self.pid2ind,
+        ) = self.collect_descriptors()
+        self.all_ind_in_train_set = np.array(
+            [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
+        )
+        self.ind2pid = {v: k for k, v in self.pid2ind.items()}
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_netvlad.npy"
@@ -249,17 +263,8 @@ class TrainerACE:
 
             pid2descriptors = {}
             features_h5 = h5py.File(features_path, "r")
-            for example in tqdm(self.dataset, desc="Collect point descriptors"):
-                pred = {}
-                name = example[1]
-                grp = features_h5[name]
-                for k, v in grp.items():
-                    pred[k] = v
-
-                pred = {k: np.array(v) for k, v in pred.items()}
-                scale = pred["scale"]
-                keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
-                descriptors = pred["descriptors"].T
+            for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+                keypoints, descriptors = read_kp_and_desc(example[1], features_h5)
                 pid_list = example[3]
                 uv = example[-1] + 0.5
                 selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
@@ -329,16 +334,13 @@ class TrainerACE:
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
         result_file = open(f"output/{self.ds_name}/Aachen_v1_1_eval_dd.txt", "w")
+        features_h5 = h5py.File(features_path, "r")
 
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):
-                image_name = example[1]
-
-                keypoints, descriptors = self.produce_local_descriptors(
-                    str(image_name), r2d2_kp_path, r2d2_desc_path
-                )
-
+                keypoints, descriptors = read_kp_and_desc(example[1], features_h5)
                 image_descriptor = self.produce_image_descriptor(example[1])
+
                 # image_descriptor = np.mean(descriptors, 0)
 
                 # image = load_image_mix_vpr(image_name)
@@ -352,27 +354,16 @@ class TrainerACE:
                     keypoints, descriptors, gpu_index_flat,
                 )
 
-                # pairs = []
-                # for j, (x, y) in enumerate(uv_arr):
-                #     xy = [x, y]
-                #     xyz = xyz_pred[j]
-                #     pairs.append((xy, xyz))
-
                 camera = example[6]
                 res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
                 qw, qx, qy, qz = res["qvec"]
                 tx, ty, tz = res["tvec"]
 
-                # pose, info = localize_pose_lib(pairs, focal_length, ppX, ppY)
-                # pose_mat = torch.from_numpy(np.vstack([pose.Rt, np.array([0, 0, 0, 1])])).inverse()
-                #
-                # qx, qy, qz, qw = Rotation.from_matrix(pose_mat.numpy()[:3, :3]).as_quat()
-                # qw, qx, qy, qz = pose.q
-                # tx, ty, tz = pose.t
                 image_id = example[2].split("/")[-1]
                 print(
                     f"{image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz}", file=result_file
                 )
+        features_h5.close()
 
     def retrieve_pid(self, pid_list, uv_gt, keypoints):
         tree = KDTree(keypoints.astype(uv_gt.dtype))
