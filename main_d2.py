@@ -295,10 +295,10 @@ class TrainerACE:
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
-            desc_dim = pid2descriptors[list(pid2descriptors.keys())[0]][0].shape[0]
+            desc_dim = pid2descriptors[list(pid2descriptors.keys())[0]].shape[0]
             pid2mean_desc = np.zeros(
                 (len(self.dataset.recon_points), desc_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
+                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
             )
 
             pid2ind = {}
