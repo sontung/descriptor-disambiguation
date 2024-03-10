@@ -356,12 +356,12 @@ class TrainerACE:
 
                 camera = example[6]
                 res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
-                qw, qx, qy, qz = res["qvec"]
-                tx, ty, tz = res["tvec"]
-
+                mat = res["cam_from_world"]
+                qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
+                tvec = " ".join(map(str, mat.translation))
                 image_id = example[2].split("/")[-1]
                 print(
-                    f"{image_id} {qw} {qx} {qy} {qz} {tx} {ty} {tz}", file=result_file
+                    f"{image_id} {qvec} {tvec}", file=result_file
                 )
         features_h5.close()
 
@@ -401,177 +401,6 @@ class TrainerACE:
         )
 
         return uv_arr, pred_scene_coords_b3
-
-    def evaluate_with_hloc(self):
-        hloc_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/aachen_v1.1/Aachen-v1.1_hloc_superpoint+superglue_netvlad50.txt"
-        with open(hloc_file) as file:
-            lines = [line.rstrip() for line in file]
-        img2gt = {}
-        for line in lines:
-            img_id, qw, qx, qy, qz, tx, ty, tz = line.split(" ")
-            qw, qx, qy, qz, tx, ty, tz = map(float, [qw, qx, qy, qz, tx, ty, tz])
-            img2gt[img_id] = [qw, qx, qy, qz, tx, ty, tz]
-
-        test_set = AachenDataset(train=False)
-        index = faiss.IndexFlatL2(128)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
-        with torch.no_grad():
-            for example in tqdm(test_set, desc="Computing pose for test set"):
-                image_name = example[1]
-                image, scale = read_and_preprocess(image_name, self.conf)
-                pred = self.encoder(
-                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                )
-                pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-
-                keypoints = pred["keypoints"]
-                descriptors = pred["descriptors"].T
-                keypoints /= scale
-
-                intrinsics_33 = example[5].cpu()
-                focal_length = intrinsics_33[0, 0].item()
-                ppX = intrinsics_33[0, 2].item()
-                ppY = intrinsics_33[1, 2].item()
-
-                image = load_image_mix_vpr(image_name)
-                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                image_descriptor = image_descriptor.squeeze().cpu().numpy()
-
-                descriptors = 0.5 * (descriptors + image_descriptor)
-
-                uv_arr, xyz_pred = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat,
-                )
-
-                pairs = []
-                for j, (x, y) in enumerate(uv_arr):
-                    xy = [x, y]
-                    xyz = xyz_pred[j]
-                    pairs.append((xy, xyz))
-
-                camera = example[6]
-                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
-                # qx, qy, qz, qw = res["qvec"]
-                # tx, ty, tz = res["tvec"]
-
-                pose, info = localize_pose_lib(pairs, focal_length, ppX, ppY)
-
-                image_id = example[2].split("/")[-1]
-                qw, qx, qy, qz, tx, ty, tz = img2gt[image_id]
-                pose_q = np.array([qx, qy, qz, qw])
-                pose_R = Rotation.from_quat(pose_q).as_matrix()
-
-                gt_pose = np.identity(4)
-                gt_pose[0:3, 0:3] = pose_R
-                gt_pose[0:3, 3] = [tx, ty, tz]
-                gt_pose = torch.from_numpy(gt_pose)
-
-                est_pose = np.vstack([pose.Rt, [0, 0, 0, 1]])
-                est_pose = np.linalg.inv(est_pose)
-                out_pose = torch.from_numpy(est_pose)
-
-                # Calculate translation error.
-                t_err = float(torch.norm(gt_pose[0:3, 3] - out_pose[0:3, 3]))
-
-                gt_R = gt_pose[0:3, 0:3].numpy()
-                out_R = out_pose[0:3, 0:3].numpy()
-
-                r_err = np.matmul(out_R, np.transpose(gt_R))
-                r_err = cv2.Rodrigues(r_err)[0]
-                r_err = np.linalg.norm(r_err) * 180 / math.pi
-                print()
-
-    def test_model(self):
-        rErrs = []
-        tErrs = []
-
-        pct10_5 = 0
-        pct5 = 0
-        pct2 = 0
-        pct1 = 0
-        mse_error = []
-        index = faiss.IndexFlatL2(128)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
-
-        with torch.no_grad():
-            for example in tqdm(self.dataset, desc="Computing pose for test set"):
-                image_name = example[1]
-                image, scale = read_and_preprocess(image_name, self.conf)
-                pred = self.encoder(
-                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                )
-                pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-
-                keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
-                descriptors = pred["descriptors"].T
-
-                intrinsics_33 = example[5].cpu()
-                focal_length = intrinsics_33[0, 0].item()
-                ppX = intrinsics_33[0, 2].item()
-                ppY = intrinsics_33[1, 2].item()
-
-                image = load_image_mix_vpr(image_name)
-                image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-                image_descriptor = image_descriptor.squeeze().cpu().numpy()
-
-                descriptors = 0.5 * (descriptors + image_descriptor)
-
-                uv_arr2, xyz_pred2 = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat,
-                )
-
-                gt_pose_B44 = example[4].inverse().unsqueeze(0)
-                t_err, r_err = compute_pose(
-                    uv_arr2, xyz_pred2, focal_length, ppX, ppY, gt_pose_B44
-                )
-
-                # Save the errors.
-                rErrs.append(r_err)
-                tErrs.append(t_err * 100)
-
-                # Check various thresholds.
-                if r_err < 5 and t_err < 0.1:  # 10cm/5deg
-                    pct10_5 += 1
-                if r_err < 5 and t_err < 0.05:  # 5cm/5deg
-                    pct5 += 1
-                if r_err < 2 and t_err < 0.02:  # 2cm/2deg
-                    pct2 += 1
-                if r_err < 1 and t_err < 0.01:  # 1cm/1deg
-                    pct1 += 1
-
-        total_frames = len(rErrs)
-        assert total_frames == len(self.dataset)
-
-        # Compute median errors.
-        tErrs.sort()
-        rErrs.sort()
-        median_idx = total_frames // 2
-        median_rErr = rErrs[median_idx]
-        median_tErr = tErrs[median_idx]
-
-        # Compute final metrics.
-        pct10_5 = pct10_5 / total_frames * 100
-        pct5 = pct5 / total_frames * 100
-        pct2 = pct2 / total_frames * 100
-        pct1 = pct1 / total_frames * 100
-
-        _logger.info("===================================================")
-        _logger.info("Test complete.")
-
-        _logger.info("Accuracy:")
-        _logger.info(f"\t10cm/5deg: {pct10_5:.1f}%")
-        _logger.info(f"\t5cm/5deg: {pct5:.1f}%")
-        _logger.info(f"\t2cm/2deg: {pct2:.1f}%")
-        _logger.info(f"\t1cm/1deg: {pct1:.1f}%")
-
-        _logger.info(f"Median Error: {median_rErr}deg, {median_tErr}cm")
-        _logger.info(f"Median Error: {median_rErr:.1f}deg, {median_tErr:.1f}cm")
-        if len(mse_error) > 0:
-            _logger.info(f"MAE Error: {np.mean(mse_error)}")
 
 
 if __name__ == "__main__":
