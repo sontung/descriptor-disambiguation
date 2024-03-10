@@ -68,14 +68,8 @@ class TrainerACE:
         conf = {
             "r2d2": {
                 "output": "feats-r2d2-n5000-r1024",
-                "model": {
-                    "name": "r2d2",
-                    "max_keypoints": 5000,
-                },
-                "preprocessing": {
-                    "grayscale": False,
-                    "resize_max": 1024,
-                },
+                "model": {"name": "r2d2", "max_keypoints": 5000,},
+                "preprocessing": {"grayscale": False, "resize_max": 1024,},
             },
             "netvlad": {
                 "output": "global-feats-netvlad",
@@ -294,9 +288,7 @@ class TrainerACE:
                 descriptors = 0.5 * (descriptors + image_descriptor)
 
                 uv_arr, xyz_pred = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
+                    keypoints, descriptors, gpu_index_flat,
                 )
 
                 # pairs = []
@@ -361,9 +353,7 @@ class TrainerACE:
                 descriptors = 0.5 * (descriptors + image_descriptor)
 
                 uv_arr, xyz_pred = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
+                    keypoints, descriptors, gpu_index_flat,
                 )
 
                 pairs = []
@@ -442,9 +432,7 @@ class TrainerACE:
                 descriptors = 0.5 * (descriptors + image_descriptor)
 
                 uv_arr2, xyz_pred2 = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
+                    keypoints, descriptors, gpu_index_flat,
                 )
 
                 gt_pose_B44 = example[4].inverse().unsqueeze(0)

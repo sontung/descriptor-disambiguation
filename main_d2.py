@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import cv2
 import faiss
+import h5py
 import numpy as np
 import pycolmap
 import torch
@@ -24,9 +25,9 @@ from dataset import AachenDataset
 from scipy.spatial.transform import Rotation as Rotation
 
 _logger = logging.getLogger(__name__)
-sys.path.append("../CosPlace")
-from cosplace_utils import load_image as load_image_cosplace
-from cosplace_utils import load_model as load_model_cosplace
+# sys.path.append("../CosPlace")
+# from cosplace_utils import load_image as load_image_cosplace
+# from cosplace_utils import load_model as load_model_cosplace
 
 # sys.path.append("../MixVPR")
 # from mix_vpr_main import VPRModel
@@ -75,9 +76,29 @@ class TrainerACE:
                 "model": {"name": "r2d2", "max_keypoints": 5000,},
                 "preprocessing": {"grayscale": False, "resize_max": 1024,},
             },
+            "d2net-ss": {
+                "output": "feats-d2net-ss",
+                "model": {"name": "d2net", "multiscale": False,},
+                "preprocessing": {"grayscale": False, "resize_max": 1600,},
+            },
+            "disk": {
+                "output": "feats-disk",
+                "model": {"name": "disk", "max_keypoints": 5000,},
+                "preprocessing": {"grayscale": False, "resize_max": 1600,},
+            },
             "netvlad": {
                 "output": "global-feats-netvlad",
                 "model": {"name": "netvlad"},
+                "preprocessing": {"resize_max": 1024},
+            },
+            "openibl": {
+                "output": "global-feats-openibl",
+                "model": {"name": "openibl"},
+                "preprocessing": {"resize_max": 1024},
+            },
+            "eigenplaces": {
+                "output": "global-feats-eigenplaces",
+                "model": {"name": "eigenplaces"},
                 "preprocessing": {"resize_max": 1024},
             },
         }
@@ -89,28 +110,28 @@ class TrainerACE:
             "resize_force": False,
             "interpolation": "cv2_area",  # pil_linear is more accurate but slower
         }
-        model_dict = conf["r2d2"]["model"]
+        model_dict = conf["d2net-ss"]["model"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         Model = dynamic_load(extractors, model_dict["name"])
         self.encoder = Model(model_dict).eval().to(device)
 
         conf_ns = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns.grayscale = conf["r2d2"]["preprocessing"]["grayscale"]
-        conf_ns.resize_max = conf["r2d2"]["preprocessing"]["resize_max"]
+        conf_ns.grayscale = conf["d2net-ss"]["preprocessing"]["grayscale"]
+        conf_ns.resize_max = conf["d2net-ss"]["preprocessing"]["resize_max"]
         self.conf = conf_ns
 
-        self.encoder_global = load_model_cosplace(
-            "../CosPlace/models/resnet50_128.pth", "ResNet50"
-        )
+        # self.encoder_global = load_model_cosplace(
+        #     "../CosPlace/models/resnet50_128.pth", "ResNet50"
+        # )
 
-        # model_dict = conf["netvlad"]["model"]
-        # device = "cuda" if torch.cuda.is_available() else "cpu"
-        # Model = dynamic_load(extractors, model_dict["name"])
-        # self.encoder_global = Model(model_dict).eval().to(device)
-        # conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        # conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
-        # self.conf_retrieval = conf_ns_retrieval
+        model_dict = conf["netvlad"]["model"]
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        Model = dynamic_load(extractors, model_dict["name"])
+        self.encoder_global = Model(model_dict).eval().to(device)
+        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
+        self.conf_retrieval = conf_ns_retrieval
 
         # self.encoder_global = VPRModel(
         #     backbone_arch="resnet50",
@@ -137,28 +158,28 @@ class TrainerACE:
             self.pid2mean_desc,
             self.all_pid_in_train_set,
             self.pid2ind,
-        ) = self.collect_descriptors(conf_ns)
+        ) = self.collect_descriptors()
         self.all_ind_in_train_set = np.array(
             [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
         )
         self.ind2pid = {v: k for k, v in self.pid2ind.items()}
 
     def collect_image_descriptors(self):
-        file_name1 = f"output/{self.ds_name}/image_desc.npy"
-        file_name2 = f"output/{self.ds_name}/image_desc_name.npy"
+        file_name1 = f"output/{self.ds_name}/image_desc_netvlad.npy"
+        file_name2 = f"output/{self.ds_name}/image_desc_name_netvlad.npy"
         if os.path.isfile(file_name1):
             all_desc = np.load(file_name1)
             afile = open(file_name2, "rb")
             all_names = pickle.load(afile)
             afile.close()
         else:
-            all_desc = np.zeros((len(self.dataset), 128))
+            all_desc = np.zeros((len(self.dataset), 512))
             all_names = []
             idx = 0
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collecting image descriptors"):
                     image_descriptor = self.produce_image_descriptor(example[1])
-                    all_desc[idx] = image_descriptor
+                    all_desc[idx] = image_descriptor[:512]
                     all_names.append(example[1])
                     idx += 1
             np.save(file_name1, all_desc)
@@ -170,34 +191,48 @@ class TrainerACE:
         return image2desc
 
     def produce_image_descriptor(self, name):
-        image = load_image_cosplace(name, resize_test_imgs=True)
-        image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
-        image_descriptor = image_descriptor.squeeze().cpu().numpy()
+        # image = load_image_cosplace(name, resize_test_imgs=True)
+        # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+        # image_descriptor = image_descriptor.squeeze().cpu().numpy()
+
+        image, _ = read_and_preprocess(name, self.conf_retrieval)
+        image_descriptor = (
+            self.encoder_global({"image": torch.from_numpy(image).unsqueeze(0).cuda()})[
+                "global_descriptor"
+            ]
+            .squeeze()
+            .cpu()
+            .numpy()
+        )
         return image_descriptor
 
-    def produce_local_descriptors(self, name, r2d2_kp_path, r2d2_desc_path):
+    def produce_local_descriptors(self, name, fd):
         image, scale = read_and_preprocess(name, self.conf)
+        pred = self.encoder({"image": torch.from_numpy(image).unsqueeze(0).cuda()})
+        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+        data = {
+            "scale": scale,
+            "keypoints": pred["keypoints"],
+            "descriptors": pred["descriptors"],
+        }
 
-        image_id = name.split("/")[-1]
-        kp_file = r2d2_kp_path / f"{image_id}.npy"
-        desc_file = r2d2_desc_path / f"{image_id}.npy"
-        if os.path.isfile(kp_file) and os.path.isfile(desc_file):
-            keypoints = np.load(str(kp_file))
-            descriptors = np.load(str(desc_file))
-        else:
-            pred = self.encoder({"image": torch.from_numpy(image).unsqueeze(0).cuda()})
+        try:
+            if name in fd:
+                del fd[name]
+            grp = fd.create_group(name)
+            for k, v in data.items():
+                grp.create_dataset(k, data=v)
+        except OSError as error:
+            if "No space left on device" in error.args[0]:
+                print("No space left")
+                del grp, fd[name]
+            raise error
 
-            pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-            keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
-            descriptors = pred["descriptors"].T
-            np.save(str(kp_file), keypoints)
-            np.save(str(desc_file), descriptors)
-        return keypoints, descriptors
-
-    def collect_descriptors(self, conf, vis=False):
-        file_name1 = f"output/{self.ds_name}/codebook_r2d2.npy"
-        file_name2 = f"output/{self.ds_name}/all_pids_r2d2.npy"
+    def collect_descriptors(self, vis=False):
+        file_name1 = f"output/{self.ds_name}/codebook_d2.npy"
+        file_name2 = f"output/{self.ds_name}/all_pids_d2.npy"
         file_name3 = f"output/{self.ds_name}/pid2ind.pkl"
+        features_path = f"output/{self.ds_name}/d2_features_train.h5"
         if os.path.isfile(file_name1):
             pid2mean_desc = np.load(file_name1)
             all_pid = np.load(file_name2)
@@ -205,48 +240,53 @@ class TrainerACE:
             pid2ind = pickle.load(afile)
             afile.close()
         else:
+            if not os.path.isfile(features_path):
+                features_h5 = h5py.File(str(features_path), "a", libver="latest")
+                with torch.no_grad():
+                    for example in tqdm(self.dataset, desc="Detecting features"):
+                        self.produce_local_descriptors(example[1], features_h5)
+                features_h5.close()
+
             pid2descriptors = {}
-            r2d2_kp_path = Path(f"output/{self.ds_name}/r2d2_kp_train")
-            r2d2_desc_path = Path(f"output/{self.ds_name}/r2d2_desc_train")
-            r2d2_kp_path.mkdir(parents=True, exist_ok=True)
-            r2d2_desc_path.mkdir(parents=True, exist_ok=True)
+            features_h5 = h5py.File(features_path, "r")
+            for example in tqdm(self.dataset, desc="Collect point descriptors"):
+                pred = {}
+                name = example[1]
+                grp = features_h5[name]
+                for k, v in grp.items():
+                    pred[k] = v
 
-            with torch.no_grad():
-                for example in tqdm(self.dataset, desc="Collect point descriptors"):
-                    keypoints, descriptors = self.produce_local_descriptors(
-                        example[1], r2d2_kp_path, r2d2_desc_path
+                pred = {k: np.array(v) for k, v in pred.items()}
+                scale = pred["scale"]
+                keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
+                descriptors = pred["descriptors"].T
+                pid_list = example[3]
+                uv = example[-1] + 0.5
+                selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
+                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                if vis:
+                    image = cv2.imread(example[1])
+                    for u, v in uv.astype(int):
+                        cv2.circle(image, (u, v), 5, (255, 0, 0))
+                    for u, v in keypoints.astype(int):
+                        cv2.circle(image, (u, v), 5, (0, 255, 0))
+                    cv2.imwrite(f"debug/test{ind}.png", image)
+
+                image_descriptor = self.image2desc[example[1]]
+                # image_descriptor = np.mean(descriptors, 0)
+
+                selected_descriptors = descriptors[idx_arr]
+                selected_descriptors = 0.5 * (
+                    selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                )
+
+                for idx, pid in enumerate(selected_pid[ind2]):
+                    pid2descriptors.setdefault(pid, []).append(
+                        selected_descriptors[idx]
                     )
-                    pid_list = example[3]
-                    uv = example[-1] + 0.5
-                    selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
-                    idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-                    if vis:
-                        image = cv2.imread(example[1])
-                        for u, v in uv.astype(int):
-                            cv2.circle(image, (u, v), 5, (255, 0, 0))
-                        for u, v in keypoints.astype(int):
-                            cv2.circle(image, (u, v), 5, (0, 255, 0))
-                        cv2.imwrite(f"debug/test{ind}.png", image)
-
-                    # image, _ = read_and_preprocess(example[1], self.conf_retrieval)
-                    # image_descriptor = self.encoder_global(
-                    #     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                    # )["global_descriptor"].cpu().numpy()
-
-                    # image_descriptor = self.image2desc[example[1]]
-                    image_descriptor = np.mean(descriptors, 0)
-
-                    selected_descriptors = descriptors[idx_arr]
-                    selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor
-                    )
-
-                    for idx, pid in enumerate(selected_pid[ind2]):
-                        pid2descriptors.setdefault(pid, []).append(
-                            selected_descriptors[idx]
-                        )
-
+            features_h5.close()
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
             desc_dim = pid2descriptors[list(pid2descriptors.keys())[0]][0].shape[0]
@@ -265,6 +305,7 @@ class TrainerACE:
             np.save(file_name2, all_pid)
             with open(file_name3, "wb") as handle:
                 pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         return pid2mean_desc, all_pid, pid2ind
 
     def evaluate(self):
@@ -273,15 +314,20 @@ class TrainerACE:
         :return:
         """
         test_set = AachenDataset(train=False)
-        index = faiss.IndexFlatL2(128)  # build the index
+        index = faiss.IndexFlatL2(512)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
         result_file = open(f"output/{self.ds_name}/Aachen_v1_1_eval_dd.txt", "w")
-        r2d2_kp_path = Path(f"output/{self.ds_name}/r2d2_kp_test")
-        r2d2_desc_path = Path(f"output/{self.ds_name}/r2d2_desc_test")
-        r2d2_kp_path.mkdir(parents=True, exist_ok=True)
-        r2d2_desc_path.mkdir(parents=True, exist_ok=True)
+
+        features_path = f"output/{self.ds_name}/d2_features_test.h5"
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(test_set, desc="Detecting testing features"):
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
+
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):
                 image_name = example[1]
@@ -290,23 +336,15 @@ class TrainerACE:
                     str(image_name), r2d2_kp_path, r2d2_desc_path
                 )
 
-                intrinsics_33 = example[5].cpu()
-                focal_length = intrinsics_33[0, 0].item()
-                ppX = intrinsics_33[0, 2].item()
-                ppY = intrinsics_33[1, 2].item()
-
-                # image, _ = read_and_preprocess(example[1], self.conf_retrieval)
-                # image_descriptor = self.encoder_global(
-                #     {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                # )["global_descriptor"].squeeze().cpu().numpy()
-
-                # image_descriptor = self.produce_image_descriptor(example[1])
-                image_descriptor = np.mean(descriptors, 0)
+                image_descriptor = self.produce_image_descriptor(example[1])
+                # image_descriptor = np.mean(descriptors, 0)
 
                 # image = load_image_mix_vpr(image_name)
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
                 # image_descriptor = image_descriptor.squeeze().cpu().numpy()
-                descriptors = 0.5 * (descriptors + image_descriptor)
+                descriptors = 0.5 * (
+                    descriptors + image_descriptor[: descriptors.shape[1]]
+                )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints, descriptors, gpu_index_flat,

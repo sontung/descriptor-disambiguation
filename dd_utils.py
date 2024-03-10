@@ -129,7 +129,7 @@ def select_coordinates_fast(image_coordinates, coord_map, trees, dist_=10):
 def produce_common_points(images, sfm_model_dir, point_filter=None):
     image_name2id = {}
     reconstruction = pycolmap.Reconstruction(sfm_model_dir)
-    invalid_number = 2**64 - 1
+    invalid_number = 2 ** 64 - 1
     data = {}
     image2points = {}
     for image_id, image in reconstruction.images.items():
@@ -557,7 +557,7 @@ def filter_points3d(
         tracks.append(points_data[pid].track.length())
         errors.append(points_data[pid].error)
     file = open(d2_file, "rb")
-    invalid_number = 2**64 - 1
+    invalid_number = 2 ** 64 - 1
     d2_data = pickle.load(file)
     file.close()
     pid2distances = {pid: [] for pid in points_data}
@@ -753,11 +753,7 @@ def transform_kp_aug_fast(
     kp_indices, image_height, scale_factor, image, image_transformed, angle
 ):
     keypoints = transform_kp(
-        kp_indices,
-        int(image_height * scale_factor),
-        image,
-        image_transformed,
-        angle,
+        kp_indices, int(image_height * scale_factor), image, image_transformed, angle,
     )
 
     keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
