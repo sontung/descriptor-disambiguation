@@ -34,6 +34,7 @@ def use_r2d2(train_ds_, test_ds_,using_global_descriptors):
     trainer_ = BaseTrainer(
         train_ds_, test_ds_,
         128,
+        2048,
         encoder,
         encoder_global,
         conf_ns,
@@ -69,6 +70,7 @@ def use_d2(train_ds_, test_ds_,using_global_descriptors):
     trainer_ = BaseTrainer(
         train_ds_, test_ds_,
         512,
+        2048,
         encoder,
         encoder_global,
         conf_ns,
@@ -104,6 +106,7 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
     trainer_ = BaseTrainer(
         train_ds_, test_ds_,
         256,
+        2048,
         encoder,
         encoder_global,
         conf_ns,
@@ -118,7 +121,7 @@ if __name__ == "__main__":
     train_ds = AachenDataset()
     test_ds = AachenDataset(train=False)
 
-    # use_r2d2(train_ds, test_ds, True)
+    use_r2d2(train_ds, test_ds, True)
     # use_d2(train_ds, test_ds, True)
     use_superpoint(train_ds, test_ds, True)
 

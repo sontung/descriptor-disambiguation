@@ -29,6 +29,7 @@ class BaseTrainer:
         train_ds,
         test_ds,
         feature_dim,
+        global_feature_dim,
         local_desc_model,
         global_desc_model,
         local_desc_conf,
@@ -39,6 +40,7 @@ class BaseTrainer:
         self.dataset = train_ds
         self.test_dataset = test_ds
         self.using_global_descriptors = using_global_descriptors
+        self.global_feature_dim = global_feature_dim
 
         self.name2uv = {}
         self.ds_name = self.dataset.ds_type
@@ -80,13 +82,13 @@ class BaseTrainer:
             all_names = pickle.load(afile)
             afile.close()
         else:
-            all_desc = np.zeros((len(self.dataset), self.feature_dim))
+            all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
             all_names = []
             idx = 0
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collecting image descriptors"):
                     image_descriptor = self.produce_image_descriptor(example[1])
-                    all_desc[idx] = image_descriptor[: self.feature_dim]
+                    all_desc[idx] = image_descriptor
                     all_names.append(example[1])
                     idx += 1
             np.save(file_name1, all_desc)
@@ -94,7 +96,7 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
         image2desc = {}
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx]
+            image2desc[name] = all_desc[idx, :self.feature_dim]
         return image2desc
 
     def produce_image_descriptor(self, name):
@@ -177,10 +179,8 @@ class BaseTrainer:
                     cv2.imwrite(f"debug/test{ind}.png", image)
 
                 selected_descriptors = descriptors[idx_arr]
-                print(selected_descriptors.shape, descriptors.shape)
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
-                    print(image_descriptor.shape, descriptors.shape[1], image_descriptor[: descriptors.shape[1]].shape)
                     selected_descriptors = 0.5 * (
                         selected_descriptors + image_descriptor[: descriptors.shape[1]]
                     )
