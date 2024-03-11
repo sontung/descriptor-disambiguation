@@ -243,9 +243,9 @@ class TrainerACE:
             raise error
 
     def collect_descriptors(self, vis=False):
-        file_name1 = f"output/{self.ds_name}/codebook_d2.npy"
-        file_name2 = f"output/{self.ds_name}/all_pids_d2.npy"
-        file_name3 = f"output/{self.ds_name}/pid2ind.pkl"
+        file_name1 = f"output/{self.ds_name}/codebook_d2_{self.retrieval_model}.npy"
+        file_name2 = f"output/{self.ds_name}/all_pids_d2_{self.retrieval_model}.npy"
+        file_name3 = f"output/{self.ds_name}/pid2ind_{self.retrieval_model}.pkl"
         features_path = f"output/{self.ds_name}/d2_features_train.h5"
         if os.path.isfile(file_name1):
             pid2mean_desc = np.load(file_name1)
