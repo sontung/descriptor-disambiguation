@@ -41,6 +41,7 @@ def use_r2d2(train_ds_, test_ds_,using_global_descriptors):
         using_global_descriptors,
     )
     trainer_.evaluate()
+    del trainer_
 
 
 def use_d2(train_ds_, test_ds_,using_global_descriptors):
@@ -75,6 +76,7 @@ def use_d2(train_ds_, test_ds_,using_global_descriptors):
         using_global_descriptors,
     )
     trainer_.evaluate()
+    del trainer_
 
 
 def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
@@ -109,13 +111,14 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
         using_global_descriptors,
     )
     trainer_.evaluate()
+    del trainer_
 
 
 if __name__ == "__main__":
     train_ds = AachenDataset()
     test_ds = AachenDataset(train=False)
 
-    use_r2d2(train_ds, test_ds, True)
+    # use_r2d2(train_ds, test_ds, True)
     use_d2(train_ds, test_ds, True)
     use_superpoint(train_ds, test_ds, True)
 
