@@ -116,7 +116,6 @@ class BaseTrainer:
         pred = self.local_desc_model(
             {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
         )
-        print("done")
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
         dict_ = {
             "scale": scale,
