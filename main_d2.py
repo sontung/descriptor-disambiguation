@@ -18,6 +18,7 @@ from hloc.utils.base_model import dynamic_load
 from pykdtree.kdtree import KDTree
 from tqdm import tqdm
 
+import dd_utils
 from ace_util import _strtobool
 from ace_util import localize_pose_lib
 from ace_util import read_and_preprocess
@@ -61,19 +62,6 @@ def compute_pose(uv_arr, xyz_pred, focal_length, ppX, ppY, gt_pose_B44):
     return t_err, r_err
 
 
-def read_kp_and_desc(name, features_h5):
-    pred = {}
-    grp = features_h5[name]
-    for k, v in grp.items():
-        pred[k] = v
-
-    pred = {k: np.array(v) for k, v in pred.items()}
-    scale = pred["scale"]
-    keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
-    descriptors = pred["descriptors"].T
-    return keypoints, descriptors
-
-
 class TrainerACE:
     def __init__(self):
         self.dataset = AachenDataset()
@@ -83,46 +71,8 @@ class TrainerACE:
         out_dir = Path(f"output/{self.ds_name}")
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        conf = {
-            "r2d2": {
-                "output": "feats-r2d2-n5000-r1024",
-                "model": {"name": "r2d2", "max_keypoints": 5000,},
-                "preprocessing": {"grayscale": False, "resize_max": 1024,},
-            },
-            "d2net-ss": {
-                "output": "feats-d2net-ss",
-                "model": {"name": "d2net", "multiscale": False,},
-                "preprocessing": {"grayscale": False, "resize_max": 1600,},
-            },
-            "disk": {
-                "output": "feats-disk",
-                "model": {"name": "disk", "max_keypoints": 5000,},
-                "preprocessing": {"grayscale": False, "resize_max": 1600,},
-            },
-            "netvlad": {
-                "output": "global-feats-netvlad",
-                "model": {"name": "netvlad"},
-                "preprocessing": {"resize_max": 1024},
-            },
-            "openibl": {
-                "output": "global-feats-openibl",
-                "model": {"name": "openibl"},
-                "preprocessing": {"resize_max": 1024},
-            },
-            "eigenplaces": {
-                "output": "global-feats-eigenplaces",
-                "model": {"name": "eigenplaces"},
-                "preprocessing": {"resize_max": 1024},
-            },
-        }
+        conf, default_conf = dd_utils.hloc_conf_for_all_models()
 
-        default_conf = {
-            "globs": ["*.jpg", "*.png", "*.jpeg", "*.JPG", "*.PNG"],
-            "grayscale": False,
-            "resize_max": None,
-            "resize_force": False,
-            "interpolation": "cv2_area",  # pil_linear is more accurate but slower
-        }
         model_dict = conf["d2net-ss"]["model"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -143,7 +93,9 @@ class TrainerACE:
         Model = dynamic_load(extractors, model_dict["name"])
         self.encoder_global = Model(model_dict).eval().to(device)
         conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns_retrieval.resize_max = conf[self.retrieval_model]["preprocessing"]["resize_max"]
+        conf_ns_retrieval.resize_max = conf[self.retrieval_model]["preprocessing"][
+            "resize_max"
+        ]
         self.conf_retrieval = conf_ns_retrieval
 
         # self.encoder_global = VPRModel(
@@ -264,7 +216,9 @@ class TrainerACE:
             pid2descriptors = {}
             features_h5 = h5py.File(features_path, "r")
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-                keypoints, descriptors = read_kp_and_desc(example[1], features_h5)
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    example[1], features_h5
+                )
                 pid_list = example[3]
                 uv = example[-1] + 0.5
                 selected_pid, mask, ind = self.retrieve_pid(pid_list, uv, keypoints)
@@ -290,7 +244,9 @@ class TrainerACE:
                     if pid not in pid2descriptors:
                         pid2descriptors[pid] = selected_descriptors[idx]
                     else:
-                        pid2descriptors[pid] = 0.5*(selected_descriptors[idx]+pid2descriptors[pid])
+                        pid2descriptors[pid] = 0.5 * (
+                            selected_descriptors[idx] + pid2descriptors[pid]
+                        )
 
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
@@ -338,7 +294,9 @@ class TrainerACE:
 
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):
-                keypoints, descriptors = read_kp_and_desc(example[1], features_h5)
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    example[1], features_h5
+                )
                 image_descriptor = self.produce_image_descriptor(example[1])
 
                 # image_descriptor = np.mean(descriptors, 0)
@@ -361,9 +319,7 @@ class TrainerACE:
                 qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
                 tvec = " ".join(map(str, mat.translation))
                 image_id = example[2].split("/")[-1]
-                print(
-                    f"{image_id} {qvec} {tvec}", file=result_file
-                )
+                print(f"{image_id} {qvec} {tvec}", file=result_file)
         features_h5.close()
 
     def retrieve_pid(self, pid_list, uv_gt, keypoints):

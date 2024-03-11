@@ -870,3 +870,60 @@ def plot_histogram(scores):
     plt.hist(scores, bins=bins)
     plt.show()
     # plt.close()
+
+
+def hloc_conf_for_all_models():
+    conf = {
+        "r2d2": {
+            "output": "feats-r2d2-n5000-r1024",
+            "model": {"name": "r2d2", "max_keypoints": 5000,},
+            "preprocessing": {"grayscale": False, "resize_max": 1024,},
+        },
+        "d2net-ss": {
+            "output": "feats-d2net-ss",
+            "model": {"name": "d2net", "multiscale": False,},
+            "preprocessing": {"grayscale": False, "resize_max": 1600,},
+        },
+        "disk": {
+            "output": "feats-disk",
+            "model": {"name": "disk", "max_keypoints": 5000,},
+            "preprocessing": {"grayscale": False, "resize_max": 1600,},
+        },
+        "netvlad": {
+            "output": "global-feats-netvlad",
+            "model": {"name": "netvlad"},
+            "preprocessing": {"resize_max": 1024},
+        },
+        "openibl": {
+            "output": "global-feats-openibl",
+            "model": {"name": "openibl"},
+            "preprocessing": {"resize_max": 1024},
+        },
+        "eigenplaces": {
+            "output": "global-feats-eigenplaces",
+            "model": {"name": "eigenplaces"},
+            "preprocessing": {"resize_max": 1024},
+        },
+    }
+
+    default_conf = {
+        "globs": ["*.jpg", "*.png", "*.jpeg", "*.JPG", "*.PNG"],
+        "grayscale": False,
+        "resize_max": None,
+        "resize_force": False,
+        "interpolation": "cv2_area",  # pil_linear is more accurate but slower
+    }
+    return conf, default_conf
+
+
+def read_kp_and_desc(name, features_h5):
+    pred = {}
+    grp = features_h5[name]
+    for k, v in grp.items():
+        pred[k] = v
+
+    pred = {k: np.array(v) for k, v in pred.items()}
+    scale = pred["scale"]
+    keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
+    descriptors = pred["descriptors"].T
+    return keypoints, descriptors
