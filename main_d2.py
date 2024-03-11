@@ -137,13 +137,13 @@ class TrainerACE:
         # self.encoder_global = load_model_cosplace(
         #     "../CosPlace/models/resnet50_128.pth", "ResNet50"
         # )
-
-        model_dict = conf["netvlad"]["model"]
+        self.retrieval_model = "eigenplaces"
+        model_dict = conf[self.retrieval_model]["model"]
         device = "cuda" if torch.cuda.is_available() else "cpu"
         Model = dynamic_load(extractors, model_dict["name"])
         self.encoder_global = Model(model_dict).eval().to(device)
         conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns_retrieval.resize_max = conf["netvlad"]["preprocessing"]["resize_max"]
+        conf_ns_retrieval.resize_max = conf[self.retrieval_model]["preprocessing"]["resize_max"]
         self.conf_retrieval = conf_ns_retrieval
 
         # self.encoder_global = VPRModel(
@@ -179,8 +179,8 @@ class TrainerACE:
         self.ind2pid = {v: k for k, v in self.pid2ind.items()}
 
     def collect_image_descriptors(self):
-        file_name1 = f"output/{self.ds_name}/image_desc_netvlad.npy"
-        file_name2 = f"output/{self.ds_name}/image_desc_name_netvlad.npy"
+        file_name1 = f"output/{self.ds_name}/image_desc_{self.retrieval_model}.npy"
+        file_name2 = f"output/{self.ds_name}/image_desc_name_{self.retrieval_model}.npy"
         if os.path.isfile(file_name1):
             all_desc = np.load(file_name1)
             afile = open(file_name2, "rb")
@@ -282,9 +282,9 @@ class TrainerACE:
                 # image_descriptor = np.mean(descriptors, 0)
 
                 selected_descriptors = descriptors[idx_arr]
-                # selected_descriptors = 0.5 * (
-                #     selected_descriptors + image_descriptor[: descriptors.shape[1]]
-                # )
+                selected_descriptors = 0.5 * (
+                    selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
                     if pid not in pid2descriptors:
@@ -339,7 +339,7 @@ class TrainerACE:
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):
                 keypoints, descriptors = read_kp_and_desc(example[1], features_h5)
-                # image_descriptor = self.produce_image_descriptor(example[1])
+                image_descriptor = self.produce_image_descriptor(example[1])
 
                 # image_descriptor = np.mean(descriptors, 0)
 
@@ -347,9 +347,9 @@ class TrainerACE:
                 # image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
                 # image_descriptor = image_descriptor.squeeze().cpu().numpy()
 
-                # descriptors = 0.5 * (
-                #     descriptors + image_descriptor[: descriptors.shape[1]]
-                # )
+                descriptors = 0.5 * (
+                    descriptors + image_descriptor[: descriptors.shape[1]]
+                )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints, descriptors, gpu_index_flat,
