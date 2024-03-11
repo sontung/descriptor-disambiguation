@@ -180,6 +180,7 @@ class BaseTrainer:
                 print(selected_descriptors.shape, descriptors.shape)
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
+                    print(image_descriptor.shape, descriptors.shape[1], image_descriptor[: descriptors.shape[1]].shape)
                     selected_descriptors = 0.5 * (
                         selected_descriptors + image_descriptor[: descriptors.shape[1]]
                     )
