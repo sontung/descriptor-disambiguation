@@ -339,7 +339,7 @@ class TrainerACE:
         with torch.no_grad():
             for example in tqdm(test_set, desc="Computing pose for test set"):
                 keypoints, descriptors = read_kp_and_desc(example[1], features_h5)
-                image_descriptor = self.produce_image_descriptor(example[1])
+                # image_descriptor = self.produce_image_descriptor(example[1])
 
                 # image_descriptor = np.mean(descriptors, 0)
 
