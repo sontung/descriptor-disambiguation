@@ -95,6 +95,7 @@ class TrainerACE:
         conf_ns_retrieval.resize_max = conf[self.retrieval_model]["preprocessing"][
             "resize_max"
         ]
+        self.conf_retrieval = conf_ns_retrieval
 
         self.image2desc = self.collect_image_descriptors()
         (
