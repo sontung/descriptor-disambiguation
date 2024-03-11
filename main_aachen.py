@@ -119,10 +119,10 @@ if __name__ == "__main__":
     test_ds = AachenDataset(train=False)
 
     # use_r2d2(train_ds, test_ds, True)
-    use_d2(train_ds, test_ds, True)
+    # use_d2(train_ds, test_ds, True)
     use_superpoint(train_ds, test_ds, True)
 
     use_r2d2(train_ds, test_ds, False)
-    use_d2(train_ds, test_ds, False)
+    # use_d2(train_ds, test_ds, False)
     use_superpoint(train_ds, test_ds, False)
 
