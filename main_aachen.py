@@ -89,6 +89,7 @@ class TrainerACE:
         model_dict = conf[self.retrieval_model]["model"]
         device = "cuda" if torch.cuda.is_available() else "cpu"
         Model = dynamic_load(extractors, model_dict["name"])
+        model_dict.update({'variant': 'EigenPlaces', 'backbone': 'ResNet101', 'fc_output_dim': 128})
         self.encoder_global = Model(model_dict).eval().to(device)
         conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
         conf_ns_retrieval.resize_max = conf[self.retrieval_model]["preprocessing"][

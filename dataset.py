@@ -747,17 +747,32 @@ class AachenDataset(Dataset):
             return self._get_single_item(idx)
 
 
+def _read_train_poses(a_file):
+    with open(a_file) as file:
+        lines = [line.rstrip() for line in file]
+    name2mat = {}
+    for line in lines:
+        img_name, *matrix = line.split(" ")
+        if matrix:
+            matrix = np.array(matrix, float).reshape(4, 4)
+        name2mat[img_name] = matrix
+    return name2mat
+
+
 class RobotCarDataset(Dataset):
-    def __init__(self, ds_dir="datasets/robotcar", train=True):
+    def __init__(self, ds_dir="datasets/robotcar", train=True, evaluate=False):
         self.ds_type = "robotcar"
         self.ds_dir = ds_dir
         self.sfm_model_dir = f"{ds_dir}/3D-models/all-merged/all.nvm"
         self.images_dir = Path(f"{self.ds_dir}/images")
-        self.pose_file = f"{ds_dir}/robotcar_v2_train.txt"
+        self.test_file1 = f"{ds_dir}/robotcar_v2_train.txt"
+        self.test_file2 = f"{ds_dir}/robotcar_v2_test.txt"
         self.train = train
+        self.evaluate = evaluate
+        if evaluate:
+            assert not self.train
 
         if self.train:
-            self.name2mat = self._read_train_poses()
             (
                 self.xyz_arr,
                 self.image2points,
@@ -768,21 +783,13 @@ class RobotCarDataset(Dataset):
             self.name2image = {v: k for k, v in self.image2name.items()}
             self.img_ids = list(self.image2name.keys())
         else:
-            name2params1 = read_intrinsic(self.day_intrinsic_file)
-            name2params2 = read_intrinsic(self.night_intrinsic_file)
-            self.name2params = {**name2params1, **name2params2}
-            self.img_ids = list(self.name2params.keys())
-        return
+            if not self.evaluate:
+                self.name2mat = _read_train_poses(self.test_file1)
+            else:
+                self.name2mat = _read_train_poses(self.test_file2)
+            self.img_ids = list(self.name2mat.keys())
 
-    def _read_train_poses(self):
-        with open(self.pose_file) as file:
-            lines = [line.rstrip() for line in file]
-        name2mat = {}
-        for line in lines:
-            img_name, *matrix = line.split(" ")
-            matrix = np.array(matrix, float).reshape(4, 4)
-            name2mat[img_name] = matrix
-        return name2mat
+        return
 
     def _load_image(self, img_id):
         name = self.image2name[img_id].split("./")[-1]
@@ -831,13 +838,22 @@ class RobotCarDataset(Dataset):
         else:
             name1 = self.img_ids[idx]
             image_name = str(self.images_dir / name1)
+            focal = 400
+            if "rear" in name1:
+                cx = 508.222931
+                cy = 498.187378
+            elif "right" in name1:
+                cx = 502.503754
+                cy = 490.259033
+            elif "left" in name1:
+                cx = 500.107605
+                cy = 511.461426
 
-            cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
             camera = pycolmap.Camera(
-                model=cam_type,
-                width=int(width),
-                height=int(height),
-                params=[focal, cx, cy, k],
+                model="SIMPLE_RADIAL",
+                width=1024,
+                height=1024,
+                params=[focal, cx, cy, 0],
             )
 
             intrinsics = torch.eye(3)
@@ -849,7 +865,10 @@ class RobotCarDataset(Dataset):
             image = None
             img_id = name1
             pid_list = []
-            pose_inv = None
+            if self.name2mat[name1]:
+                pose_inv = torch.from_numpy(self.name2mat[name1])
+            else:
+                pose_inv = None
             xyz_gt = None
             uv_gt = None
 
@@ -876,6 +895,6 @@ class RobotCarDataset(Dataset):
 
 
 if __name__ == "__main__":
-    testset = RobotCarDataset(train=True)
+    testset = RobotCarDataset(train=False, evaluate=False)
     for t in testset:
         continue
