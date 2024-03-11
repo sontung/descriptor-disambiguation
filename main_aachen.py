@@ -103,7 +103,7 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
     conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
     trainer_ = BaseTrainer(
         train_ds_, test_ds_,
-        512,
+        256,
         encoder,
         encoder_global,
         conf_ns,
