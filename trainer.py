@@ -177,6 +177,7 @@ class BaseTrainer:
                     cv2.imwrite(f"debug/test{ind}.png", image)
 
                 selected_descriptors = descriptors[idx_arr]
+                print(selected_descriptors.shape, descriptors.shape)
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
                     selected_descriptors = 0.5 * (
