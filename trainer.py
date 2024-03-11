@@ -111,8 +111,8 @@ class BaseTrainer:
 
     def produce_local_descriptors(self, name, fd):
         image, scale = read_and_preprocess(name, self.local_desc_conf)
-        print(name)
-        print(image.shape, name)
+        # print(name)
+        # print(image.shape, name)
         pred = self.local_desc_model(
             {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
         )
