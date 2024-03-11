@@ -137,7 +137,7 @@ class TrainerACE:
         # self.encoder_global = load_model_cosplace(
         #     "../CosPlace/models/resnet50_128.pth", "ResNet50"
         # )
-        self.retrieval_model = "eigenplaces"
+        self.retrieval_model = "openibl"
         model_dict = conf[self.retrieval_model]["model"]
         device = "cuda" if torch.cuda.is_available() else "cpu"
         Model = dynamic_load(extractors, model_dict["name"])
