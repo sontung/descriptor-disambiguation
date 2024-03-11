@@ -182,25 +182,22 @@ class BaseTrainer:
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in pid2descriptors:
-                        pid2descriptors[pid] = selected_descriptors[idx]
-                    else:
-                        pid2descriptors[pid] = 0.5 * (
-                            selected_descriptors[idx] + pid2descriptors[pid]
-                        )
+                    pid2descriptors.setdefault(pid, []).append(
+                        selected_descriptors[idx]
+                    )
 
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
             pid2mean_desc = np.zeros(
                 (len(self.dataset.recon_points), self.feature_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+                pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
             )
 
             pid2ind = {}
             ind = 0
             for pid in pid2descriptors:
-                pid2mean_desc[ind] = pid2descriptors[pid]
+                pid2mean_desc[ind] = np.mean(pid2descriptors[pid], 0)
                 pid2ind[pid] = ind
                 ind += 1
             np.save(file_name1, pid2mean_desc)
@@ -257,7 +254,7 @@ class BaseTrainer:
                     dict_ = {"global_descriptor": image_descriptor}
                     dd_utils.write_to_h5_file(global_features_h5, name, dict_)
             global_features_h5.close()
-            
+
         features_h5 = h5py.File(features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
 
