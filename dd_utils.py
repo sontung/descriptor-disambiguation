@@ -874,6 +874,18 @@ def plot_histogram(scores):
 
 def hloc_conf_for_all_models():
     conf = {
+        "superpoint": {
+            "output": "feats-superpoint-n4096-r1024",
+            "model": {
+                "name": "superpoint",
+                "nms_radius": 3,
+                "max_keypoints": 4096,
+            },
+            "preprocessing": {
+                "grayscale": True,
+                "resize_max": 1024,
+            },
+        },
         "r2d2": {
             "output": "feats-r2d2-n5000-r1024",
             "model": {"name": "r2d2", "max_keypoints": 5000,},
@@ -927,3 +939,17 @@ def read_kp_and_desc(name, features_h5):
     keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
     descriptors = pred["descriptors"].T
     return keypoints, descriptors
+
+
+def write_to_h5_file(fd, name, dict_):
+    try:
+        if name in fd:
+            del fd[name]
+        grp = fd.create_group(name)
+        for k, v in dict_.items():
+            grp.create_dataset(k, data=v)
+    except OSError as error:
+        if "No space left on device" in error.args[0]:
+            print("No space left")
+            del grp, fd[name]
+        raise error

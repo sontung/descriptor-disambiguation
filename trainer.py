@@ -120,18 +120,7 @@ class BaseTrainer:
             "keypoints": pred["keypoints"],
             "descriptors": pred["descriptors"],
         }
-
-        try:
-            if name in fd:
-                del fd[name]
-            grp = fd.create_group(name)
-            for k, v in dict_.items():
-                grp.create_dataset(k, data=v)
-        except OSError as error:
-            if "No space left on device" in error.args[0]:
-                print("No space left")
-                del grp, fd[name]
-            raise error
+        dd_utils.write_to_h5_file(fd, name, dict_)
 
     def collect_descriptors(self, vis=False):
         if self.using_global_descriptors:
@@ -203,9 +192,8 @@ class BaseTrainer:
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
-            desc_dim = pid2descriptors[list(pid2descriptors.keys())[0]].shape[0]
             pid2mean_desc = np.zeros(
-                (len(self.dataset.recon_points), desc_dim),
+                (len(self.dataset.recon_points), self.feature_dim),
                 pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
             )
 
@@ -254,16 +242,33 @@ class BaseTrainer:
                 f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}.txt",
                 "w",
             )
+
+        global_descriptors_path = (
+            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
+        )
+        if not os.path.isfile(global_descriptors_path):
+            global_features_h5 = h5py.File(str(global_descriptors_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(
+                    self.test_dataset, desc="Collecting global descriptors for test set"
+                ):
+                    image_descriptor = self.produce_image_descriptor(example[1])
+                    name = example[1]
+                    dict_ = {"global_descriptor": image_descriptor}
+                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
+            global_features_h5.close()
+            
         features_h5 = h5py.File(features_path, "r")
+        global_features_h5 = h5py.File(global_descriptors_path, "r")
 
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
+                name = example[1]
                 keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
+                    name, features_h5
                 )
                 if self.using_global_descriptors:
-                    image_descriptor = self.produce_image_descriptor(example[1])
-
+                    image_descriptor = np.array(global_features_h5[name]["global_descriptor"])
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
