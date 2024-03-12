@@ -865,7 +865,7 @@ class RobotCarDataset(Dataset):
             image = None
             img_id = name1
             pid_list = []
-            if self.name2mat[name1]:
+            if type(self.name2mat[name1]) == np.ndarray:
                 pose_inv = torch.from_numpy(self.name2mat[name1])
             else:
                 pose_inv = None

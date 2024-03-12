@@ -180,7 +180,8 @@ class BaseTrainer:
                 pid_list = example[3]
                 uv = example[-1] + 0.5
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+                # idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+                idx_arr = ind[mask]
 
                 if vis:
                     image = cv2.imread(example[1])
@@ -197,7 +198,8 @@ class BaseTrainer:
                         selected_descriptors + image_descriptor[: descriptors.shape[1]]
                     )
 
-                for idx, pid in enumerate(selected_pid[ind2]):
+                # for idx, pid in enumerate(selected_pid[ind2]):
+                for idx, pid in enumerate(selected_pid):
                     pid2descriptors.setdefault(pid, []).append(
                         selected_descriptors[idx]
                     )
@@ -316,3 +318,95 @@ class BaseTrainer:
         )
 
         return uv_arr, pred_scene_coords_b3
+
+
+class RobotCarTrainer(BaseTrainer):
+    def __init__(self, train_ds, test_ds, feature_dim, global_feature_dim, local_desc_model, global_desc_model,
+                 local_desc_conf, global_desc_conf, using_global_descriptors):
+        super().__init__(train_ds, test_ds, feature_dim, global_feature_dim, local_desc_model, global_desc_model,
+                         local_desc_conf, global_desc_conf, using_global_descriptors)
+
+    def collect_descriptors(self, vis=False):
+        if self.using_global_descriptors:
+            file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
+            file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
+            file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}.pkl"
+        else:
+            file_name1 = (
+                f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
+            )
+            file_name2 = (
+                f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}.npy"
+            )
+            file_name3 = (
+                f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}.pkl"
+            )
+
+        features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
+        )
+        if os.path.isfile(file_name1):
+            pid2mean_desc = np.load(file_name1)
+            all_pid = np.load(file_name2)
+            afile = open(file_name3, "rb")
+            pid2ind = pickle.load(afile)
+            afile.close()
+        else:
+            if not os.path.isfile(features_path):
+                features_h5 = h5py.File(str(features_path), "a", libver="latest")
+                with torch.no_grad():
+                    for example in tqdm(self.dataset, desc="Detecting features"):
+                        self.produce_local_descriptors(example[1], features_h5)
+                features_h5.close()
+
+            pid2descriptors = {}
+            features_h5 = h5py.File(features_path, "r")
+            for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    example[1], features_h5
+                )
+                pid_list = example[3]
+                uv = example[-1] + 0.5
+                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                if vis:
+                    image = cv2.imread(example[1])
+                    for u, v in uv.astype(int):
+                        cv2.circle(image, (u, v), 5, (255, 0, 0))
+                    for u, v in keypoints.astype(int):
+                        cv2.circle(image, (u, v), 5, (0, 255, 0))
+                    cv2.imwrite(f"debug/test{ind}.png", image)
+
+                selected_descriptors = descriptors[idx_arr]
+                if self.using_global_descriptors:
+                    image_descriptor = self.image2desc[example[1]]
+                    selected_descriptors = 0.5 * (
+                            selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                    )
+
+                for idx, pid in enumerate(selected_pid[ind2]):
+                    pid2descriptors.setdefault(pid, []).append(
+                        selected_descriptors[idx]
+                    )
+
+            features_h5.close()
+            all_pid = list(pid2descriptors.keys())
+            all_pid = np.array(all_pid)
+            pid2mean_desc = np.zeros(
+                (len(self.dataset.recon_points), self.feature_dim),
+                pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
+            )
+
+            pid2ind = {}
+            ind = 0
+            for pid in pid2descriptors:
+                pid2mean_desc[ind] = np.mean(pid2descriptors[pid], 0)
+                pid2ind[pid] = ind
+                ind += 1
+            np.save(file_name1, pid2mean_desc)
+            np.save(file_name2, all_pid)
+            with open(file_name3, "wb") as handle:
+                pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        return pid2mean_desc, all_pid, pid2ind
