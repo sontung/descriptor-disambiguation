@@ -55,6 +55,18 @@ class BaseTrainer:
         self.global_desc_model = global_desc_model
         self.global_desc_conf = global_desc_conf
 
+        self.test_features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
+        )
+        if not os.path.isfile(self.test_features_path):
+            features_h5 = h5py.File(str(self.test_features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(
+                    self.test_dataset, desc="Detecting testing features"
+                ):
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
+
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
         else:
@@ -217,18 +229,6 @@ class BaseTrainer:
         :return:
         """
 
-        features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
-        )
-        if not os.path.isfile(features_path):
-            features_h5 = h5py.File(str(features_path), "a", libver="latest")
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Detecting testing features"
-                ):
-                    self.produce_local_descriptors(example[1], features_h5)
-            features_h5.close()
-
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
@@ -259,7 +259,7 @@ class BaseTrainer:
                     dd_utils.write_to_h5_file(global_features_h5, name, dict_)
             global_features_h5.close()
 
-        features_h5 = h5py.File(features_path, "r")
+        features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
 
         with torch.no_grad():
