@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 from pathlib import Path
 
 import cv2
@@ -13,6 +14,10 @@ from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess
+
+sys.path.append("../MixVPR")
+from mix_vpr_main import VPRModel
+from mix_vpr_demo import load_image as load_image_mix_vpr
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -62,7 +67,9 @@ class BaseTrainer:
                 f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
             )
             if not os.path.isfile(self.test_features_path):
-                features_h5 = h5py.File(str(self.test_features_path), "a", libver="latest")
+                features_h5 = h5py.File(
+                    str(self.test_features_path), "a", libver="latest"
+                )
                 with torch.no_grad():
                     for example in tqdm(
                         self.test_dataset, desc="Detecting testing features"
@@ -685,7 +692,10 @@ class ConcatenateTrainer(BaseTrainer):
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
             pid2mean_desc = np.zeros(
-                (len(self.dataset.recon_points), self.feature_dim+self.global_feature_dim),
+                (
+                    len(self.dataset.recon_points),
+                    self.feature_dim + self.global_feature_dim,
+                ),
                 pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
             )
 
@@ -766,15 +776,149 @@ class ConcatenateTrainer(BaseTrainer):
         global_features_h5.close()
 
 
-class GlobalDescriptorOnlyTrainer(BaseTrainer):
-    def __init__(self, train_ds, test_ds, feature_dim, global_feature_dim, local_desc_model, global_desc_model,
-                 local_desc_conf, global_desc_conf):
+class MeanOfLocalDescriptorsTrainer(BaseTrainer):
+    def __init__(
+        self,
+        train_ds,
+        test_ds,
+        feature_dim,
+        global_feature_dim,
+        local_desc_model,
+        global_desc_model,
+        local_desc_conf,
+        global_desc_conf,
+    ):
+        super().__init__(
+            train_ds,
+            test_ds,
+            feature_dim,
+            global_feature_dim,
+            local_desc_model,
+            global_desc_model,
+            local_desc_conf,
+            global_desc_conf,
+            False,
+            collect_code_book=False,
+            run_local_feature_detection_on_test_set=True,
+        )
         self.all_global_descriptors = None
         self.all_image_names = None
-        super().__init__(train_ds, test_ds, feature_dim, global_feature_dim, local_desc_model, global_desc_model,
-                         local_desc_conf, global_desc_conf, True,
-                         run_local_feature_detection_on_test_set=False,
-                         collect_code_book=False)
+        self.image2desc = self.collect_image_descriptors()
+
+    def collect_image_descriptors(self):
+        file_name1 = (
+            f"output/{self.ds_name}/image_desc_{self.local_desc_model_name}.npy"
+        )
+        file_name2 = (
+            f"output/{self.ds_name}/image_desc_name_{self.local_desc_model_name}.npy"
+        )
+        if os.path.isfile(file_name1):
+            all_desc = np.load(file_name1)
+            afile = open(file_name2, "rb")
+            all_names = pickle.load(afile)
+            afile.close()
+        else:
+            features_path = (
+                f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
+            )
+            if not os.path.isfile(features_path):
+                features_h5 = h5py.File(str(features_path), "a", libver="latest")
+                with torch.no_grad():
+                    for example in tqdm(self.dataset, desc="Detecting features"):
+                        self.produce_local_descriptors(example[1], features_h5)
+                features_h5.close()
+
+            all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
+            all_names = []
+            idx = 0
+            features_h5 = h5py.File(features_path, "r")
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Collecting image descriptors"):
+                    keypoints, descriptors = dd_utils.read_kp_and_desc(
+                        example[1], features_h5
+                    )
+                    image_descriptor = np.mean(descriptors, 0)
+                    all_desc[idx] = image_descriptor
+                    all_names.append(example[1])
+                    idx += 1
+            features_h5.close()
+            np.save(file_name1, all_desc)
+            with open(file_name2, "wb") as handle:
+                pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        image2desc = {}
+        for idx, name in enumerate(all_names):
+            image2desc[name] = all_desc[idx, : self.feature_dim]
+        self.all_global_descriptors = all_desc
+        self.all_image_names = all_names
+        return image2desc
+
+    def evaluate(self):
+        """
+        write to pose file as name.jpg qw qx qy qz tx ty tz
+        :return:
+        """
+
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.all_global_descriptors)
+        result_file = open(
+            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_global_only.txt",
+            "w",
+        )
+        print(f"Evaluating with {self.feature_dim}-D descriptors.")
+        features_h5 = h5py.File(self.test_features_path, "r")
+
+        with torch.no_grad():
+            for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
+                name = example[1]
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+
+                image_descriptor = np.mean(descriptors, 0)
+
+                distances, image_ind = gpu_index_flat.search(
+                    np.expand_dims(image_descriptor, 0), 1
+                )
+                db_name = self.all_image_names[image_ind[0][0]]
+                name = db_name.split(f"{str(self.dataset.images_dir)}/")[-1]
+                db_img_id = self.dataset.image_name2id[name]
+                res = self.dataset.recon_images[db_img_id]
+                qvec = " ".join(map(str, res.qvec))
+                tvec = " ".join(map(str, res.tvec))
+
+                image_id = example[2].split("/")[-1]
+                print(f"{image_id} {qvec} {tvec}", file=result_file)
+        result_file.close()
+        features_h5.close()
+
+
+class GlobalDescriptorOnlyTrainer(BaseTrainer):
+    def __init__(
+        self,
+        train_ds,
+        test_ds,
+        feature_dim,
+        global_feature_dim,
+        local_desc_model,
+        global_desc_model,
+        local_desc_conf,
+        global_desc_conf,
+    ):
+        self.all_global_descriptors = None
+        self.all_image_names = None
+        super().__init__(
+            train_ds,
+            test_ds,
+            feature_dim,
+            global_feature_dim,
+            local_desc_model,
+            global_desc_model,
+            local_desc_conf,
+            global_desc_conf,
+            True,
+            run_local_feature_detection_on_test_set=False,
+            collect_code_book=False,
+        )
 
     def collect_image_descriptors(self):
         file_name1 = (
@@ -847,7 +991,147 @@ class GlobalDescriptorOnlyTrainer(BaseTrainer):
                     global_features_h5[name]["global_descriptor"]
                 )
 
-                distances, image_ind = gpu_index_flat.search(np.expand_dims(image_descriptor, 0), 1)
+                distances, image_ind = gpu_index_flat.search(
+                    np.expand_dims(image_descriptor, 0), 1
+                )
+                db_name = self.all_image_names[image_ind[0][0]]
+                name = db_name.split(f"{str(self.dataset.images_dir)}/")[-1]
+                db_img_id = self.dataset.image_name2id[name]
+                res = self.dataset.recon_images[db_img_id]
+                qvec = " ".join(map(str, res.qvec))
+                tvec = " ".join(map(str, res.tvec))
+
+                image_id = example[2].split("/")[-1]
+                print(f"{image_id} {qvec} {tvec}", file=result_file)
+        result_file.close()
+        global_features_h5.close()
+
+
+class MixVPROnlyTrainer:
+    def __init__(
+        self,
+        train_ds,
+        test_ds,
+        feature_dim,
+        global_feature_dim,
+        local_desc_model,
+        global_desc_model,
+        local_desc_conf,
+        global_desc_conf,
+    ):
+        self.dataset = train_ds
+        self.test_dataset = test_ds
+        self.ds_name = self.dataset.ds_type
+        self.all_global_descriptors = None
+        self.all_image_names = None
+        self.global_feature_dim = global_feature_dim
+        self.global_desc_model_name = "MixVPR"
+        self.encoder_global = VPRModel(
+            backbone_arch="resnet50",
+            layers_to_crop=[4],
+            agg_arch="MixVPR",
+            agg_config={
+                "in_channels": 1024,
+                "in_h": 20,
+                "in_w": 20,
+                "out_channels": 1024,
+                "mix_depth": 4,
+                "mlp_ratio": 1,
+                "out_rows": 4,
+            },
+        ).cuda()
+
+        # state_dict = torch.load(
+        #     "../MixVPR/resnet50_MixVPR_128_channels(64)_rows(2).ckpt"
+        # )
+        state_dict = torch.load(
+            "../MixVPR/resnet50_MixVPR_4096_channels(1024)_rows(4).ckpt"
+        )
+        self.encoder_global.load_state_dict(state_dict)
+        self.encoder_global.eval()
+
+        self.collect_image_descriptors()
+
+    def collect_image_descriptors(self):
+        file_name1 = (
+            f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_all.npy"
+        )
+        file_name2 = f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}_all.npy"
+        if os.path.isfile(file_name1):
+            all_desc = np.load(file_name1)
+            afile = open(file_name2, "rb")
+            all_names = pickle.load(afile)
+            afile.close()
+        else:
+            all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
+            all_names = []
+            idx = 0
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Collecting image descriptors"):
+                    image = load_image_mix_vpr(example[1])
+                    image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                    image_descriptor = image_descriptor.squeeze().cpu().numpy()
+
+                    all_desc[idx] = image_descriptor
+                    all_names.append(example[1])
+                    idx += 1
+            np.save(file_name1, all_desc)
+            with open(file_name2, "wb") as handle:
+                pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        image2desc = {}
+        for idx, name in enumerate(all_names):
+            image2desc[name] = all_desc[idx]
+        self.all_global_descriptors = all_desc
+        self.all_image_names = all_names
+        return image2desc
+
+    def evaluate(self):
+        """
+        write to pose file as name.jpg qw qx qy qz tx ty tz
+        :return:
+        """
+
+        index = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.all_global_descriptors)
+        result_file = open(
+            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.global_desc_model_name}_global_only.txt",
+            "w",
+        )
+        print(f"Evaluating with {self.global_feature_dim}-D descriptors.")
+        global_descriptors_path = (
+            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
+        )
+        if not os.path.isfile(global_descriptors_path):
+            global_features_h5 = h5py.File(
+                str(global_descriptors_path), "a", libver="latest"
+            )
+            with torch.no_grad():
+                for example in tqdm(
+                    self.test_dataset, desc="Collecting global descriptors for test set"
+                ):
+                    image = load_image_mix_vpr(example[1])
+                    image_descriptor = self.encoder_global(image.unsqueeze(0).cuda())
+                    image_descriptor = image_descriptor.squeeze().cpu().numpy()
+
+                    name = example[1]
+                    dict_ = {"global_descriptor": image_descriptor}
+                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
+            global_features_h5.close()
+
+        global_features_h5 = h5py.File(global_descriptors_path, "r")
+
+        with torch.no_grad():
+            for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
+                name = example[1]
+                image_descriptor = np.array(
+                    global_features_h5[name]["global_descriptor"]
+                )
+
+                distances, image_ind = gpu_index_flat.search(
+                    np.expand_dims(image_descriptor, 0), 1
+                )
                 db_name = self.all_image_names[image_ind[0][0]]
                 name = db_name.split(f"{str(self.dataset.images_dir)}/")[-1]
                 db_img_id = self.dataset.image_name2id[name]
