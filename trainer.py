@@ -710,18 +710,30 @@ class ConcatenateTrainer(BaseTrainer):
 
     # @profile
     def legal_predict_with_img_desc(
-        self, uv_arr, features_ori, gpu_index_flat, img_desc,
+        self,
+        uv_arr,
+        features_ori,
+        gpu_index_flat,
+        img_desc,
     ):
         distances, feature_indices = gpu_index_flat.search(features_ori, 10)
         pid2global_desc = {}
         res2 = []
         for uv_id, ind_arr in enumerate(feature_indices):
             pid_arr = [self.ind2pid[ind] for ind in ind_arr]
-            all_desc_np = np.zeros((len(pid_arr), self.global_feature_dim), img_desc.dtype)
+            all_desc_np = np.zeros(
+                (len(pid_arr), self.global_feature_dim), img_desc.dtype
+            )
             for ind1, pid in enumerate(pid_arr):
                 if pid not in pid2global_desc:
-                    image_ids = [self.dataset.recon_images[img_id].name for img_id in self.dataset.pid2images[pid]]
-                    all_desc = [self.image2desc[f"{self.dataset.images_dir_str}/{img_id}"] for img_id in image_ids]
+                    image_ids = [
+                        self.dataset.recon_images[img_id].name
+                        for img_id in self.dataset.pid2images[pid]
+                    ]
+                    all_desc = [
+                        self.image2desc[f"{self.dataset.images_dir_str}/{img_id}"]
+                        for img_id in image_ids
+                    ]
                     global_desc = np.mean(all_desc, 0)
                     pid2global_desc[pid] = global_desc
                 else:
@@ -731,7 +743,7 @@ class ConcatenateTrainer(BaseTrainer):
                 # arr_.append([pid, diff])
                 all_desc_np[ind1] = global_desc
             # arr_ = sorted(arr_, key=lambda x: x[-1])
-            diff2 = np.mean(np.abs(all_desc_np-img_desc), 1)
+            diff2 = np.mean(np.abs(all_desc_np - img_desc), 1)
             pid_wanted = pid_arr[np.argmin(diff2)]
             res2.append(pid_wanted)
 
