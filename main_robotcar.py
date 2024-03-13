@@ -9,7 +9,7 @@ from dataset import RobotCarDataset
 from trainer import RobotCarTrainer
 
 
-def use_r2d2(train_ds_, test_ds_,using_global_descriptors):
+def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()
     local_desc_model = "r2d2"
     model_dict = conf[local_desc_model]["model"]
@@ -32,7 +32,8 @@ def use_r2d2(train_ds_, test_ds_,using_global_descriptors):
     conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
     conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
     trainer_ = RobotCarTrainer(
-        train_ds_, test_ds_,
+        train_ds_,
+        test_ds_,
         128,
         2048,
         encoder,
@@ -47,6 +48,6 @@ def use_r2d2(train_ds_, test_ds_,using_global_descriptors):
 
 if __name__ == "__main__":
     train_ds = RobotCarDataset()
-    test_ds = RobotCarDataset(train=False, evaluate=False)
+    test_ds = RobotCarDataset(train=False, evaluate=True)
 
     use_r2d2(train_ds, test_ds, False)

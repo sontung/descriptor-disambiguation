@@ -368,7 +368,7 @@ class CamLocDataset(Dataset):
             )
             cam_dists = cam_data - cam_dists
             cam_dists = np.linalg.norm(cam_dists, axis=1)
-            cam_dists = cam_dists ** 2
+            cam_dists = cam_dists**2
 
             cluster_sizes[cluster[1]] = cam_dists.mean()
 
