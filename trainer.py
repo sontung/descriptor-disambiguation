@@ -817,10 +817,10 @@ class GlobalDescriptorOnlyTrainer(BaseTrainer):
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.all_global_descriptors)
         result_file = open(
-            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.global_desc_model_name}_cc.txt",
+            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.global_desc_model_name}_global_only.txt",
             "w",
         )
-
+        print(f"Evaluating with {self.global_feature_dim}-D descriptors.")
         global_descriptors_path = (
             f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
         )
