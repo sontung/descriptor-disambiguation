@@ -600,6 +600,7 @@ class ConcatenateTrainer(BaseTrainer):
         local_desc_conf,
         global_desc_conf,
     ):
+        self.pid2global_descriptors = None
         super().__init__(
             train_ds,
             test_ds,
@@ -611,7 +612,6 @@ class ConcatenateTrainer(BaseTrainer):
             global_desc_conf,
             True,
         )
-        self.feature_dim = feature_dim + global_feature_dim
 
     def collect_image_descriptors(self):
         file_name1 = (
@@ -664,6 +664,7 @@ class ConcatenateTrainer(BaseTrainer):
                 features_h5.close()
 
             pid2descriptors = {}
+
             features_h5 = h5py.File(features_path, "r")
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 keypoints, descriptors = dd_utils.read_kp_and_desc(
@@ -675,13 +676,7 @@ class ConcatenateTrainer(BaseTrainer):
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
                 selected_descriptors = descriptors[idx_arr]
-                image_descriptor = self.image2desc[example[1]]
-                selected_descriptors = np.hstack(
-                    (
-                        selected_descriptors,
-                        np.tile(image_descriptor, (selected_descriptors.shape[0], 1)),
-                    )
-                )
+                # image_descriptor = self.image2desc[example[1]]
 
                 for idx, pid in enumerate(selected_pid[ind2]):
                     pid2descriptors.setdefault(pid, []).append(
@@ -694,7 +689,7 @@ class ConcatenateTrainer(BaseTrainer):
             pid2mean_desc = np.zeros(
                 (
                     len(self.dataset.recon_points),
-                    self.feature_dim + self.global_feature_dim,
+                    self.feature_dim,
                 ),
                 pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
             )
@@ -712,6 +707,38 @@ class ConcatenateTrainer(BaseTrainer):
 
         return pid2mean_desc, all_pid, pid2ind
 
+    # @profile
+    def legal_predict_with_img_desc(
+        self, uv_arr, features_ori, gpu_index_flat, img_desc,
+    ):
+        distances, feature_indices = gpu_index_flat.search(features_ori, 10)
+        pid2global_desc = {}
+        res2 = []
+        for uv_id, ind_arr in enumerate(feature_indices):
+            pid_arr = [self.ind2pid[ind] for ind in ind_arr]
+            all_desc_np = np.zeros((len(pid_arr), self.global_feature_dim), img_desc.dtype)
+            for ind1, pid in enumerate(pid_arr):
+                if pid not in pid2global_desc:
+                    image_ids = [self.dataset.recon_images[img_id].name for img_id in self.dataset.pid2images[pid]]
+                    all_desc = [self.image2desc[f"{self.dataset.images_dir_str}/{img_id}"] for img_id in image_ids]
+                    global_desc = np.mean(all_desc, 0)
+                    pid2global_desc[pid] = global_desc
+                else:
+                    global_desc = pid2global_desc[pid]
+
+                # diff = np.mean(np.abs(img_desc-global_desc))
+                # arr_.append([pid, diff])
+                all_desc_np[ind1] = global_desc
+            # arr_ = sorted(arr_, key=lambda x: x[-1])
+            diff2 = np.mean(np.abs(all_desc_np-img_desc), 1)
+            pid_wanted = pid_arr[np.argmin(diff2)]
+            res2.append(pid_wanted)
+
+        pred_scene_coords_b3 = np.array(
+            [self.dataset.recon_points[pid].xyz for pid in res2]
+        )
+        return uv_arr, pred_scene_coords_b3
+
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -722,6 +749,7 @@ class ConcatenateTrainer(BaseTrainer):
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+
         result_file = open(
             f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_cc.txt",
             "w",
@@ -754,16 +782,13 @@ class ConcatenateTrainer(BaseTrainer):
                 image_descriptor = np.array(
                     global_features_h5[name]["global_descriptor"]
                 )
-                descriptors = np.hstack(
-                    (descriptors, np.tile(image_descriptor, (descriptors.shape[0], 1)))
-                )
 
-                uv_arr, xyz_pred = self.legal_predict(
+                uv_arr, xyz_pred = self.legal_predict_with_img_desc(
                     keypoints,
                     descriptors,
                     gpu_index_flat,
+                    image_descriptor,
                 )
-
                 camera = example[6]
                 res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
                 mat = res["cam_from_world"]
