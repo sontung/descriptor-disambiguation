@@ -196,7 +196,7 @@ def use_d2_concat(train_ds_, test_ds_):
     )
     trainer_.evaluate()
     del trainer_
-    
+
 
 def use_eigen(train_ds_, test_ds_):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()

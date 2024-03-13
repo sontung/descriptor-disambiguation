@@ -650,6 +650,7 @@ class ConcatenateTrainer(BaseTrainer):
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
         if os.path.isfile(file_name1):
+            print(f"Loading from {file_name1}")
             pid2mean_desc = np.load(file_name1)
             all_pid = np.load(file_name2)
             afile = open(file_name3, "rb")
