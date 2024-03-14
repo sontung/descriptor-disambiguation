@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess
+from sklearn.preprocessing import normalize
 
 sys.path.append("../MixVPR")
 from mix_vpr_main import VPRModel
@@ -618,6 +619,7 @@ class ConcatenateTrainer(BaseTrainer):
         return image2desc
 
     def collect_descriptors(self, vis=False):
+        print("Using child method")
         file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_concat.npy"
         file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_concat.npy"
         file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_concat.pkl"
@@ -625,8 +627,8 @@ class ConcatenateTrainer(BaseTrainer):
         features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
+        print(f"Checking if {file_name1} exists")
         if os.path.isfile(file_name1):
-            print(f"Loading from {file_name1}")
             pid2mean_desc = np.load(file_name1)
             all_pid = np.load(file_name2)
             afile = open(file_name3, "rb")
@@ -652,8 +654,16 @@ class ConcatenateTrainer(BaseTrainer):
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
+                image_descriptor = self.image2desc[example[1]]
                 selected_descriptors = descriptors[idx_arr]
-                # image_descriptor = self.image2desc[example[1]]
+                g1 = np.sqrt(0.5/selected_descriptors.shape[1])
+                g2 = np.sqrt(0.5/image_descriptor.shape[0])
+                selected_descriptors = np.hstack(
+                    (
+                        selected_descriptors*g1,
+                        np.tile(image_descriptor*g2, (selected_descriptors.shape[0], 1)),
+                    )
+                )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
                     pid2descriptors.setdefault(pid, []).append(
@@ -768,11 +778,19 @@ class ConcatenateTrainer(BaseTrainer):
                     global_features_h5[name]["global_descriptor"]
                 )
 
-                uv_arr, xyz_pred = self.legal_predict_with_img_desc(
+                g1 = np.sqrt(0.5/descriptors.shape[1])
+                g2 = np.sqrt(0.5/image_descriptor.shape[0])
+                descriptors = np.hstack(
+                    (
+                        descriptors*g1,
+                        np.tile(image_descriptor*g2, (descriptors.shape[0], 1)),
+                    )
+                )
+
+                uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
                     descriptors,
                     gpu_index_flat,
-                    image_descriptor,
                 )
                 camera = example[6]
                 res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)

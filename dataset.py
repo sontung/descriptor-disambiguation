@@ -653,7 +653,7 @@ class AachenDataset(Dataset):
                 xyz_arr = np.zeros((pid_arr.shape[0], 3))
                 for idx, pid in enumerate(pid_arr):
                     xyz_arr[idx] = self.recon_points[pid].xyz
-                    self.pid2images.setdefault(pid, []).append(img_id)
+                    # self.pid2images.setdefault(pid, []).append(img_id)
                 self.image_id2points[img_id] = xyz_arr
             # self.im_names = list(self.image_name2id.keys())
             self.img_ids = list(self.image_name2id.values())
