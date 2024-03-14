@@ -589,30 +589,6 @@ class RobotCarTrainer(BaseTrainer):
 
 
 class ConcatenateTrainer(BaseTrainer):
-    def __init__(
-        self,
-        train_ds,
-        test_ds,
-        feature_dim,
-        global_feature_dim,
-        local_desc_model,
-        global_desc_model,
-        local_desc_conf,
-        global_desc_conf,
-    ):
-        self.pid2global_descriptors = None
-        super().__init__(
-            train_ds,
-            test_ds,
-            feature_dim,
-            global_feature_dim,
-            local_desc_model,
-            global_desc_model,
-            local_desc_conf,
-            global_desc_conf,
-            True,
-        )
-
     def collect_image_descriptors(self):
         file_name1 = (
             f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_all.npy"
@@ -708,7 +684,6 @@ class ConcatenateTrainer(BaseTrainer):
 
         return pid2mean_desc, all_pid, pid2ind
 
-    # @profile
     def legal_predict_with_img_desc(
         self,
         uv_arr,
@@ -739,10 +714,7 @@ class ConcatenateTrainer(BaseTrainer):
                 else:
                     global_desc = pid2global_desc[pid]
 
-                # diff = np.mean(np.abs(img_desc-global_desc))
-                # arr_.append([pid, diff])
                 all_desc_np[ind1] = global_desc
-            # arr_ = sorted(arr_, key=lambda x: x[-1])
             diff2 = np.mean(np.abs(all_desc_np - img_desc), 1)
             pid_wanted = pid_arr[np.argmin(diff2)]
             res2.append(pid_wanted)
