@@ -20,6 +20,7 @@ from torch.utils.data.dataloader import default_collate
 from torchvision import transforms
 from tqdm import tqdm
 
+from hloc.pipelines.RobotCar.pipeline import CONDITIONS, generate_query_list
 import ace_util
 import colmap_read
 import dd_utils
@@ -772,6 +773,7 @@ class RobotCarDataset(Dataset):
         self.images_dir = Path(f"{self.ds_dir}/images")
         self.test_file1 = f"{ds_dir}/robotcar_v2_train.txt"
         self.test_file2 = f"{ds_dir}/robotcar_v2_test.txt"
+        self.ds_dir_path = Path(self.ds_dir)
         self.train = train
         self.evaluate = evaluate
         if evaluate:
@@ -788,6 +790,16 @@ class RobotCarDataset(Dataset):
             self.name2image = {v: k for k, v in self.image2name.items()}
             self.img_ids = list(self.image2name.keys())
         else:
+            self.ts2cond = {}
+            for condition in CONDITIONS:
+                all_image_names = list(Path.glob(self.images_dir, f"{condition}/*/*"))
+
+                for name in all_image_names:
+                    time_stamp = str(name).split("/")[-1].split(".")[0]
+                    self.ts2cond.setdefault(time_stamp, []).append(condition)
+            for ts in self.ts2cond:
+                assert len(self.ts2cond[ts]) == 3
+
             if not self.evaluate:
                 self.name2mat = _read_train_poses(self.test_file1)
             else:
@@ -841,8 +853,19 @@ class RobotCarDataset(Dataset):
             )
 
         else:
-            name1 = self.img_ids[idx]
+            name0 = self.img_ids[idx]
+
+            if self.evaluate:
+                time_stamp = str(name0).split("/")[-1].split(".")[0]
+                cond = self.ts2cond[time_stamp][0]
+                name1 = f"{cond}/{name0}"
+                if ".png" in name1:
+                    name1 = name1.replace(".png", ".jpg")
+            else:
+                name1 = name0
+
             image_name = str(self.images_dir / name1)
+
             focal = 400
             if "rear" in name1:
                 cx = 508.222931
@@ -870,8 +893,8 @@ class RobotCarDataset(Dataset):
             image = None
             img_id = name1
             pid_list = []
-            if type(self.name2mat[name1]) == np.ndarray:
-                pose_inv = torch.from_numpy(self.name2mat[name1])
+            if type(self.name2mat[name0]) == np.ndarray:
+                pose_inv = torch.from_numpy(self.name2mat[name0])
             else:
                 pose_inv = None
             xyz_gt = None
@@ -900,6 +923,6 @@ class RobotCarDataset(Dataset):
 
 
 if __name__ == "__main__":
-    testset = RobotCarDataset(train=False, evaluate=False)
+    testset = RobotCarDataset(train=False, evaluate=True)
     for t in testset:
         continue

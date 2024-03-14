@@ -582,7 +582,7 @@ class RobotCarTrainer(BaseTrainer):
                     mat = res["cam_from_world"]
                     qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
                     tvec = " ".join(map(str, mat.translation))
-                    image_id = example[2].split("/")[-1]
+                    image_id = "/".join(example[2].split("/")[1:])
                     print(f"{image_id} {qvec} {tvec}", file=result_file)
             result_file.close()
         features_h5.close()
