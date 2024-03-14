@@ -157,6 +157,7 @@ def use_r2d2_concat(train_ds_, test_ds_):
         encoder_global,
         conf_ns,
         conf_ns_retrieval,
+        True
     )
     trainer_.evaluate()
     del trainer_
