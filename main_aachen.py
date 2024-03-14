@@ -321,11 +321,12 @@ if __name__ == "__main__":
     test_ds = AachenDataset(train=False)
 
     # use_netvlad(train_ds, test_ds)
+
     # use_mixvpr(train_ds, test_ds)
     # use_mean_of_local_descriptors(train_ds, test_ds)
-    use_d2_concat(train_ds, test_ds)
+    # use_d2_concat(train_ds, test_ds)
 
-    # use_r2d2(train_ds, test_ds, True)
+    use_r2d2(train_ds, test_ds, True)
     # use_d2(train_ds, test_ds, True)
     # use_superpoint(train_ds, test_ds, True)
 

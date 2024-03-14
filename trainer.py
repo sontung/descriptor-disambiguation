@@ -925,10 +925,11 @@ class GlobalDescriptorOnlyTrainer(BaseTrainer):
             global_desc_model,
             local_desc_conf,
             global_desc_conf,
-            True,
+            False,
             run_local_feature_detection_on_test_set=False,
             collect_code_book=False,
         )
+        self.image2desc = self.collect_image_descriptors()
 
     def collect_image_descriptors(self):
         file_name1 = (
