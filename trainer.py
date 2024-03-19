@@ -15,6 +15,7 @@ from tqdm import tqdm
 import dd_utils
 from ace_util import read_and_preprocess
 from sklearn.preprocessing import normalize
+from torch.utils.data import DataLoader
 
 sys.path.append("../MixVPR")
 from mix_vpr_main import VPRModel
@@ -147,8 +148,6 @@ class BaseTrainer:
 
     def produce_local_descriptors(self, name, fd):
         image, scale = read_and_preprocess(name, self.local_desc_conf)
-        # print(name)
-        # print(image.shape, name)
         pred = self.local_desc_model(
             {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
         )
@@ -204,14 +203,6 @@ class BaseTrainer:
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-                if vis:
-                    image = cv2.imread(example[1])
-                    for u, v in uv.astype(int):
-                        cv2.circle(image, (u, v), 5, (255, 0, 0))
-                    for u, v in keypoints.astype(int):
-                        cv2.circle(image, (u, v), 5, (0, 255, 0))
-                    cv2.imwrite(f"debug/test{ind}.png", image)
-
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
@@ -223,7 +214,6 @@ class BaseTrainer:
                     pid2descriptors.setdefault(pid, []).append(
                         selected_descriptors[idx]
                     )
-
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
@@ -347,6 +337,19 @@ class BaseTrainer:
 
 
 class RobotCarTrainer(BaseTrainer):
+    def produce_local_descriptors(self, name, fd):
+        image, scale = read_and_preprocess(name, self.local_desc_conf)
+        pred = self.local_desc_model(
+            {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+        )
+        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+        dict_ = {
+            "scale": scale,
+            "keypoints": pred["keypoints"],
+            "descriptors": pred["descriptors"],
+        }
+        dd_utils.write_to_h5_file(fd, name, dict_)
+
     def collect_descriptors(self, vis=False):
         if self.using_global_descriptors:
             file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
@@ -384,14 +387,6 @@ class RobotCarTrainer(BaseTrainer):
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-                if vis:
-                    image = cv2.imread(example[1])
-                    for u, v in uv.astype(int):
-                        cv2.circle(image, (u, v), 5, (255, 0, 0))
-                    for u, v in keypoints.astype(int):
-                        cv2.circle(image, (u, v), 5, (0, 255, 0))
-                    cv2.imwrite(f"debug/test{ind}.png", image)
-
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
@@ -400,20 +395,23 @@ class RobotCarTrainer(BaseTrainer):
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
-                    pid2descriptors.setdefault(pid, []).append(
-                        selected_descriptors[idx]
-                    )
+                    if pid not in pid2descriptors:
+                        pid2descriptors[pid] = selected_descriptors[idx]
+                    else:
+                        pid2descriptors[pid] = 0.5*(pid2descriptors[pid]+selected_descriptors[idx])
 
             features_h5.close()
+            self.image2desc.clear()
+
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
             pid2mean_desc = np.zeros(
                 (self.dataset.xyz_arr.shape[0], self.feature_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
+                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
             )
 
             for pid in pid2descriptors:
-                pid2mean_desc[pid] = np.mean(pid2descriptors[pid], 0)
+                pid2mean_desc[pid] = pid2descriptors[pid]
 
             np.save(file_name1, pid2mean_desc)
             np.save(file_name2, all_pid)

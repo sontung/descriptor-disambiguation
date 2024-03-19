@@ -57,32 +57,20 @@ def read_nvm_file(file_name):
     image2points = {}
     image2uvs = {}
     xyz_arr = np.zeros((nb_points, 3), np.float64)
-    rgb_arr = np.zeros((nb_points, 3), np.uint8)
     for j in tqdm(range(nb_points), desc="Reading points"):
         point_info = lines[5 + nb_cameras + j].split(" ")
-        x, y, z, r, g, b, nb_features = map(float, point_info[:7])
+        x, y, z, r, g, b, nb_features = point_info[:7]
+        x, y, z = map(float, [x, y, z])
         xyz_arr[j] = [x, y, z]
-        rgb_arr[j] = [r, g, b]
         features_info = point_info[7:]
         nb_features = int(nb_features)
         for k in range(nb_features):
-            image_id, feature_id, u, v = features_info[k * 4 : (k + 1) * 4]
-            image_id, feature_id = map(int, [image_id, feature_id])
+            image_id, _, u, v = features_info[k * 4 : (k + 1) * 4]
+            image_id = int(image_id)
             u, v = map(float, [u, v])
             image2points.setdefault(image_id, []).append(j)
             image2uvs.setdefault(image_id, []).append([u, v])
 
-    # for image_id in image2uvs:
-    #     img_name = image2name[image_id]
-    #     image = cv2.imread(f"datasets/Cambridge_KingsCollege/{img_name.split('.jpg')[0]}.png")
-    #     uvs = np.array(image2uvs[image_id])
-    #     pids = np.array(image2points[image_id])
-    #     xyz = xyz_arr[pids]
-    #     focal, radial = image2info[image_id]
-    #     r2 = np.sqrt(np.sum(np.square(uvs), 1))*radial
-    #     r2 = np.expand_dims(r2, 1)
-    #     uvs_undistorted = uvs*(1+r2)
-    #     print()
     return xyz_arr, image2points, image2name, image2pose, image2info, image2uvs
 
 
