@@ -21,7 +21,7 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
     conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
     conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
 
-    retrieval_model = "netvlad"
+    retrieval_model = "eigenplaces"
     model_dict = conf[retrieval_model]["model"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     Model = dynamic_load(extractors, model_dict["name"])
@@ -36,7 +36,7 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
         train_ds_,
         test_ds_,
         128,
-        4096,
+        2048,
         encoder,
         encoder_global,
         conf_ns,
@@ -59,7 +59,7 @@ def use_d2(train_ds_, test_ds_, using_global_descriptors):
     conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
     conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
 
-    retrieval_model = "netvlad"
+    retrieval_model = "eigenplaces"
     model_dict = conf[retrieval_model]["model"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     Model = dynamic_load(extractors, model_dict["name"])
@@ -97,7 +97,7 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
     conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
     conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
 
-    retrieval_model = "netvlad"
+    retrieval_model = "eigenplaces"
     model_dict = conf[retrieval_model]["model"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     Model = dynamic_load(extractors, model_dict["name"])
@@ -127,9 +127,9 @@ if __name__ == "__main__":
     train_ds = RobotCarDataset()
     test_ds = RobotCarDataset(train=False, evaluate=True)
 
-    use_superpoint(train_ds, test_ds, False)
-    use_superpoint(train_ds, test_ds, True)
-    use_d2(train_ds, test_ds, False)
+    # use_superpoint(train_ds, test_ds, False)
+    # use_superpoint(train_ds, test_ds, True)
     use_d2(train_ds, test_ds, True)
+    use_d2(train_ds, test_ds, False)
     # use_r2d2(train_ds, test_ds, True)
     # use_r2d2(train_ds, test_ds, False)

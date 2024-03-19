@@ -509,103 +509,56 @@ class RobotCarTrainer(BaseTrainer):
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
 
-        if not self.test_dataset.evaluate:
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Computing pose for test set"
-                ):
-                    name = example[1]
-                    keypoints, descriptors = dd_utils.read_kp_and_desc(
-                        name, features_h5
-                    )
-                    if self.using_global_descriptors:
-                        image_descriptor = np.array(
-                            global_features_h5[name]["global_descriptor"]
-                        )
-                        descriptors = 0.5 * (
-                            descriptors + image_descriptor[: descriptors.shape[1]]
-                        )
-
-                    uv_arr, xyz_pred = self.legal_predict(
-                        keypoints,
-                        descriptors,
-                        gpu_index_flat,
-                    )
-
-                    from ace_util import project_using_pose
-
-                    pose_gt = example[4]
-                    intrinsics = example[5]
-                    uv_gt = project_using_pose(
-                        pose_gt.unsqueeze(0).cuda().float(),
-                        intrinsics.unsqueeze(0).cuda().float(),
-                        xyz_pred,
-                    )
-
-                    camera = example[6]
-                    res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
-                    mat = res["cam_from_world"]
-                    pose44 = dd_utils.return_pose_mat(
-                        mat.rotation.quat, mat.translation
-                    )
-                    pose44 = dd_utils.return_pose_mat(
-                        mat.rotation.quat[[3, 0, 1, 2]], mat.translation
-                    )
-                    pose_gt = example[4]
-
-                    break
-
+        if self.using_global_descriptors:
+            result_file = open(
+                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt",
+                "w",
+            )
         else:
-            if self.using_global_descriptors:
-                result_file = open(
-                    f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt",
-                    "w",
+            result_file = open(
+                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}.txt",
+                "w",
+            )
+
+        with torch.no_grad():
+            for example in tqdm(
+                self.test_dataset, desc="Computing pose for test set"
+            ):
+                name = example[1]
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    name, features_h5
                 )
-            else:
-                result_file = open(
-                    f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}.txt",
-                    "w",
+                if self.using_global_descriptors:
+                    image_descriptor = np.array(
+                        global_features_h5[name]["global_descriptor"]
+                    )
+                    descriptors = 0.5 * (
+                        descriptors + image_descriptor[: descriptors.shape[1]]
+                    )
+
+                uv_arr, xyz_pred = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
                 )
 
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Computing pose for test set"
-                ):
-                    name = example[1]
-                    keypoints, descriptors = dd_utils.read_kp_and_desc(
-                        name, features_h5
-                    )
-                    if self.using_global_descriptors:
-                        image_descriptor = np.array(
-                            global_features_h5[name]["global_descriptor"]
-                        )
-                        descriptors = 0.5 * (
-                            descriptors + image_descriptor[: descriptors.shape[1]]
-                        )
-
-                    uv_arr, xyz_pred = self.legal_predict(
-                        keypoints,
-                        descriptors,
-                        gpu_index_flat,
-                    )
-
-                    camera = example[6]
-                    res = pycolmap.absolute_pose_estimation(
-                        uv_arr,
-                        xyz_pred,
-                        camera,
-                        refinement_options={"max_num_iterations": 100},
-                    )
-                    # res2 = pycolmap.absolute_pose_estimation(
-                    #     uv_arr,
-                    #     xyz_pred,
-                    #     camera,
-                    # )
-                    mat = res["cam_from_world"]
-                    qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
-                    tvec = " ".join(map(str, mat.translation))
-                    image_id = "/".join(example[2].split("/")[1:])
-                    print(f"{image_id} {qvec} {tvec}", file=result_file)
+                camera = example[6]
+                res = pycolmap.absolute_pose_estimation(
+                    uv_arr,
+                    xyz_pred,
+                    camera,
+                    refinement_options={"max_num_iterations": 100},
+                )
+                # res2 = pycolmap.absolute_pose_estimation(
+                #     uv_arr,
+                #     xyz_pred,
+                #     camera,
+                # )
+                mat = res["cam_from_world"]
+                qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
+                tvec = " ".join(map(str, mat.translation))
+                image_id = "/".join(example[2].split("/")[1:])
+                print(f"{image_id} {qvec} {tvec}", file=result_file)
             result_file.close()
         features_h5.close()
         global_features_h5.close()
