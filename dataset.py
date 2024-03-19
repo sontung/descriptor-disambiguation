@@ -37,6 +37,7 @@ from os import listdir
 from os.path import isfile, join
 from ace_util import project_using_pose
 import faiss
+
 _logger = logging.getLogger(__name__)
 
 
@@ -774,9 +775,9 @@ def _read_train_poses(a_file):
 def _produce_image_descriptor(name2, conf_ns_retrieval, encoder_global):
     image, _ = ace_util.read_and_preprocess(name2, conf_ns_retrieval)
     image_descriptor = (
-        encoder_global(
-            {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-        )["global_descriptor"]
+        encoder_global({"image": torch.from_numpy(image).unsqueeze(0).cuda()})[
+            "global_descriptor"
+        ]
         .squeeze()
         .cpu()
         .numpy()
@@ -786,7 +787,6 @@ def _produce_image_descriptor(name2, conf_ns_retrieval, encoder_global):
 
 class RobotCarDataset(Dataset):
     def __init__(self, ds_dir="datasets/robotcar", train=True, evaluate=False):
-
         self.ds_type = "robotcar"
         self.ds_dir = ds_dir
         self.sfm_model_dir = f"{ds_dir}/3D-models/all-merged/all.nvm"
@@ -936,9 +936,7 @@ class RobotCarDataset(Dataset):
         #         points.extend(points_ref)
         #     self.image2points[img_id] = list(set(points))
 
-        features_path = (
-            f"output/robotcar/r2d2_features_train.h5"
-        )
+        features_path = f"output/robotcar/r2d2_features_train.h5"
         features_h5 = h5py.File(features_path, "r")
         du0 = 0
         pkl_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/RobotCar_hloc_superpoint+superglue_netvlad20.txt_logs.pkl"
@@ -947,7 +945,8 @@ class RobotCarDataset(Dataset):
         afile.close()
 
         hloc_sfm_model = colmap_read.read_points3D_binary(
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/sfm_superpoint+superglue/points3D.bin")
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/sfm_superpoint+superglue/points3D.bin"
+        )
         tree = KDTree(self.xyz_arr)
 
         for name in tqdm(self.name2mat, desc="Completing training images"):
@@ -986,7 +985,9 @@ class RobotCarDataset(Dataset):
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
             intrinsics[1, 2] = cy
-            xyz_gt = np.array([hloc_sfm_model[pid].xyz for pid in loc_res["points3D_ids"]])
+            xyz_gt = np.array(
+                [hloc_sfm_model[pid].xyz for pid in loc_res["points3D_ids"]]
+            )
 
             tree = KDTree(self.xyz_arr)
             uv_gt = project_using_pose(
@@ -994,15 +995,20 @@ class RobotCarDataset(Dataset):
                 intrinsics.unsqueeze(0).cuda().float(),
                 xyz_gt,
             )
-            diff = np.mean(np.abs(loc_res["keypoints_query"]-uv_gt), 1)
+            diff = np.mean(np.abs(loc_res["keypoints_query"] - uv_gt), 1)
             mask = diff < 5
             xyz_gt_ref = xyz_gt[mask]
             _, pid_list = tree.query(xyz_gt_ref)
             self.image2points[img_id] = pid_list
 
             import open3d as o3d
-            point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr[pid_list]))
-            point_cloud2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_gt[mask]))
+
+            point_cloud = o3d.geometry.PointCloud(
+                o3d.utility.Vector3dVector(self.xyz_arr[pid_list])
+            )
+            point_cloud2 = o3d.geometry.PointCloud(
+                o3d.utility.Vector3dVector(xyz_gt[mask])
+            )
             point_cloud.paint_uniform_color((1, 0, 0))
             point_cloud2.paint_uniform_color((0, 1, 0))
             vis = o3d.visualization.Visualizer()
@@ -1115,7 +1121,9 @@ class RobotCarDataset(Dataset):
             image, image_name = self._load_image(img_id)
             if type(self.image2pose[img_id]) == list:
                 qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
-                pose_mat = dd_utils.return_pose_mat_no_inv([qw, qx, qy, qz], [tx, ty, tz])
+                pose_mat = dd_utils.return_pose_mat_no_inv(
+                    [qw, qx, qy, qz], [tx, ty, tz]
+                )
             else:
                 pose_mat = self.image2pose[img_id]
                 # pose_mat = np.linalg.inv(pose_mat)

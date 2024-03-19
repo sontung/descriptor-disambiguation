@@ -104,7 +104,6 @@ class BaseTrainer:
             self.ind2pid = None
 
     def collect_image_descriptors(self):
-
         file_name1 = (
             f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}.npy"
         )
@@ -465,9 +464,7 @@ class RobotCarTrainer(BaseTrainer):
 
         ind = 0
         for example in tqdm(self.test_dataset, desc="Testing"):
-            keypoints, descriptors = dd_utils.read_kp_and_desc(
-                example[1], features_h5
-            )
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
 
             uv_arr, xyz_pred = self.legal_predict(
                 keypoints,
@@ -482,7 +479,9 @@ class RobotCarTrainer(BaseTrainer):
                 camera,
                 # refinement_options={"max_num_iterations": 100},
             )
-            t_err = float(torch.norm(example[4][0:3, 3] - res["cam_from_world"].translation))
+            t_err = float(
+                torch.norm(example[4][0:3, 3] - res["cam_from_world"].translation)
+            )
             print(t_err)
             print()
         return
