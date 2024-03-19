@@ -21,13 +21,14 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
     conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
     conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
 
-    retrieval_model = "eigenplaces"
+    retrieval_model = "netvlad"
     model_dict = conf[retrieval_model]["model"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-    )
+    if retrieval_model == "eigenplaces":
+        model_dict.update(
+            {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
+        )
     encoder_global = Model(model_dict).eval().to(device)
     conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
     conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
@@ -35,7 +36,7 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
         train_ds_,
         test_ds_,
         128,
-        2048,
+        4096,
         encoder,
         encoder_global,
         conf_ns,
@@ -108,7 +109,7 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
     trainer_ = RobotCarTrainer(
         train_ds_,
         test_ds_,
-        512,
+        256,
         2048,
         encoder,
         encoder_global,
@@ -124,9 +125,9 @@ if __name__ == "__main__":
     train_ds = RobotCarDataset()
     test_ds = RobotCarDataset(train=False, evaluate=True)
 
-    use_superpoint(train_ds, test_ds, False)
-    use_superpoint(train_ds, test_ds, True)
-    use_d2(train_ds, test_ds, False)
-    use_d2(train_ds, test_ds, True)
+    # use_superpoint(train_ds, test_ds, False)
+    # use_superpoint(train_ds, test_ds, True)
+    # use_d2(train_ds, test_ds, False)
+    # use_d2(train_ds, test_ds, True)
     use_r2d2(train_ds, test_ds, True)
     use_r2d2(train_ds, test_ds, False)
