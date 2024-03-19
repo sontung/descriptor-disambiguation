@@ -86,6 +86,7 @@ class BaseTrainer:
         else:
             self.image2desc = {}
 
+        self.xyz_arr = None
         if collect_code_book:
             (
                 self.pid2mean_desc,
@@ -406,16 +407,16 @@ class RobotCarTrainer(BaseTrainer):
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
             pid2mean_desc = np.zeros(
-                (self.dataset.xyz_arr.shape[0], self.feature_dim),
+                (all_pid.shape[0], self.feature_dim),
                 pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
             )
 
-            for pid in pid2descriptors:
-                pid2mean_desc[pid] = pid2descriptors[pid]
+            for ind, pid in enumerate(all_pid):
+                pid2mean_desc[ind] = pid2descriptors[pid]
 
             np.save(file_name1, pid2mean_desc)
             np.save(file_name2, all_pid)
-
+        self.xyz_arr = self.dataset.xyz_arr[all_pid]
         return pid2mean_desc, all_pid, {}
 
     def legal_predict(
@@ -439,9 +440,7 @@ class RobotCarTrainer(BaseTrainer):
             uv_arr = np.array([pid2uv[pid][1] for pid in pid2uv])
             feature_indices = [pid for pid in pid2uv]
 
-        pred_scene_coords_b3 = self.dataset.xyz_arr[
-            self.all_pid_in_train_set[feature_indices]
-        ]
+        pred_scene_coords_b3 = self.xyz_arr[feature_indices]
 
         return uv_arr, pred_scene_coords_b3
 
@@ -484,12 +483,11 @@ class RobotCarTrainer(BaseTrainer):
             print()
         return
 
-    # @profile
     def evaluate(self):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_pid_in_train_set])
+        gpu_index_flat.add(self.pid2mean_desc)
 
         global_descriptors_path = (
             f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
