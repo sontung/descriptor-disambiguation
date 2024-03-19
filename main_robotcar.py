@@ -43,6 +43,7 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
         using_global_descriptors,
     )
     trainer_.evaluate()
+    # trainer_.test()
     del trainer_
 
 
@@ -50,4 +51,4 @@ if __name__ == "__main__":
     train_ds = RobotCarDataset()
     test_ds = RobotCarDataset(train=False, evaluate=True)
 
-    use_r2d2(train_ds, test_ds, False)
+    use_r2d2(train_ds, test_ds, True)

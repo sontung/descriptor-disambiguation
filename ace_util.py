@@ -83,7 +83,7 @@ def read_nvm_file(file_name):
     #     r2 = np.expand_dims(r2, 1)
     #     uvs_undistorted = uvs*(1+r2)
     #     print()
-    return xyz_arr, image2points, image2name, image2pose, image2info
+    return xyz_arr, image2points, image2name, image2pose, image2info, image2uvs
 
 
 def return_pose_mat(pose_q, pose_t):

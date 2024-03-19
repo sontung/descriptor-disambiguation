@@ -1,8 +1,11 @@
 import logging
 import math
+import os
+import pickle
 import random
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pycolmap
 from PIL import Image
@@ -12,6 +15,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
+from hloc import extractors
+from hloc.utils.base_model import dynamic_load
+from pykdtree.kdtree import KDTree
 from skimage import color
 from skimage import io
 from skimage.transform import rotate, resize
@@ -30,7 +36,7 @@ from skimage.transform import resize as ski_resize
 from os import listdir
 from os.path import isfile, join
 from ace_util import project_using_pose
-
+import faiss
 _logger = logging.getLogger(__name__)
 
 
@@ -765,8 +771,22 @@ def _read_train_poses(a_file):
     return name2mat
 
 
+def _produce_image_descriptor(name2, conf_ns_retrieval, encoder_global):
+    image, _ = ace_util.read_and_preprocess(name2, conf_ns_retrieval)
+    image_descriptor = (
+        encoder_global(
+            {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+        )["global_descriptor"]
+        .squeeze()
+        .cpu()
+        .numpy()
+    )
+    return image_descriptor
+
+
 class RobotCarDataset(Dataset):
     def __init__(self, ds_dir="datasets/robotcar", train=True, evaluate=False):
+
         self.ds_type = "robotcar"
         self.ds_dir = ds_dir
         self.sfm_model_dir = f"{ds_dir}/3D-models/all-merged/all.nvm"
@@ -774,6 +794,7 @@ class RobotCarDataset(Dataset):
         self.test_file1 = f"{ds_dir}/robotcar_v2_train.txt"
         self.test_file2 = f"{ds_dir}/robotcar_v2_test.txt"
         self.ds_dir_path = Path(self.ds_dir)
+        self.images_dir_str = str(self.images_dir)
         self.train = train
         self.evaluate = evaluate
         if evaluate:
@@ -786,9 +807,32 @@ class RobotCarDataset(Dataset):
                 self.image2name,
                 self.image2pose,
                 self.image2info,
+                self.image2uvs,
             ) = ace_util.read_nvm_file(self.sfm_model_dir)
             self.name2image = {v: k for k, v in self.image2name.items()}
             self.img_ids = list(self.image2name.keys())
+
+            self.name2mat = _read_train_poses(self.test_file1)
+
+            # start_id = max(self.img_ids)+1
+            # self.name2id = {}
+            # for name in self.name2mat:
+            #     pose = self.name2mat[name]
+            #     self.name2id[name] = start_id
+            #     self.image2name[start_id] = f"./{name}"
+            #     self.image2pose[start_id] = pose
+            #     self.img_ids.append(start_id)
+            #     start_id += 1
+            # self.complete_image2points()
+
+            # self.img_ids = self.img_ids[-len(self.name2mat):]
+            # import open3d as o3d
+            # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr))
+            # vis = o3d.visualization.Visualizer()
+            # vis.create_window(width=1920, height=1025)
+            # vis.add_geometry(point_cloud)
+            # vis.run()
+            # vis.destroy_window()
         else:
             self.ts2cond = {}
             for condition in CONDITIONS:
@@ -808,9 +852,252 @@ class RobotCarDataset(Dataset):
 
         return
 
-    def _load_image(self, img_id):
+    def process_pid_list(self, pose_mat, intrinsics, tree, inverse=True):
+        if not inverse:
+            uv_gt = project_using_pose(
+                torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+                intrinsics.unsqueeze(0).cuda().float(),
+                self.xyz_arr,
+            )
+        else:
+            uv_gt = project_using_pose(
+                torch.from_numpy(pose_mat).inverse().unsqueeze(0).cuda().float(),
+                intrinsics.unsqueeze(0).cuda().float(),
+                self.xyz_arr,
+            )
+        oob_mask1 = np.bitwise_and(0 <= uv_gt[:, 0], uv_gt[:, 0] < 1024)
+        oob_mask2 = np.bitwise_and(0 <= uv_gt[:, 1], uv_gt[:, 1] < 1024)
+        oob_mask = np.bitwise_and(oob_mask1, oob_mask2)
+        dis, ind = tree.query(uv_gt[oob_mask])
+        mask = dis < 5
+        pid_list = np.arange(self.xyz_arr.shape[0])[oob_mask][mask]
+        return pid_list
+
+    def complete_image2points(self):
+        # retrieval_model = "netvlad"
+        # global_feature_dim = 2048
+        # conf, default_conf = dd_utils.hloc_conf_for_all_models()
+        #
+        # model_dict = conf[retrieval_model]["model"]
+        # device = "cuda" if torch.cuda.is_available() else "cpu"
+        # Model = dynamic_load(extractors, model_dict["name"])
+        # encoder_global = Model(model_dict).eval().to(device)
+        # conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        # conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
+        #
+        # file_name1 = (
+        #     f"output/{self.ds_type}/small_image_desc_{retrieval_model}.npy"
+        # )
+        # file_name2 = (
+        #     f"output/{self.ds_type}/small_image_desc_ids_{retrieval_model}.npy"
+        # )
+        # if os.path.isfile(file_name1):
+        #     all_desc = np.load(file_name1)
+        #     afile = open(file_name2, "rb")
+        #     all_ids = pickle.load(afile)
+        #     afile.close()
+        # else:
+        #     all_desc = np.zeros((len(self.image2points), global_feature_dim))
+        #     all_ids = []
+        #     idx = 0
+        #     with torch.no_grad():
+        #         for img_id in tqdm(self.image2points, desc="Collecting image descriptors for reference images"):
+        #             name2 = self._process_id_to_name(img_id)
+        #             image_descriptor = _produce_image_descriptor(name2, conf_ns_retrieval, encoder_global)
+        #             all_desc[idx] = image_descriptor
+        #             all_ids.append(img_id)
+        #             idx += 1
+        #     np.save(file_name1, all_desc)
+        #     with open(file_name2, "wb") as handle:
+        #         pickle.dump(all_ids, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        #
+        # all_desc_train = np.zeros((len(self.name2mat), global_feature_dim))
+        # all_ids_train = []
+        # idx = 0
+        # with torch.no_grad():
+        #     for img_id in tqdm(self.img_ids, desc="Collecting image descriptors for training images"):
+        #         if img_id not in self.image2points:
+        #             name2 = self._process_id_to_name(img_id)
+        #             image_descriptor = _produce_image_descriptor(name2, conf_ns_retrieval, encoder_global)
+        #             all_desc_train[idx] = image_descriptor
+        #             all_ids_train.append(img_id)
+        #             idx += 1
+        # index = faiss.IndexFlatL2(global_feature_dim)  # build the index
+        # res = faiss.StandardGpuResources()
+        # gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        # gpu_index_flat.add(all_desc)
+        # distances, image_indices = gpu_index_flat.search(all_desc_train, 10)
+        # for idx, img_id in enumerate(all_ids_train):
+        #     images_retrieved = image_indices[idx]
+        #     id_retrieved = [all_ids[id_] for id_ in images_retrieved]
+        #     points = []
+        #     for id_ in id_retrieved:
+        #         points_ref = self.image2points[id_]
+        #         points.extend(points_ref)
+        #     self.image2points[img_id] = list(set(points))
+
+        features_path = (
+            f"output/robotcar/r2d2_features_train.h5"
+        )
+        features_h5 = h5py.File(features_path, "r")
+        du0 = 0
+        pkl_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/RobotCar_hloc_superpoint+superglue_netvlad20.txt_logs.pkl"
+        afile = open(pkl_file, "rb")
+        data_hloc = pickle.load(afile)
+        afile.close()
+
+        hloc_sfm_model = colmap_read.read_points3D_binary(
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/sfm_superpoint+superglue/points3D.bin")
+        tree = KDTree(self.xyz_arr)
+
+        for name in tqdm(self.name2mat, desc="Completing training images"):
+            keypoints, descriptors = dd_utils.read_kp_and_desc(
+                f"{self.images_dir_str}/{name}", features_h5
+            )
+            tree = KDTree(keypoints)
+            focal = 400
+            if "rear" in name:
+                cx = 508.222931
+                cy = 498.187378
+            elif "right" in name:
+                cx = 502.503754
+                cy = 490.259033
+            elif "left" in name:
+                cx = 500.107605
+                cy = 511.461426
+            img_id = self.name2id[name]
+
+            pose_mat = self.image2pose[img_id]
+            intrinsics = torch.eye(3)
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            pid_list = self.process_pid_list(pose_mat, intrinsics, tree, inverse=False)
+
+            self.image2points[img_id] = pid_list
+
+            loc_res = data_hloc["loc"][name]
+            img_id = self.name2id[name]
+
+            intrinsics = torch.eye(3)
+            focal, cx, cy, _ = loc_res["PnP_ret"]["camera"].params
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            xyz_gt = np.array([hloc_sfm_model[pid].xyz for pid in loc_res["points3D_ids"]])
+
+            tree = KDTree(self.xyz_arr)
+            uv_gt = project_using_pose(
+                torch.from_numpy(pose_mat).inverse().unsqueeze(0).cuda().float(),
+                intrinsics.unsqueeze(0).cuda().float(),
+                xyz_gt,
+            )
+            diff = np.mean(np.abs(loc_res["keypoints_query"]-uv_gt), 1)
+            mask = diff < 5
+            xyz_gt_ref = xyz_gt[mask]
+            _, pid_list = tree.query(xyz_gt_ref)
+            self.image2points[img_id] = pid_list
+
+            import open3d as o3d
+            point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr[pid_list]))
+            point_cloud2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_gt[mask]))
+            point_cloud.paint_uniform_color((1, 0, 0))
+            point_cloud2.paint_uniform_color((0, 1, 0))
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(width=1920, height=1025)
+            vis.add_geometry(point_cloud)
+            vis.add_geometry(point_cloud2)
+            vis.run()
+            vis.destroy_window()
+
+            # image = cv2.imread(str(self.images_dir/name))
+            # for u, v in uv_gt[oob_mask][mask].astype(int):
+            #     cv2.circle(image, (u, v), 5, (255, 0, 0))
+            #
+            # uv_gt = project_using_pose(
+            #     torch.from_numpy(pose_mat).inverse().unsqueeze(0).cuda().float(),
+            #     intrinsics.unsqueeze(0).cuda().float(),
+            #     self.xyz_arr,
+            # )
+            # oob_mask1 = np.bitwise_and(0 <= uv_gt[:, 0], uv_gt[:, 0] < 1024)
+            # oob_mask2 = np.bitwise_and(0 <= uv_gt[:, 1], uv_gt[:, 1] < 1024)
+            # oob_mask = np.bitwise_and(oob_mask1, oob_mask2)
+            # dis, ind = tree.query(uv_gt[oob_mask])
+            # mask = dis < 1
+            # for u, v in uv_gt[oob_mask][mask].astype(int):
+            #     cv2.circle(image, (u, v), 5, (0, 255, 0))
+            # cv2.imwrite(f"debug/test{du0}.png", image)
+            # du0 += 1
+            #
+            # pid_list1 = self.process_pid_list(pose_mat, intrinsics, tree)
+            # pid_list2 = self.process_pid_list(pose_mat, intrinsics, tree, inverse=False)
+            # import open3d as o3d
+            # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr[pid_list1]))
+            # point_cloud2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr[pid_list2]))
+            # point_cloud.paint_uniform_color((1, 0, 0))
+            # point_cloud2.paint_uniform_color((0, 1, 0))
+            # vis = o3d.visualization.Visualizer()
+            # vis.create_window(width=1920, height=1025)
+            # vis.add_geometry(point_cloud)
+            # vis.add_geometry(point_cloud2)
+            # vis.run()
+            # vis.destroy_window()
+
+            # camera = pycolmap.Camera(
+            #     model="SIMPLE_RADIAL",
+            #     width=1024,
+            #     height=1024,
+            #     params=[focal, cx, cy, 0],
+            # )
+            # res = pycolmap.absolute_pose_estimation(
+            #     uv_gt[oob_mask][mask],
+            #     self.xyz_arr[pid_list],
+            #     camera,
+            #     # refinement_options={"max_num_iterations": 100},
+            # )
+            # pose_mat = torch.from_numpy(self.image2pose[img_id])
+            # t_err = float(torch.norm(pose_mat[0:3, 3] - res["cam_from_world"].translation))
+            # print(t_err)
+
+        # pkl_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/RobotCar_hloc_superpoint+superglue_netvlad20.txt_logs.pkl"
+        # afile = open(pkl_file, "rb")
+        # data_hloc = pickle.load(afile)
+        # afile.close()
+        #
+        # hloc_sfm_model = colmap_read.read_points3D_binary("/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/sfm_superpoint+superglue/points3D.bin")
+        # tree = KDTree(self.xyz_arr)
+        # for name in self.name2mat:
+        #     loc_res = data_hloc["loc"][name]
+        #     img_id = self.name2id[name]
+        #
+        #     pose_mat = self.image2pose[img_id]
+        #     intrinsics = torch.eye(3)
+        #     focal, cx, cy, _ = loc_res["PnP_ret"]["camera"].params
+        #     intrinsics[0, 0] = focal
+        #     intrinsics[1, 1] = focal
+        #     intrinsics[0, 2] = cx
+        #     intrinsics[1, 2] = cy
+        #     xyz_gt = np.array([hloc_sfm_model[pid].xyz for pid in loc_res["points3D_ids"]])
+        #     uv_gt = project_using_pose(
+        #         torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+        #         intrinsics.unsqueeze(0).cuda().float(),
+        #         xyz_gt,
+        #     )
+        #     diff = np.mean(np.abs(loc_res["keypoints_query"]-uv_gt), 1)
+        #     mask = diff < 5
+        #     xyz_gt_ref = xyz_gt[mask]
+        #     _, pid_list = tree.query(xyz_gt_ref)
+        #     self.image2points[img_id] = pid_list
+
+    def _process_id_to_name(self, img_id):
         name = self.image2name[img_id].split("./")[-1]
         name2 = str(self.images_dir / name).replace(".png", ".jpg")
+        return name2
+
+    def _load_image(self, img_id):
+        name2 = self._process_id_to_name(img_id)
         image = io.imread(name2)
 
         if len(image.shape) < 3:
@@ -826,31 +1113,53 @@ class RobotCarDataset(Dataset):
         if self.train:
             img_id = self.img_ids[idx]
             image, image_name = self._load_image(img_id)
-            qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
+            if type(self.image2pose[img_id]) == list:
+                qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
+                pose_mat = dd_utils.return_pose_mat_no_inv([qw, qx, qy, qz], [tx, ty, tz])
+            else:
+                pose_mat = self.image2pose[img_id]
+                # pose_mat = np.linalg.inv(pose_mat)
+
             intrinsics = torch.eye(3)
-            focal, radial = self.image2info[img_id]
+            if img_id in self.image2info:
+                focal, radial = self.image2info[img_id]
+                cx, cy = 512, 512
+            else:
+                focal = 400
+                if "rear" in image_name:
+                    cx = 508.222931
+                    cy = 498.187378
+                elif "right" in image_name:
+                    cx = 502.503754
+                    cy = 490.259033
+                elif "left" in image_name:
+                    cx = 500.107605
+                    cy = 511.461426
+
             assert image.shape == (1024, 1024, 3)
             intrinsics[0, 0] = focal
             intrinsics[1, 1] = focal
-            intrinsics[0, 2] = 512
-            intrinsics[1, 2] = 512
-            pose_mat = dd_utils.return_pose_mat_no_inv([qw, qx, qy, qz], [tx, ty, tz])
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
 
             pid_list = self.image2points[img_id]
             xyz_gt = self.xyz_arr[pid_list]
-            uv_gt = project_using_pose(
-                torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
-                intrinsics.unsqueeze(0).cuda().float(),
-                xyz_gt,
-            )
 
-            pose_inv = torch.from_numpy(pose_mat)
+            # uv_gt = project_using_pose(
+            #     torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+            #     intrinsics.unsqueeze(0).cuda().float(),
+            #     xyz_gt,
+            # )
+
+            uv_gt = np.array(self.image2uvs[img_id])
             camera = pycolmap.Camera(
                 model="SIMPLE_RADIAL",
                 width=1024,
                 height=1024,
-                params=[focal, 512, 512, radial],
+                params=[focal, cx, cy, 0],
             )
+
+            pose_inv = torch.from_numpy(pose_mat)
 
         else:
             name0 = self.img_ids[idx]
@@ -894,7 +1203,7 @@ class RobotCarDataset(Dataset):
             img_id = name1
             pid_list = []
             if type(self.name2mat[name0]) == np.ndarray:
-                pose_inv = torch.from_numpy(self.name2mat[name0])
+                pose_inv = torch.from_numpy(self.name2mat[name0]).inverse()
             else:
                 pose_inv = None
             xyz_gt = None
@@ -923,6 +1232,6 @@ class RobotCarDataset(Dataset):
 
 
 if __name__ == "__main__":
-    testset = RobotCarDataset(train=False, evaluate=True)
+    testset = RobotCarDataset(train=True, evaluate=False)
     for t in testset:
         continue
