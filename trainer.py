@@ -416,11 +416,13 @@ class RobotCarTrainer(BaseTrainer):
 
             np.save(file_name1, pid2mean_desc)
             np.save(file_name2, all_pid)
+        if pid2mean_desc.shape[0] > all_pid.shape[0]:
+            pid2mean_desc = pid2mean_desc[all_pid]
         self.xyz_arr = self.dataset.xyz_arr[all_pid]
         return pid2mean_desc, all_pid, {}
 
     def legal_predict(
-        self, uv_arr, features_ori, gpu_index_flat, remove_duplicate=False
+        self, uv_arr, features_ori, gpu_index_flat, remove_duplicate=False, return_pid=False,
     ):
         distances, feature_indices = gpu_index_flat.search(features_ori, 1)
 
@@ -441,46 +443,122 @@ class RobotCarTrainer(BaseTrainer):
             feature_indices = [pid for pid in pid2uv]
 
         pred_scene_coords_b3 = self.xyz_arr[feature_indices]
+        if return_pid:
+            return uv_arr, pred_scene_coords_b3, feature_indices
 
         return uv_arr, pred_scene_coords_b3
 
-    def test(self):
+    def test(self, test_dataset):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_pid_in_train_set])
-
-        features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
-        )
-        features_h5 = h5py.File(features_path, "r")
+        gpu_index_flat.add(self.pid2mean_desc)
         # global_descriptors_path = (
         #     f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
         # )
         # global_features_h5 = h5py.File(global_descriptors_path, "r")
 
-        ind = 0
-        for example in tqdm(self.test_dataset, desc="Testing"):
-            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+        features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train_small.h5"
+        )
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(test_dataset, desc="Detecting small train features"):
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
 
-            uv_arr, xyz_pred = self.legal_predict(
+        ind = 0
+        bad_pids = set([])
+        features_h5 = h5py.File(features_path, "r")
+
+        ncentroids = 10000
+        niter = 20
+        verbose = True
+        d = self.pid2mean_desc.shape[1]
+        kmeans = faiss.Kmeans(d, ncentroids, niter=niter, verbose=verbose)
+        kmeans.train(self.pid2mean_desc)
+        _, cluster_ind = kmeans.index.search(self.pid2mean_desc, 1)
+        cluster_ind2 = cluster_ind.flatten()
+        cluster_coord_var = np.zeros(ncentroids)
+        for id2 in tqdm(range(ncentroids)):
+            mask = cluster_ind2==id2
+            coords = self.xyz_arr[mask]
+            cluster_coord_var[id2] = np.mean(np.var(coords, 0))
+
+        import kmeans1d
+        mask3 = np.array(kmeans1d.cluster(cluster_coord_var, 2).clusters)==0
+        cluster_list1 = np.arange(ncentroids)[mask3]
+        cluster_list2 = np.arange(ncentroids)[np.bitwise_not(mask3)]
+        mask41 = np.isin(cluster_ind2, cluster_list1)
+        mask42 = np.isin(cluster_ind2, cluster_list2)
+
+        xyz_22 = self.xyz_arr[cluster_ind.flatten()==8741]
+        import open3d as o3d
+        point_cloud = o3d.geometry.PointCloud(
+            o3d.utility.Vector3dVector(
+                self.xyz_arr[mask41]
+            )
+        )
+        vis = o3d.visualization.Visualizer()
+        vis.create_window(width=1920, height=1025)
+        vis.add_geometry(point_cloud)
+        vis.run()
+        vis.destroy_window()
+        good_pids = np.arange(self.xyz_arr.shape[0])[mask41]
+        ind = 0
+        for example in test_dataset:
+
+            keypoints, descriptors = dd_utils.read_kp_and_desc(
+                example[1], features_h5
+            )
+
+            uv_arr, xyz_pred, pid_list = self.legal_predict(
                 keypoints,
                 descriptors,
                 gpu_index_flat,
+                return_pid=True,
             )
-
+            mask0 = np.isin(pid_list, good_pids)
             camera = example[6]
+
             res = pycolmap.absolute_pose_estimation(
                 uv_arr,
                 xyz_pred,
                 camera,
-                # refinement_options={"max_num_iterations": 100},
+            )
+            t_err0 = float(
+                torch.norm(example[4][0:3, 3] - res["cam_from_world"].translation)
+            )
+            res = pycolmap.absolute_pose_estimation(
+                uv_arr[mask0],
+                xyz_pred[mask0],
+                camera,
             )
             t_err = float(
                 torch.norm(example[4][0:3, 3] - res["cam_from_world"].translation)
             )
-            print(t_err)
-            print()
+            print(t_err0, t_err)
+            ind += 1
+            if ind > 10:
+                break
+            if t_err < 1:
+                mask = np.bitwise_not(res["inliers"])
+                for pid in pid_list[mask]:
+                    bad_pids.add(pid)
+
+        features_h5.close()
+
+        distances, feature_indices = gpu_index_flat.search(self.pid2mean_desc, 2)
+
+
+        # import open3d as o3d
+        # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr[list(bad_pids)]))
+        # vis = o3d.visualization.Visualizer()
+        # vis.create_window(width=1920, height=1025)
+        # vis.add_geometry(point_cloud)
+        # vis.run()
+        # vis.destroy_window()
         return
 
     def evaluate(self):
