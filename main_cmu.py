@@ -15,7 +15,7 @@ from trainer import (
 TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
 
-def use_r2d2(using_global_descriptors):
+def use_r2d2(ds_dir, using_global_descriptors):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()
     local_desc_model = "r2d2"
     model_dict = conf[local_desc_model]["model"]
@@ -40,9 +40,9 @@ def use_r2d2(using_global_descriptors):
 
     results = []
     for slice in TEST_SLICES:
-        train_ds_ = CMUDataset(ds_dir=f"datasets/datasets/cmu_extended/slice{slice}")
+        train_ds_ = CMUDataset(ds_dir=f"{ds_dir}/slice{slice}")
         test_ds_ = CMUDataset(
-            ds_dir=f"datasets/datasets/cmu_extended/slice{slice}", train=False
+            ds_dir=f"{ds_dir}/slice{slice}", train=False
         )
 
         trainer_ = CMUTrainer(
@@ -160,4 +160,4 @@ if __name__ == "__main__":
         help="Path to the dataset, default: %(default)s",
     )
     args = parser.parse_args()
-    use_r2d2(False)
+    use_r2d2(args.dataset, False)
