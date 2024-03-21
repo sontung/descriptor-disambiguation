@@ -377,7 +377,7 @@ class CamLocDataset(Dataset):
             )
             cam_dists = cam_data - cam_dists
             cam_dists = np.linalg.norm(cam_dists, axis=1)
-            cam_dists = cam_dists ** 2
+            cam_dists = cam_dists**2
 
             cluster_sizes[cluster[1]] = cam_dists.mean()
 
@@ -1306,7 +1306,9 @@ class CMUDataset(Dataset):
             self.images_dir_str = f"{self.ds_dir}/query"
             self.images_dir = Path(self.images_dir_str)
 
-            self.img_ids = [str(file) for file in self.images_dir.iterdir() if file.is_file()]
+            self.img_ids = [
+                str(file) for file in self.images_dir.iterdir() if file.is_file()
+            ]
 
         self.train = train
 

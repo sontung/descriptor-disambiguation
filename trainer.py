@@ -290,7 +290,9 @@ class BaseTrainer:
                     )
 
                 uv_arr, xyz_pred = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat,
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
                 )
 
                 camera = example[6]
@@ -500,21 +502,29 @@ class RobotCarTrainer(BaseTrainer):
         good_pids = np.arange(self.xyz_arr.shape[0])[mask41]
         ind = 0
         for example in test_dataset:
-
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
 
             uv_arr, xyz_pred, pid_list = self.legal_predict(
-                keypoints, descriptors, gpu_index_flat, return_pid=True,
+                keypoints,
+                descriptors,
+                gpu_index_flat,
+                return_pid=True,
             )
             mask0 = np.isin(pid_list, good_pids)
             camera = example[6]
 
-            res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera,)
+            res = pycolmap.absolute_pose_estimation(
+                uv_arr,
+                xyz_pred,
+                camera,
+            )
             t_err0 = float(
                 torch.norm(example[4][0:3, 3] - res["cam_from_world"].translation)
             )
             res = pycolmap.absolute_pose_estimation(
-                uv_arr[mask0], xyz_pred[mask0], camera,
+                uv_arr[mask0],
+                xyz_pred[mask0],
+                camera,
             )
             t_err = float(
                 torch.norm(example[4][0:3, 3] - res["cam_from_world"].translation)
@@ -591,7 +601,9 @@ class RobotCarTrainer(BaseTrainer):
                     )
 
                 uv_arr, xyz_pred = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat,
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
                 )
 
                 camera = example[6]
@@ -651,6 +663,18 @@ class CMUTrainer(BaseTrainer):
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
         query_results = []
+
+        if self.using_global_descriptors:
+            result_file = open(
+                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt",
+                "w",
+            )
+        else:
+            result_file = open(
+                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt",
+                "w",
+            )
+
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
@@ -664,18 +688,28 @@ class CMUTrainer(BaseTrainer):
                     )
 
                 uv_arr, xyz_pred = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat,
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
                 )
 
                 camera = example[6]
-                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
+                res = pycolmap.absolute_pose_estimation(
+                    uv_arr,
+                    xyz_pred,
+                    camera,
+                )
+
                 mat = res["cam_from_world"]
                 qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
                 tvec = " ".join(map(str, mat.translation))
                 image_id = example[2].split("/")[-1]
-                query_results.append(f"{image_id} {qvec} {tvec}")
+                line = f"{image_id} {qvec} {tvec}"
+                query_results.append(line)
+                print(line, file=result_file)
         features_h5.close()
         global_features_h5.close()
+        result_file.close()
         return query_results
 
 
@@ -766,7 +800,10 @@ class ConcatenateTrainer(BaseTrainer):
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
             pid2mean_desc = np.zeros(
-                (len(self.dataset.recon_points), self.feature_dim,),
+                (
+                    len(self.dataset.recon_points),
+                    self.feature_dim,
+                ),
                 pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
             )
 
@@ -784,7 +821,11 @@ class ConcatenateTrainer(BaseTrainer):
         return pid2mean_desc, all_pid, pid2ind
 
     def legal_predict_with_img_desc(
-        self, uv_arr, features_ori, gpu_index_flat, img_desc,
+        self,
+        uv_arr,
+        features_ori,
+        gpu_index_flat,
+        img_desc,
     ):
         distances, feature_indices = gpu_index_flat.search(features_ori, 10)
         pid2global_desc = {}
@@ -873,7 +914,9 @@ class ConcatenateTrainer(BaseTrainer):
                 )
 
                 uv_arr, xyz_pred = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat,
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
                 )
                 camera = example[6]
                 res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)

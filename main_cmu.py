@@ -1,3 +1,4 @@
+import argparse
 from types import SimpleNamespace
 
 import torch
@@ -5,15 +6,11 @@ from hloc import extractors
 from hloc.utils.base_model import dynamic_load
 
 import dd_utils
-from dataset import AachenDataset, CMUDataset
+from dataset import CMUDataset
 from trainer import (
     BaseTrainer,
-    ConcatenateTrainer,
-    GlobalDescriptorOnlyTrainer,
-    MixVPROnlyTrainer,
-    MeanOfLocalDescriptorsTrainer, CMUTrainer,
+    CMUTrainer,
 )
-
 
 TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
@@ -44,7 +41,9 @@ def use_r2d2(using_global_descriptors):
     results = []
     for slice in TEST_SLICES:
         train_ds_ = CMUDataset(ds_dir=f"datasets/datasets/cmu_extended/slice{slice}")
-        test_ds_ = CMUDataset(ds_dir=f"datasets/datasets/cmu_extended/slice{slice}", train=False)
+        test_ds_ = CMUDataset(
+            ds_dir=f"datasets/datasets/cmu_extended/slice{slice}", train=False
+        )
 
         trainer_ = CMUTrainer(
             train_ds_,
@@ -153,5 +152,12 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="datasets/datasets/cmu_extended",
+        help="Path to the dataset, default: %(default)s",
+    )
+    args = parser.parse_args()
     use_r2d2(False)
-
