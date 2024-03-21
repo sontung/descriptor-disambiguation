@@ -84,16 +84,9 @@ def run_slice(slice_, root, outputs, num_covis, num_loc):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--slices",
-        type=str,
-        default="*",
-        help="a single number, an interval (e.g. 2-6), "
-        "or a Python-style list or int (e.g. [2, 3, 4]",
-    )
-    parser.add_argument(
         "--dataset",
         type=Path,
-        default="datasets/cmu_extended",
+        default="datasets/datasets/cmu_extended",
         help="Path to the dataset, default: %(default)s",
     )
     parser.add_argument(
@@ -116,17 +109,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.slice == "*":
-        slices = TEST_SLICES
-    if "-" in args.slices:
-        min_, max_ = args.slices.split("-")
-        slices = list(range(int(min_), int(max_) + 1))
-    else:
-        slices = eval(args.slices)
-        if isinstance(slices, int):
-            slices = [slices]
-
-    for slice_ in slices:
+    for slice_ in TEST_SLICES:
         logger.info("Working on slice %s.", slice_)
         run_slice(
             f"slice{slice_}", args.dataset, args.outputs, args.num_covis, args.num_loc
