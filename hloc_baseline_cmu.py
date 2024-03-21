@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from ... import (
+from hloc import (
     extract_features,
     localize_sfm,
     logger,

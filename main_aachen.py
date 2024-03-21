@@ -271,14 +271,7 @@ def use_netvlad(train_ds_, test_ds_):
 
 def use_mixvpr(train_ds_, test_ds_):
     trainer_ = MixVPROnlyTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        4096,
-        None,
-        None,
-        None,
-        None,
+        train_ds_, test_ds_, 128, 4096, None, None, None, None,
     )
     trainer_.evaluate()
     del trainer_

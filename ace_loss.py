@@ -50,7 +50,7 @@ class ReproLoss:
 
             if self.circle_schedule:
                 # Optionally scale it using the circular schedule.
-                schedule_weight = 1 - np.sqrt(1 - schedule_weight**2)
+                schedule_weight = 1 - np.sqrt(1 - schedule_weight ** 2)
 
             # Compute the weight to use in the tanh loss.
             loss_weight = (1 - schedule_weight) * self.soft_clamp + self.soft_clamp_min
