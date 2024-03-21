@@ -1310,7 +1310,7 @@ class CMUDataset(Dataset):
 
         self.train = train
 
-    def _clear(self):
+    def clear(self):
         if self.train:
             self.recon_images.clear()
             self.recon_cameras.clear()

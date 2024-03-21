@@ -18,7 +18,7 @@ from trainer import (
 TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
 
-def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
+def use_r2d2(using_global_descriptors):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()
     local_desc_model = "r2d2"
     model_dict = conf[local_desc_model]["model"]
@@ -41,20 +41,27 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
     conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
     conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
 
-    trainer_ = CMUTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        using_global_descriptors,
-    )
-    query_results = trainer_.evaluate()
-    trainer_.clear()
-    del trainer_
+    results = []
+    for slice in TEST_SLICES:
+        train_ds_ = CMUDataset(ds_dir=f"datasets/datasets/cmu_extended/slice{slice}")
+        test_ds_ = CMUDataset(ds_dir=f"datasets/datasets/cmu_extended/slice{slice}", train=False)
+
+        trainer_ = CMUTrainer(
+            train_ds_,
+            test_ds_,
+            128,
+            2048,
+            encoder,
+            encoder_global,
+            conf_ns,
+            conf_ns_retrieval,
+            using_global_descriptors,
+        )
+        query_results = trainer_.evaluate()
+        results.extend(query_results)
+        trainer_.clear()
+        del trainer_
+        train_ds_.clear()
 
     if using_global_descriptors:
         result_file = open(
@@ -146,8 +153,5 @@ def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
 
 
 if __name__ == "__main__":
-    train_ds = CMUDataset(ds_dir="datasets/datasets/cmu_extended/slice2")
-    test_ds = CMUDataset(ds_dir="datasets/datasets/cmu_extended/slice2", train=False)
-
-    use_r2d2(train_ds, test_ds, False)
+    use_r2d2(False)
 
