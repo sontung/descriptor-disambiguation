@@ -186,8 +186,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--use_global",
-        type=bool,
-        default=True,
+        type=int,
+        default=1
     )
     parser.add_argument(
         "--local_desc",
@@ -196,6 +196,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if args.local_desc == "r2d2":
-        use_r2d2(args.dataset, args.use_global)
+        print(bool(args.use_global))
+        use_r2d2(args.dataset, bool(args.use_global))
     elif args.local_desc == "superpoint":
-        use_superpoint(args.dataset, args.use_global)
+        use_superpoint(args.dataset, bool(args.use_global))
