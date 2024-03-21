@@ -2,6 +2,7 @@ import os
 import pickle
 import sys
 from pathlib import Path
+import poselib
 
 import cv2
 import faiss
@@ -694,15 +695,27 @@ class CMUTrainer(BaseTrainer):
                 )
 
                 camera = example[6]
-                res = pycolmap.absolute_pose_estimation(
+                # res = pycolmap.absolute_pose_estimation(
+                #     uv_arr,
+                #     xyz_pred,
+                #     camera,
+                # )
+
+                camera_dict = {
+                    "model": "OPENCV",
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
                     uv_arr,
                     xyz_pred,
-                    camera,
+                    camera_dict,
                 )
 
-                mat = res["cam_from_world"]
-                qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
-                tvec = " ".join(map(str, mat.translation))
+                # mat = res["cam_from_world"]
+                qvec = " ".join(map(str, pose.q))
+                tvec = " ".join(map(str, pose.t))
                 image_id = example[2].split("/")[-1]
                 line = f"{image_id} {qvec} {tvec}"
                 query_results.append(line)
