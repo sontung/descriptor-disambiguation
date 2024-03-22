@@ -54,7 +54,7 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
 
 def use_d2(train_ds_, test_ds_, using_global_descriptors):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "d2net-ss"
+    local_desc_model = "d2net"
     model_dict = conf[local_desc_model]["model"]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -165,7 +165,7 @@ def use_r2d2_concat(train_ds_, test_ds_):
 
 def use_d2_concat(train_ds_, test_ds_):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "d2net-ss"
+    local_desc_model = "d2net"
     model_dict = conf[local_desc_model]["model"]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

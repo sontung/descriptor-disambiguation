@@ -17,7 +17,7 @@ TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
 def run_d2_detector_on_all_images(ds_dir):
     conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "d2net-ss"
+    local_desc_model = "d2net"
 
     model_dict = conf[local_desc_model]["model"]
 

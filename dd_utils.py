@@ -901,7 +901,7 @@ def hloc_conf_for_all_models():
                 "resize_max": 1024,
             },
         },
-        "d2net-ss": {
+        "d2net": {
             "output": "feats-d2net-ss",
             "model": {
                 "name": "d2net",
