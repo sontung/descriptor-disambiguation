@@ -191,12 +191,16 @@ class BaseTrainer:
                 features_h5 = h5py.File(str(features_path), "a", libver="latest")
                 with torch.no_grad():
                     for example in tqdm(self.dataset, desc="Detecting features"):
+                        if example is None:
+                            continue
                         self.produce_local_descriptors(example[1], features_h5)
                 features_h5.close()
 
             pid2descriptors = {}
             features_h5 = h5py.File(features_path, "r")
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+                if example is None:
+                    continue
                 keypoints, descriptors = dd_utils.read_kp_and_desc(
                     example[1], features_h5
                 )
@@ -655,6 +659,8 @@ class CMUTrainer(BaseTrainer):
                 for example in tqdm(
                     self.test_dataset, desc="Collecting global descriptors for test set"
                 ):
+                    if example is None:
+                        continue
                     image_descriptor = self.produce_image_descriptor(example[1])
                     name = example[1]
                     dict_ = {"global_descriptor": image_descriptor}
@@ -684,7 +690,6 @@ class CMUTrainer(BaseTrainer):
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 if example is None:
                     continue
-
                 name = example[1]
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
