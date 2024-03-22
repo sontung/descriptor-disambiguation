@@ -1,15 +1,11 @@
 import argparse
 from types import SimpleNamespace
 
-import h5py
 import torch
 from hloc import extractors
 from hloc.utils.base_model import dynamic_load
-from pathlib import Path
-from tqdm import tqdm
 
 import dd_utils
-from ace_util import read_and_preprocess
 from dataset import CMUDataset
 from trainer import (
     CMUTrainer,
@@ -214,7 +210,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if args.local_desc == "r2d2":
-        print(bool(args.use_global))
         use_r2d2(args.dataset, bool(args.use_global))
     elif args.local_desc == "superpoint":
         use_superpoint(args.dataset, bool(args.use_global))
+    elif args.local_desc == "d2":
+        use_d2(args.dataset, bool(args.use_global))
