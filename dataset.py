@@ -1324,7 +1324,10 @@ class CMUDataset(Dataset):
             name2 = str(self.images_dir / name)
         else:
             name2 = img_id
-        image = io.imread(name2)
+        try:
+            image = io.imread(name2)
+        except ValueError:
+            return None, name2
 
         if len(image.shape) < 3:
             # Convert to RGB if needed.
@@ -1336,10 +1339,13 @@ class CMUDataset(Dataset):
         return len(self.img_ids)
 
     def _get_single_item(self, idx):
-        if self.train:
-            img_id = self.img_ids[idx]
+        img_id = self.img_ids[idx]
+        image, image_name = self._load_image(img_id)
+        if image is None:
+            print(f"Warning: cannot read image at {image_name}")
+            return None
 
-            image, image_name = self._load_image(img_id)
+        if self.train:
             camera_id = self.recon_images[img_id].camera_id
             camera = self.recon_cameras[camera_id]
             camera = pycolmap.Camera(
@@ -1361,8 +1367,6 @@ class CMUDataset(Dataset):
             pose_inv = torch.from_numpy(pose_inv)
 
         else:
-            img_id = self.img_ids[idx]
-            image, image_name = self._load_image(img_id)
             cam_id = image_name.split("/")[-1].split("_")[2]
             camera = self.intrinsics_dict[cam_id]
 

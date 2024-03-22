@@ -666,18 +666,20 @@ class CMUTrainer(BaseTrainer):
         query_results = []
 
         if self.using_global_descriptors:
-            result_file = open(
-                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt",
-                "w",
-            )
+            result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt"
         else:
-            result_file = open(
-                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt",
-                "w",
-            )
+            result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
+
+        if os.path.isfile(result_file_name):
+            print(f"Found result file at {result_file_name}. Skipping")
+            return
+        result_file = open(result_file_name, "w")
 
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
+                if example is None:
+                    continue
+
                 name = example[1]
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
