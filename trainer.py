@@ -668,7 +668,9 @@ class CMUTrainer(BaseTrainer):
         if self.using_global_descriptors:
             result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt"
         else:
-            result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
+            result_file_name = (
+                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
+            )
 
         if os.path.isfile(result_file_name):
             print(f"Found result file at {result_file_name}. Skipping")
