@@ -77,6 +77,8 @@ class BaseTrainer:
                     for example in tqdm(
                         self.test_dataset, desc="Detecting testing features"
                     ):
+                        if example is None:
+                            continue
                         self.produce_local_descriptors(example[1], features_h5)
                 features_h5.close()
         else:
@@ -124,6 +126,8 @@ class BaseTrainer:
             idx = 0
             with torch.no_grad():
                 for example in tqdm(self.dataset, desc="Collecting image descriptors"):
+                    if example is None:
+                        continue
                     image_descriptor = self.produce_image_descriptor(example[1])
                     all_desc[idx] = image_descriptor
                     all_names.append(example[1])
