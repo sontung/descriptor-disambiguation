@@ -678,58 +678,66 @@ class CMUTrainer(BaseTrainer):
                 f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
             )
 
+        computed_images = {}
         if os.path.isfile(result_file_name):
             with open(result_file_name) as file:
                 lines = [line.rstrip() for line in file]
-            if len(lines) >= len(self.test_dataset)*0.8:
+            if len(lines) == len(self.test_dataset):
                 print(f"Found result file at {result_file_name}. Skipping")
                 return lines
-        result_file = open(result_file_name, "w")
+            else:
+                computed_images = {line.split(" ")[0]: line for line in lines}
 
+        result_file = open(result_file_name, "w")
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 if example is None:
                     continue
                 name = example[1]
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                if self.using_global_descriptors:
-                    image_descriptor = np.array(
-                        global_features_h5[name]["global_descriptor"]
-                    )
-                    descriptors = 0.5 * (
-                        descriptors + image_descriptor[: descriptors.shape[1]]
-                    )
-
-                uv_arr, xyz_pred = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
-                )
-
-                camera = example[6]
-                # res = pycolmap.absolute_pose_estimation(
-                #     uv_arr,
-                #     xyz_pred,
-                #     camera,
-                # )
-
-                camera_dict = {
-                    "model": "OPENCV",
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose, info = poselib.estimate_absolute_pose(
-                    uv_arr,
-                    xyz_pred,
-                    camera_dict,
-                )
-
-                # mat = res["cam_from_world"]
-                qvec = " ".join(map(str, pose.q))
-                tvec = " ".join(map(str, pose.t))
                 image_id = example[2].split("/")[-1]
-                line = f"{image_id} {qvec} {tvec}"
+                if image_id in computed_images:
+                    line = computed_images[image_id]
+                else:
+
+                    keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+
+                    if self.using_global_descriptors:
+                        image_descriptor = np.array(
+                            global_features_h5[name]["global_descriptor"]
+                        )
+                        descriptors = 0.5 * (
+                            descriptors + image_descriptor[: descriptors.shape[1]]
+                        )
+
+                    uv_arr, xyz_pred = self.legal_predict(
+                        keypoints,
+                        descriptors,
+                        gpu_index_flat,
+                    )
+
+                    camera = example[6]
+                    # res = pycolmap.absolute_pose_estimation(
+                    #     uv_arr,
+                    #     xyz_pred,
+                    #     camera,
+                    # )
+
+                    camera_dict = {
+                        "model": "OPENCV",
+                        "height": camera.height,
+                        "width": camera.width,
+                        "params": camera.params,
+                    }
+                    pose, info = poselib.estimate_absolute_pose(
+                        uv_arr,
+                        xyz_pred,
+                        camera_dict,
+                    )
+
+                    # mat = res["cam_from_world"]
+                    qvec = " ".join(map(str, pose.q))
+                    tvec = " ".join(map(str, pose.t))
+                    line = f"{image_id} {qvec} {tvec}"
                 query_results.append(line)
                 print(line, file=result_file)
         features_h5.close()
