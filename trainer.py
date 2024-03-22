@@ -673,10 +673,11 @@ class CMUTrainer(BaseTrainer):
             )
 
         if os.path.isfile(result_file_name):
-            print(f"Found result file at {result_file_name}. Skipping")
             with open(result_file_name) as file:
                 lines = [line.rstrip() for line in file]
-            return lines
+            if len(lines) >= len(self.test_dataset)*0.8:
+                print(f"Found result file at {result_file_name}. Skipping")
+                return lines
         result_file = open(result_file_name, "w")
 
         with torch.no_grad():
