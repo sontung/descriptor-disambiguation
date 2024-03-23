@@ -952,7 +952,9 @@ def hloc_conf_for_all_models():
 
 def read_kp_and_desc(name, features_h5):
     pred = {}
-    grp = features_h5[name]
+    img_id = "/".join(name.split("/")[-2:])
+
+    grp = features_h5[img_id]
     for k, v in grp.items():
         pred[k] = v
 
@@ -964,6 +966,8 @@ def read_kp_and_desc(name, features_h5):
 
 
 def write_to_h5_file(fd, name, dict_):
+    img_id = "/".join(name.split("/")[-2:])
+    name = img_id
     try:
         if name in fd:
             del fd[name]
