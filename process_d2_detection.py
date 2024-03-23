@@ -70,7 +70,7 @@ def run_d2_detector_on_all_images(ds_dir, out_dir):
             features_h5.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dataset",

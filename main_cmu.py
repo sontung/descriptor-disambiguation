@@ -99,6 +99,7 @@ def use_d2(ds_dir, using_global_descriptors):
 
     results = []
     for slice_ in TEST_SLICES:
+        print(f"Processing slice {slice_}")
         train_ds_ = CMUDataset(ds_dir=f"{ds_dir}/slice{slice_}")
         test_ds_ = CMUDataset(ds_dir=f"{ds_dir}/slice{slice_}", train=False)
 

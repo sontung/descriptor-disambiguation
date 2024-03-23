@@ -205,9 +205,13 @@ class BaseTrainer:
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 if example is None:
                     continue
-                keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
-                )
+                try:
+                    keypoints, descriptors = dd_utils.read_kp_and_desc(
+                        example[1], features_h5
+                    )
+                except KeyError:
+                    print(f"Cannot read {example[1]} from {features_path}")
+                    sys.exit()
                 pid_list = example[3]
                 uv = example[-1] + 0.5
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
@@ -702,8 +706,9 @@ class CMUTrainer(BaseTrainer):
                 if image_id in computed_images:
                     line = computed_images[image_id]
                 else:
-
-                    keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+                    keypoints, descriptors = dd_utils.read_kp_and_desc(
+                        name, features_h5
+                    )
 
                     if self.using_global_descriptors:
                         image_descriptor = np.array(
