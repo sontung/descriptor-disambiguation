@@ -46,12 +46,14 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
     return encoder, conf_ns, encoder_global, conf_ns_retrieval
 
 
-def run_function(root_dir_,
-                 local_model,
-                 retrieval_model,
-                 local_desc_dim,
-                 global_desc_dim,
-                 using_global_descriptors):
+def run_function(
+    root_dir_,
+    local_model,
+    retrieval_model,
+    local_desc_dim,
+    global_desc_dim,
+    using_global_descriptors,
+):
     encoder, conf_ns, encoder_global, conf_ns_retrieval = prepare_encoders(
         local_model, retrieval_model, global_desc_dim
     )
@@ -127,7 +129,6 @@ if __name__ == "__main__":
         int(args.local_desc_dim),
         int(args.global_desc_dim),
         bool(args.use_global),
-
     )
 
     if bool(args.use_global):
