@@ -69,7 +69,7 @@ class BaseTrainer:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         self.local_desc_model_name = local_desc_model.conf["name"]
-        self.global_desc_model_name = global_desc_model.conf["name"]
+        self.global_desc_model_name = f"{global_desc_model.conf['name']}{global_feature_dim}"
         self.local_desc_model = local_desc_model
         self.local_desc_conf = local_desc_conf
 
