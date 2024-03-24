@@ -16,12 +16,6 @@ from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess
-from sklearn.preprocessing import normalize
-from torch.utils.data import DataLoader
-
-sys.path.append("../MixVPR")
-from mix_vpr_main import VPRModel
-from mix_vpr_demo import load_image as load_image_mix_vpr
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -158,15 +152,18 @@ class BaseTrainer:
         return image2desc
 
     def produce_image_descriptor(self, name):
-        image, _ = read_and_preprocess(name, self.global_desc_conf)
-        image_descriptor = (
-            self.global_desc_model(
-                {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-            )["global_descriptor"]
-            .squeeze()
-            .cpu()
-            .numpy()
-        )
+        if "mixvpr" in self.global_desc_model_name:
+            image_descriptor = self.global_desc_model.process(name)
+        else:
+            image, _ = read_and_preprocess(name, self.global_desc_conf)
+            image_descriptor = (
+                self.global_desc_model(
+                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                )["global_descriptor"]
+                .squeeze()
+                .cpu()
+                .numpy()
+            )
         return image_descriptor
 
     def produce_local_descriptors(self, name, fd):
