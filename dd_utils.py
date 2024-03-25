@@ -967,6 +967,19 @@ def read_kp_and_desc(name, features_h5):
     return keypoints, descriptors
 
 
+def read_global_desc(name, global_features_h5):
+    img_id = "/".join(name.split("/")[-2:])
+    try:
+        desc = np.array(
+            global_features_h5[name]["global_descriptor"]
+        )
+    except KeyError:
+        desc = np.array(
+            global_features_h5[img_id]["global_descriptor"]
+        )
+    return desc
+
+
 def write_to_h5_file(fd, name, dict_):
     img_id = "/".join(name.split("/")[-2:])
     name = img_id

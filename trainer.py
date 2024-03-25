@@ -727,9 +727,7 @@ class CMUTrainer(BaseTrainer):
                     )
 
                     if self.using_global_descriptors:
-                        image_descriptor = np.array(
-                            global_features_h5[name]["global_descriptor"]
-                        )
+                        image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
                         descriptors = 0.5 * (
                             descriptors + image_descriptor[: descriptors.shape[1]]
                         )
@@ -909,9 +907,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 name = "/".join(example[1].split("/")[-2:])
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
-                    image_descriptor = np.array(
-                        global_features_h5[name]["global_descriptor"]
-                    )
+                    image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
@@ -1136,9 +1132,7 @@ class ConcatenateTrainer(BaseTrainer):
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                image_descriptor = np.array(
-                    global_features_h5[name]["global_descriptor"]
-                )
+                image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
 
                 g1 = np.sqrt(0.5 / descriptors.shape[1])
                 g2 = np.sqrt(0.5 / image_descriptor.shape[0])
@@ -1378,9 +1372,7 @@ class GlobalDescriptorOnlyTrainer(BaseTrainer):
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
-                image_descriptor = np.array(
-                    global_features_h5[name]["global_descriptor"]
-                )
+                image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
 
                 distances, image_ind = gpu_index_flat.search(
                     np.expand_dims(image_descriptor, 0), 1
@@ -1516,9 +1508,7 @@ class MixVPROnlyTrainer:
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
-                image_descriptor = np.array(
-                    global_features_h5[name]["global_descriptor"]
-                )
+                image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
 
                 distances, image_ind = gpu_index_flat.search(
                     np.expand_dims(image_descriptor, 0), 1
