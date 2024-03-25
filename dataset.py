@@ -854,7 +854,7 @@ class CMUDataset(Dataset):
             self.image_id2points = {}
             self.pid2images = {}
 
-            for img_id in tqdm(self.recon_images):
+            for img_id in self.recon_images:
                 pid_arr = self.recon_images[img_id].point3D_ids
                 pid_arr = pid_arr[pid_arr >= 0]
                 xyz_arr = np.zeros((pid_arr.shape[0], 3))

@@ -953,8 +953,10 @@ def hloc_conf_for_all_models():
 def read_kp_and_desc(name, features_h5):
     pred = {}
     img_id = "/".join(name.split("/")[-2:])
-
-    grp = features_h5[img_id]
+    try:
+        grp = features_h5[img_id]
+    except KeyError:
+        grp = features_h5[name]
     for k, v in grp.items():
         pred[k] = v
 
