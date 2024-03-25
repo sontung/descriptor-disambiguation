@@ -692,6 +692,8 @@ class CMUTrainer(BaseTrainer):
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
         query_results = []
+        print(f"Reading global descriptors from {global_descriptors_path}")
+        print(f"Reading local descriptors from {self.test_features_path}")
 
         if self.using_global_descriptors:
             result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt"

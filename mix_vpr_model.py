@@ -9,7 +9,7 @@ from mix_vpr_demo import load_image as load_image_mix_vpr
 
 class MVModel:
     def __init__(self, dim=128):
-        self.conf = {"name": f"mixvpr{dim}"}
+        self.conf = "mixvpr"
         if dim == 128:
             self.encoder_global = VPRModel(
                 backbone_arch="resnet50",
