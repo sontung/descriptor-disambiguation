@@ -9,12 +9,19 @@ import numpy as np
 import poselib
 import pycolmap
 import skimage
-import torch
 from pykdtree.kdtree import KDTree
 from scipy.spatial import KDTree as scipy_KDTree
 from scipy.spatial.transform import Rotation as Rotation
 from skimage.transform import rotate
 from tqdm import tqdm
+from types import SimpleNamespace
+
+import torch
+from hloc import extractors
+from hloc.utils.base_model import dynamic_load
+from pathlib import Path
+
+from mix_vpr_model import MVModel
 
 
 def create_sampling_matrix(out_w, out_h):
@@ -970,13 +977,9 @@ def read_kp_and_desc(name, features_h5):
 def read_global_desc(name, global_features_h5):
     img_id = "/".join(name.split("/")[-2:])
     try:
-        desc = np.array(
-            global_features_h5[name]["global_descriptor"]
-        )
+        desc = np.array(global_features_h5[name]["global_descriptor"])
     except KeyError:
-        desc = np.array(
-            global_features_h5[img_id]["global_descriptor"]
-        )
+        desc = np.array(global_features_h5[img_id]["global_descriptor"])
     return desc
 
 
@@ -994,3 +997,37 @@ def write_to_h5_file(fd, name, dict_):
             print("No space left")
             del grp, fd[name]
         raise error
+
+
+def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
+    conf, default_conf = hloc_conf_for_all_models()
+    model_dict = conf[local_desc_model]["model"]
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    Model = dynamic_load(extractors, model_dict["name"])
+    encoder = Model(model_dict).eval().to(device)
+    conf_ns = SimpleNamespace(**{**default_conf, **conf})
+    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
+    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
+
+    if retrieval_model == "mixvpr":
+        encoder_global = MVModel(global_desc_dim)
+        conf_ns_retrieval = None
+    else:
+        model_dict = conf[retrieval_model]["model"]
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        Model = dynamic_load(extractors, model_dict["name"])
+        if retrieval_model == "eigenplaces":
+            model_dict.update(
+                {
+                    "variant": "EigenPlaces",
+                    "backbone": "ResNet101",
+                    "fc_output_dim": global_desc_dim,
+                }
+            )
+        encoder_global = Model(model_dict).eval().to(device)
+        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
+        conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"][
+            "resize_max"
+        ]
+    return encoder, conf_ns, encoder_global, conf_ns_retrieval

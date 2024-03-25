@@ -1,50 +1,10 @@
 import argparse
-from types import SimpleNamespace
-
-import torch
-from hloc import extractors
-from hloc.utils.base_model import dynamic_load
 
 import dd_utils
 from dataset import CMUDataset
-from mix_vpr_model import MVModel
 from trainer import CMUTrainer
 
 TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
-
-
-def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    if retrieval_model == "mixvpr":
-        encoder_global = MVModel(global_desc_dim)
-        conf_ns_retrieval = None
-    else:
-        model_dict = conf[retrieval_model]["model"]
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        Model = dynamic_load(extractors, model_dict["name"])
-        if retrieval_model == "eigenplaces":
-            model_dict.update(
-                {
-                    "variant": "EigenPlaces",
-                    "backbone": "ResNet101",
-                    "fc_output_dim": global_desc_dim,
-                }
-            )
-        encoder_global = Model(model_dict).eval().to(device)
-        conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"][
-            "resize_max"
-        ]
-    return encoder, conf_ns, encoder_global, conf_ns_retrieval
 
 
 def run_function(
@@ -55,7 +15,7 @@ def run_function(
     global_desc_dim,
     using_global_descriptors,
 ):
-    encoder, conf_ns, encoder_global, conf_ns_retrieval = prepare_encoders(
+    encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
         local_desc_model, retrieval_model, global_desc_dim
     )
     results = []
@@ -123,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=4096,
+        default=2048,
     )
     args = parser.parse_args()
 

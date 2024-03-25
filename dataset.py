@@ -42,6 +42,30 @@ import faiss
 _logger = logging.getLogger(__name__)
 
 
+def read_intrinsic(file_name):
+    with open(file_name) as file:
+        lines = [line.rstrip() for line in file]
+    name2params = {}
+    for line in lines:
+        img_name, cam_type, w, h, f, cx, cy, k = line.split(" ")
+        f, cx, cy, k = map(float, [f, cx, cy, k])
+        w, h = map(int, [w, h])
+        name2params[img_name] = [cam_type, w, h, f, cx, cy, k]
+    return name2params
+
+
+def read_train_poses(a_file):
+    with open(a_file) as file:
+        lines = [line.rstrip() for line in file]
+    name2mat = {}
+    for line in lines:
+        img_name, *matrix = line.split(" ")
+        if matrix:
+            matrix = np.array(matrix, float).reshape(4, 4)
+        name2mat[img_name] = matrix
+    return name2mat
+
+
 class CambridgeLandmarksDataset(Dataset):
     def __init__(self, root_dir, ds_name, train=True):
         self.using_sfm_poses = True
@@ -175,18 +199,6 @@ class CambridgeLandmarksDataset(Dataset):
         else:
             # Single element.
             return self._get_single_item(idx)
-
-
-def read_intrinsic(file_name):
-    with open(file_name) as file:
-        lines = [line.rstrip() for line in file]
-    name2params = {}
-    for line in lines:
-        img_name, cam_type, w, h, f, cx, cy, k = line.split(" ")
-        f, cx, cy, k = map(float, [f, cx, cy, k])
-        w, h = map(int, [w, h])
-        name2params[img_name] = [cam_type, w, h, f, cx, cy, k]
-    return name2params
 
 
 class AachenDataset(Dataset):
@@ -326,31 +338,6 @@ class AachenDataset(Dataset):
             return self._get_single_item(idx)
 
 
-def _read_train_poses(a_file):
-    with open(a_file) as file:
-        lines = [line.rstrip() for line in file]
-    name2mat = {}
-    for line in lines:
-        img_name, *matrix = line.split(" ")
-        if matrix:
-            matrix = np.array(matrix, float).reshape(4, 4)
-        name2mat[img_name] = matrix
-    return name2mat
-
-
-def _produce_image_descriptor(name2, conf_ns_retrieval, encoder_global):
-    image, _ = ace_util.read_and_preprocess(name2, conf_ns_retrieval)
-    image_descriptor = (
-        encoder_global({"image": torch.from_numpy(image).unsqueeze(0).cuda()})[
-            "global_descriptor"
-        ]
-        .squeeze()
-        .cpu()
-        .numpy()
-    )
-    return image_descriptor
-
-
 class RobotCarDataset(Dataset):
     def __init__(self, ds_dir="datasets/robotcar", train=True, evaluate=False):
         self.ds_type = "robotcar"
@@ -378,7 +365,7 @@ class RobotCarDataset(Dataset):
             self.name2image = {v: k for k, v in self.image2name.items()}
             self.img_ids = list(self.image2name.keys())
 
-            self.name2mat = _read_train_poses(self.test_file1)
+            self.name2mat = read_train_poses(self.test_file1)
 
             # start_id = max(self.img_ids)+1
             # self.name2id = {}
@@ -411,9 +398,9 @@ class RobotCarDataset(Dataset):
                 assert len(self.ts2cond[ts]) == 3
 
             if not self.evaluate:
-                self.name2mat = _read_train_poses(self.test_file1)
+                self.name2mat = read_train_poses(self.test_file1)
             else:
-                self.name2mat = _read_train_poses(self.test_file2)
+                self.name2mat = read_train_poses(self.test_file2)
             self.img_ids = list(self.name2mat.keys())
 
         return
@@ -959,9 +946,101 @@ class CMUDataset(Dataset):
             return self._get_single_item(idx)
 
 
+class SevenScenesDataset(Dataset):
+    def __init__(self, ds_name, img_dir, sfm_model_dir, train=True):
+        self.ds_type = f"7scenes_{ds_name}"
+        self.img_dir = img_dir
+        self.sfm_model_dir = sfm_model_dir
+
+        self.test_file = f"{self.sfm_model_dir}/list_test.txt"
+        with open(self.test_file) as file:
+            self.test_images = [line.rstrip() for line in file]
+
+        self.recon_images = colmap_read.read_images_binary(
+            f"{self.sfm_model_dir}/images.bin"
+        )
+        self.recon_cameras = colmap_read.read_cameras_binary(
+            f"{self.sfm_model_dir}/cameras.bin"
+        )
+        self.recon_points = colmap_read.read_points3D_binary(
+            f"{self.sfm_model_dir}/points3D.bin"
+        )
+        self.image_name2id = {}
+        for image_id, image in self.recon_images.items():
+            self.image_name2id[image.name] = image_id
+        self.image_id2points = {}
+        self.pid2images = {}
+
+        for img_id in self.recon_images:
+            pid_arr = self.recon_images[img_id].point3D_ids
+            pid_arr = pid_arr[pid_arr >= 0]
+            xyz_arr = np.zeros((pid_arr.shape[0], 3))
+            for idx, pid in enumerate(pid_arr):
+                xyz_arr[idx] = self.recon_points[pid].xyz
+            self.image_id2points[img_id] = xyz_arr
+
+        if train:
+            self.img_dir = f"{self.img_dir}/train/rgb"
+            self.img_ids = [
+                img_name
+                for img_name in self.image_name2id
+                if img_name not in self.test_images
+            ]
+        else:
+            self.img_dir = f"{self.img_dir}/test/rgb"
+            self.img_ids = self.test_images
+
+    def __len__(self):
+        return len(self.img_ids)
+
+    def __getitem__(self, idx):
+        img_id = self.img_ids[idx]
+        image_name = f"{self.img_dir}/{img_id.replace('/', '-')}"
+        image = io.imread(image_name)
+        sfm_image_id = self.image_name2id[img_id]
+
+        camera_id = self.recon_images[sfm_image_id].camera_id
+        camera = self.recon_cameras[camera_id]
+        camera_dict = {
+            "model": camera.model,
+            "height": int(camera.height),
+            "width": int(camera.width),
+            "params": camera.params,
+        }
+        qvec = self.recon_images[sfm_image_id].qvec
+        tvec = self.recon_images[sfm_image_id].tvec
+        pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+        pose_inv = torch.from_numpy(pose_inv)
+        xyz_gt = self.image_id2points[sfm_image_id]
+        pid_list = self.recon_images[sfm_image_id].point3D_ids
+        mask = pid_list >= 0
+        pid_list = pid_list[mask]
+        uv_gt = self.recon_images[sfm_image_id].xys[mask]
+
+        return (
+            image,
+            image_name,
+            img_id,
+            pid_list,
+            pose_inv,
+            None,
+            camera_dict,
+            xyz_gt,
+            uv_gt,
+        )
+
+
 if __name__ == "__main__":
-    testset = CambridgeLandmarksDataset(
-        train=False, ds_name="GC", root_dir="../ace/datasets/Cambridge_GreatCourt"
+    # testset = CambridgeLandmarksDataset(
+    #     train=True, ds_name="GC", root_dir="../ace/datasets/Cambridge_GreatCourt"
+    # )
+    # for t in testset:
+    #     continue
+
+    testset = SevenScenesDataset(
+        train=True,
+        img_dir="../ace/datasets/7scenes_chess",
+        sfm_model_dir="../7scenes_reference_models/chess/sfm_gt",
     )
     for t in testset:
         continue

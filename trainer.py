@@ -69,7 +69,9 @@ class BaseTrainer:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         self.local_desc_model_name = local_desc_model.conf["name"]
-        self.global_desc_model_name = f"{global_desc_model.conf['name']}{global_feature_dim}"
+        self.global_desc_model_name = (
+            f"{global_desc_model.conf['name']}{global_feature_dim}"
+        )
         self.local_desc_model = local_desc_model
         self.local_desc_conf = local_desc_conf
 
@@ -727,7 +729,9 @@ class CMUTrainer(BaseTrainer):
                     )
 
                     if self.using_global_descriptors:
-                        image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
+                        image_descriptor = dd_utils.read_global_desc(
+                            name, global_features_h5
+                        )
                         descriptors = 0.5 * (
                             descriptors + image_descriptor[: descriptors.shape[1]]
                         )
@@ -767,6 +771,94 @@ class CMUTrainer(BaseTrainer):
         global_features_h5.close()
         result_file.close()
         return query_results
+
+
+class SevenScenesTrainer(BaseTrainer):
+    def clear(self):
+        del self.pid2mean_desc
+
+    def evaluate(self):
+        """
+        write to pose file as name.jpg qw qx qy qz tx ty tz
+        :return:
+        """
+
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+
+        global_descriptors_path = (
+            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
+        )
+        if not os.path.isfile(global_descriptors_path):
+            global_features_h5 = h5py.File(
+                str(global_descriptors_path), "a", libver="latest"
+            )
+            with torch.no_grad():
+                for example in tqdm(
+                    self.test_dataset, desc="Collecting global descriptors for test set"
+                ):
+                    if example is None:
+                        continue
+                    image_descriptor = self.produce_image_descriptor(example[1])
+                    name = example[1]
+                    dict_ = {"global_descriptor": image_descriptor}
+                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
+            global_features_h5.close()
+
+        features_h5 = h5py.File(self.test_features_path, "r")
+        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        print(f"Reading global descriptors from {global_descriptors_path}")
+        print(f"Reading local descriptors from {self.test_features_path}")
+        rErrs = []
+        tErrs = []
+        pct5 = 0
+        total_frames = 0
+        with torch.no_grad():
+            for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
+                if example is None:
+                    continue
+                name = example[1]
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+
+                if self.using_global_descriptors:
+                    image_descriptor = dd_utils.read_global_desc(
+                        name, global_features_h5
+                    )
+                    descriptors = 0.5 * (
+                        descriptors + image_descriptor[: descriptors.shape[1]]
+                    )
+
+                uv_arr, xyz_pred = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
+                )
+
+                camera = example[6]
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera,
+                )
+
+                t_err, r_err = compute_pose_error(pose, example[4])
+                rErrs.append(r_err)
+                tErrs.append(t_err * 100)
+                total_frames += 1
+                if r_err < 5 and t_err < 0.05:  # 5cm/5deg
+                    pct5 += 1
+
+        pct5 = pct5 / total_frames * 100
+        tErrs.sort()
+        rErrs.sort()
+        median_idx = total_frames // 2
+        median_rErr = rErrs[median_idx]
+        median_tErr = tErrs[median_idx]
+        features_h5.close()
+        global_features_h5.close()
+        return median_tErr, median_rErr, pct5
 
 
 class CambridgeLandmarksTrainer(BaseTrainer):
@@ -907,7 +999,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 name = "/".join(example[1].split("/")[-2:])
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
-                    image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
+                    image_descriptor = dd_utils.read_global_desc(
+                        name, global_features_h5
+                    )
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
