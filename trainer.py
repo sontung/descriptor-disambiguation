@@ -321,7 +321,7 @@ class BaseTrainer:
                 camera = example[6]
 
                 camera_dict = {
-                    "model": "OPENCV",
+                    "model": camera.model,
                     "height": camera.height,
                     "width": camera.width,
                     "params": camera.params,
@@ -375,8 +375,8 @@ class BaseTrainer:
 class RobotCarTrainer(BaseTrainer):
     def collect_descriptors(self, vis=False):
         if self.using_global_descriptors:
-            file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
-            file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
+            file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
+            file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         else:
             file_name1 = (
                 f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
@@ -593,7 +593,7 @@ class RobotCarTrainer(BaseTrainer):
         gpu_index_flat.add(self.pid2mean_desc)
 
         global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
+            f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
         )
         if not os.path.isfile(global_descriptors_path):
             global_features_h5 = h5py.File(
@@ -614,7 +614,7 @@ class RobotCarTrainer(BaseTrainer):
 
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt",
+                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.txt",
                 "w",
             )
         else:
@@ -642,20 +642,21 @@ class RobotCarTrainer(BaseTrainer):
                 )
 
                 camera = example[6]
-                res = pycolmap.absolute_pose_estimation(
+                camera_dict = {
+                    "model": camera.model,
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
                     uv_arr,
                     xyz_pred,
-                    camera,
-                    refinement_options={"max_num_iterations": 100},
+                    camera_dict,
                 )
-                # res2 = pycolmap.absolute_pose_estimation(
-                #     uv_arr,
-                #     xyz_pred,
-                #     camera,
-                # )
-                mat = res["cam_from_world"]
-                qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
-                tvec = " ".join(map(str, mat.translation))
+
+                qvec = " ".join(map(str, pose.q))
+                tvec = " ".join(map(str, pose.t))
+
                 image_id = "/".join(example[2].split("/")[1:])
                 print(f"{image_id} {qvec} {tvec}", file=result_file)
             result_file.close()
