@@ -122,12 +122,8 @@ class BaseTrainer:
             self.ind2pid = None
 
     def collect_image_descriptors(self):
-        file_name1 = (
-            f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}.npy"
-        )
-        file_name2 = (
-            f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}.npy"
-        )
+        file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
+        file_name2 = f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         if os.path.isfile(file_name1):
             all_desc = np.load(file_name1)
             afile = open(file_name2, "rb")
@@ -183,9 +179,9 @@ class BaseTrainer:
 
     def collect_descriptors(self, vis=False):
         if self.using_global_descriptors:
-            file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
-            file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
-            file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}.pkl"
+            file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
+            file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
+            file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.pkl"
         else:
             file_name1 = (
                 f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
@@ -277,7 +273,7 @@ class BaseTrainer:
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt",
+                f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.txt",
                 "w",
             )
         else:
@@ -286,9 +282,7 @@ class BaseTrainer:
                 "w",
             )
 
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
-        )
+        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
         if not os.path.isfile(global_descriptors_path):
             global_features_h5 = h5py.File(
                 str(global_descriptors_path), "a", libver="latest"
@@ -325,10 +319,22 @@ class BaseTrainer:
                 )
 
                 camera = example[6]
-                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
-                mat = res["cam_from_world"]
-                qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
-                tvec = " ".join(map(str, mat.translation))
+
+                camera_dict = {
+                    "model": "OPENCV",
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera_dict,
+                )
+
+                qvec = " ".join(map(str, pose.q))
+                tvec = " ".join(map(str, pose.t))
+
                 image_id = example[2].split("/")[-1]
                 print(f"{image_id} {qvec} {tvec}", file=result_file)
         features_h5.close()

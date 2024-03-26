@@ -1,47 +1,31 @@
-from types import SimpleNamespace
-
-import torch
-from hloc import extractors
-from hloc.utils.base_model import dynamic_load
+import argparse
 
 import dd_utils
 from dataset import AachenDataset
 from trainer import (
     BaseTrainer,
-    ConcatenateTrainer,
-    GlobalDescriptorOnlyTrainer,
-    MixVPROnlyTrainer,
-    MeanOfLocalDescriptorsTrainer,
 )
 
 
-def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "r2d2"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
+def run_function(
+    ds_dir,
+    local_desc_model,
+    retrieval_model,
+    local_desc_dim,
+    global_desc_dim,
+    using_global_descriptors,
+):
+    encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
+        local_desc_model, retrieval_model, global_desc_dim
     )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
+    train_ds_ = AachenDataset(ds_dir=ds_dir)
+    test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
+
     trainer_ = BaseTrainer(
         train_ds_,
         test_ds_,
-        128,
-        2048,
+        local_desc_dim,
+        global_desc_dim,
         encoder,
         encoder_global,
         conf_ns,
@@ -49,289 +33,44 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
         using_global_descriptors,
     )
     trainer_.evaluate()
-    del trainer_
-
-
-def use_d2(train_ds_, test_ds_, using_global_descriptors):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "d2net"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-    )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = BaseTrainer(
-        train_ds_,
-        test_ds_,
-        512,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        using_global_descriptors,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "superpoint"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-    )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = BaseTrainer(
-        train_ds_,
-        test_ds_,
-        256,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        using_global_descriptors,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_r2d2_concat(train_ds_, test_ds_):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "r2d2"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-    )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = ConcatenateTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        True,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_d2_concat(train_ds_, test_ds_):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "d2net"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-    )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = ConcatenateTrainer(
-        train_ds_,
-        test_ds_,
-        512,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        True,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_eigen(train_ds_, test_ds_):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "r2d2"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    model_dict.update(
-        {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-    )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = GlobalDescriptorOnlyTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_netvlad(train_ds_, test_ds_):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "r2d2"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "netvlad"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = GlobalDescriptorOnlyTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        4096,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_mixvpr(train_ds_, test_ds_):
-    trainer_ = MixVPROnlyTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        4096,
-        None,
-        None,
-        None,
-        None,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_mean_of_local_descriptors(train_ds_, test_ds_):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "r2d2"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "netvlad"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = MeanOfLocalDescriptorsTrainer(
-        train_ds_,
-        test_ds_,
-        128,
-        128,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-    )
-    trainer_.evaluate()
-    del trainer_
 
 
 if __name__ == "__main__":
-    train_ds = AachenDataset()
-    test_ds = AachenDataset(train=False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="datasets/aachen_v1.1",
+        help="Path to the dataset, default: %(default)s",
+    )
+    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument(
+        "--local_desc",
+        type=str,
+        default="d2net",
+    )
+    parser.add_argument(
+        "--local_desc_dim",
+        type=int,
+        default=512,
+    )
+    parser.add_argument(
+        "--global_desc",
+        type=str,
+        default="eigenplaces",
+    )
+    parser.add_argument(
+        "--global_desc_dim",
+        type=int,
+        default=2048,
+    )
+    args = parser.parse_args()
 
-    # use_netvlad(train_ds, test_ds)
-
-    # use_mixvpr(train_ds, test_ds)
-    # use_mean_of_local_descriptors(train_ds, test_ds)
-    # use_r2d2_concat(train_ds, test_ds)
-    use_d2_concat(train_ds, test_ds)
-
-    # use_r2d2(train_ds, test_ds, True)
-    # use_d2(train_ds, test_ds, True)
-    # use_superpoint(train_ds, test_ds, True)
-
-    # use_r2d2(train_ds, test_ds, False)
-    # use_d2(train_ds, test_ds, False)
-    # use_superpoint(train_ds, test_ds, False)
+    run_function(
+        args.dataset,
+        args.local_desc,
+        args.global_desc,
+        int(args.local_desc_dim),
+        int(args.global_desc_dim),
+        bool(args.use_global),
+    )

@@ -233,7 +233,7 @@ class AachenDataset(Dataset):
             self.image_id2points = {}
             self.pid2images = {}
 
-            for img_id in tqdm(self.recon_images):
+            for img_id in tqdm(self.recon_images, desc="Gathering points per image"):
                 pid_arr = self.recon_images[img_id].point3D_ids
                 pid_arr = pid_arr[pid_arr >= 0]
                 xyz_arr = np.zeros((pid_arr.shape[0], 3))
@@ -241,7 +241,6 @@ class AachenDataset(Dataset):
                     xyz_arr[idx] = self.recon_points[pid].xyz
                     # self.pid2images.setdefault(pid, []).append(img_id)
                 self.image_id2points[img_id] = xyz_arr
-            # self.im_names = list(self.image_name2id.keys())
             self.img_ids = list(self.image_name2id.values())
         else:
             name2params1 = read_intrinsic(self.day_intrinsic_file)

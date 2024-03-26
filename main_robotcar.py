@@ -1,42 +1,29 @@
-from types import SimpleNamespace
-
-import torch
-from hloc import extractors
-from hloc.utils.base_model import dynamic_load
+import argparse
 
 import dd_utils
 from dataset import RobotCarDataset
 from trainer import RobotCarTrainer
 
 
-def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "r2d2"
-    model_dict = conf[local_desc_model]["model"]
+def run_function(
+    ds_dir,
+    local_desc_model,
+    retrieval_model,
+    local_desc_dim,
+    global_desc_dim,
+    using_global_descriptors,
+):
+    encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
+        local_desc_model, retrieval_model, global_desc_dim
+    )
+    train_ds_ = RobotCarDataset(ds_dir=ds_dir)
+    test_ds_ = RobotCarDataset(ds_dir=ds_dir, train=False, evaluate=True)
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    if retrieval_model == "eigenplaces":
-        model_dict.update(
-            {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-        )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
     trainer_ = RobotCarTrainer(
         train_ds_,
         test_ds_,
-        128,
-        2048,
+        local_desc_dim,
+        global_desc_dim,
         encoder,
         encoder_global,
         conf_ns,
@@ -44,93 +31,44 @@ def use_r2d2(train_ds_, test_ds_, using_global_descriptors):
         using_global_descriptors,
     )
     trainer_.evaluate()
-    # trainer_.test(RobotCarDataset(train=False, evaluate=False))
-    del trainer_
-
-
-def use_d2(train_ds_, test_ds_, using_global_descriptors):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "d2net"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    if retrieval_model == "eigenplaces":
-        model_dict.update(
-            {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-        )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = RobotCarTrainer(
-        train_ds_,
-        test_ds_,
-        512,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        using_global_descriptors,
-    )
-    trainer_.evaluate()
-    del trainer_
-
-
-def use_superpoint(train_ds_, test_ds_, using_global_descriptors):
-    conf, default_conf = dd_utils.hloc_conf_for_all_models()
-    local_desc_model = "superpoint"
-    model_dict = conf[local_desc_model]["model"]
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-
-    retrieval_model = "eigenplaces"
-    model_dict = conf[retrieval_model]["model"]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    if retrieval_model == "eigenplaces":
-        model_dict.update(
-            {"variant": "EigenPlaces", "backbone": "ResNet101", "fc_output_dim": 2048}
-        )
-    encoder_global = Model(model_dict).eval().to(device)
-    conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"]["resize_max"]
-    trainer_ = RobotCarTrainer(
-        train_ds_,
-        test_ds_,
-        256,
-        2048,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        using_global_descriptors,
-    )
-    trainer_.evaluate()
-    del trainer_
 
 
 if __name__ == "__main__":
-    train_ds = RobotCarDataset()
-    test_ds = RobotCarDataset(train=False, evaluate=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="datasets/robotcar",
+        help="Path to the dataset, default: %(default)s",
+    )
+    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument(
+        "--local_desc",
+        type=str,
+        default="d2net",
+    )
+    parser.add_argument(
+        "--local_desc_dim",
+        type=int,
+        default=512,
+    )
+    parser.add_argument(
+        "--global_desc",
+        type=str,
+        default="eigenplaces",
+    )
+    parser.add_argument(
+        "--global_desc_dim",
+        type=int,
+        default=2048,
+    )
+    args = parser.parse_args()
 
-    # use_superpoint(train_ds, test_ds, False)
-    # use_superpoint(train_ds, test_ds, True)
-    # use_d2(train_ds, test_ds, True)
-    # use_d2(train_ds, test_ds, False)
-    # use_r2d2(train_ds, test_ds, True)
-    use_r2d2(train_ds, test_ds, False)
+    run_function(
+        args.dataset,
+        args.local_desc,
+        args.global_desc,
+        int(args.local_desc_dim),
+        int(args.global_desc_dim),
+        bool(args.use_global),
+    )
