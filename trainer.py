@@ -213,6 +213,7 @@ class BaseTrainer:
                 features_h5.close()
 
             pid2descriptors = {}
+            pid2count = {}
             features_h5 = h5py.File(features_path, "r")
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 if example is None:
@@ -237,21 +238,26 @@ class BaseTrainer:
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
-                    pid2descriptors.setdefault(pid, []).append(
-                        selected_descriptors[idx]
-                    )
+                    if pid not in pid2descriptors:
+                        pid2descriptors[pid] = selected_descriptors[idx]
+                        pid2count[pid] = 1
+                    else:
+                        pid2count[pid] += 1
+                        pid2descriptors[pid] = pid2descriptors[pid] + selected_descriptors[idx]
+
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
             all_pid = np.array(all_pid)
+
             pid2mean_desc = np.zeros(
-                (len(self.dataset.recon_points), self.feature_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
+                (all_pid.shape[0], self.feature_dim),
+                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
             )
 
             pid2ind = {}
             ind = 0
             for pid in pid2descriptors:
-                pid2mean_desc[ind] = np.mean(pid2descriptors[pid], 0)
+                pid2mean_desc[ind] = pid2descriptors[pid] / pid2count[pid]
                 pid2ind[pid] = ind
                 ind += 1
             np.save(file_name1, pid2mean_desc)
@@ -400,6 +406,7 @@ class RobotCarTrainer(BaseTrainer):
                 features_h5.close()
 
             pid2descriptors = {}
+            pid2count = {}
             features_h5 = h5py.File(features_path, "r")
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 keypoints, descriptors = dd_utils.read_kp_and_desc(
@@ -420,10 +427,10 @@ class RobotCarTrainer(BaseTrainer):
                 for idx, pid in enumerate(selected_pid[ind2]):
                     if pid not in pid2descriptors:
                         pid2descriptors[pid] = selected_descriptors[idx]
+                        pid2count[pid] = 1
                     else:
-                        pid2descriptors[pid] = 0.5 * (
-                            pid2descriptors[pid] + selected_descriptors[idx]
-                        )
+                        pid2count[pid] += 1
+                        pid2descriptors[pid] = pid2descriptors[pid] + selected_descriptors[idx]
 
             features_h5.close()
             self.image2desc.clear()
@@ -436,7 +443,7 @@ class RobotCarTrainer(BaseTrainer):
             )
 
             for ind, pid in enumerate(all_pid):
-                pid2mean_desc[ind] = pid2descriptors[pid]
+                pid2mean_desc[ind] = pid2descriptors[pid] / pid2count[pid]
 
             np.save(file_name1, pid2mean_desc)
             np.save(file_name2, all_pid)
