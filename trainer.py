@@ -311,8 +311,8 @@ class BaseTrainer:
                 name = example[1]
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
-                    image_descriptor = np.array(
-                        global_features_h5[name]["global_descriptor"]
+                    image_descriptor = dd_utils.read_global_desc(
+                        name, global_features_h5
                     )
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
@@ -635,8 +635,8 @@ class RobotCarTrainer(BaseTrainer):
                 name = example[1]
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
-                    image_descriptor = np.array(
-                        global_features_h5[name]["global_descriptor"]
+                    image_descriptor = dd_utils.read_global_desc(
+                        name, global_features_h5
                     )
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
