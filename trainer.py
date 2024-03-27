@@ -650,7 +650,7 @@ class RobotCarTrainer(BaseTrainer):
 
                 camera = example[6]
                 camera_dict = {
-                    "model": camera.model,
+                    "model": camera.model.name,
                     "height": camera.height,
                     "width": camera.width,
                     "params": camera.params,
