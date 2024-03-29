@@ -919,6 +919,14 @@ def hloc_conf_for_all_models():
                 "resize_max": 1600,
             },
         },
+        "sift": {
+            "output": "feats-sift",
+            "model": {"name": "dog"},
+            "preprocessing": {
+                "grayscale": True,
+                "resize_max": 1600,
+            },
+        },
         "disk": {
             "output": "feats-disk",
             "model": {

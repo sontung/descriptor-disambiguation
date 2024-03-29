@@ -47,7 +47,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="r2d2",
+        default="sift",
     )
     parser.add_argument(
         "--local_desc_dim",
