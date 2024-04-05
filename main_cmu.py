@@ -43,7 +43,7 @@ def run_function(
 
     if using_global_descriptors:
         result_file = open(
-            f"output/cmu/CMU_eval_{local_desc_model}_{retrieval_model}.txt",
+            f"output/cmu/CMU_eval_{local_desc_model}_{retrieval_model}_{global_desc_dim}.txt",
             "w",
         )
     else:
