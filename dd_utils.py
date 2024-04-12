@@ -1025,6 +1025,7 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             conf_ns.grayscale = False
             conf_ns.resize_max = 1600
             import sdf2_models
+
             encoder = sdf2_models.return_models()
 
     if retrieval_model == "mixvpr":

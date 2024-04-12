@@ -110,9 +110,7 @@ def run_d2_detector_on_all_images_robot_car(ds_dir, out_dir):
                     continue
                 name = example[1]
                 image, scale = read_and_preprocess(name, conf_ns)
-                pred = encoder(
-                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                )
+                pred = encoder({"image": torch.from_numpy(image).unsqueeze(0).cuda()})
                 pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
                 dict_ = {
                     "scale": scale,

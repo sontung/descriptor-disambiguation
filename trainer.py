@@ -60,7 +60,7 @@ class BaseTrainer:
         using_global_descriptors,
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
-        using_vae=False
+        using_vae=False,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -109,13 +109,15 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             if using_vae:
-                self.vae_x_dim = self.feature_dim+self.global_feature_dim
+                self.vae_x_dim = self.feature_dim + self.global_feature_dim
                 self.vae_hidden_dim = self.feature_dim * 2
                 self.vae_latent_dim = self.feature_dim
                 self.lr = 1e-3
                 self.batch_size = 100
                 self.epochs = 30
-                self.vae = VAE_model(self.vae_x_dim, self.vae_hidden_dim, self.vae_latent_dim).to("cuda")
+                self.vae = VAE_model(
+                    self.vae_x_dim, self.vae_hidden_dim, self.vae_latent_dim
+                ).to("cuda")
                 self.optimizer = Adam(self.vae.parameters(), lr=self.lr)
 
             self.image2desc = self.collect_image_descriptors()
@@ -145,11 +147,13 @@ class BaseTrainer:
         img_ids = list(range(len(self.dataset)))
         nb_epochs = 10
         nb_epochs_per_work = 10
-        pbar = tqdm(total=nb_epochs*len(img_ids)*nb_epochs_per_work, desc="Training VAE")
+        pbar = tqdm(
+            total=nb_epochs * len(img_ids) * nb_epochs_per_work, desc="Training VAE"
+        )
 
         for epoch in range(nb_epochs):
             np.random.shuffle(img_ids)
-            works = np.array_split(img_ids, len(img_ids)//20)
+            works = np.array_split(img_ids, len(img_ids) // 20)
             for work in works:
                 all_x = []
                 all_y = []
@@ -168,20 +172,34 @@ class BaseTrainer:
                     try:
                         image_descriptor = self.image2desc[example[1]]
                     except KeyError:
-                        image_descriptor = self.image2desc[example[1].replace("datasets/robotcar",
-                                                                              "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons")]
-                    x = np.hstack((selected_descriptors, np.tile(image_descriptor, (selected_descriptors.shape[0], 1))))
+                        image_descriptor = self.image2desc[
+                            example[1].replace(
+                                "datasets/robotcar",
+                                "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons",
+                            )
+                        ]
+                    x = np.hstack(
+                        (
+                            selected_descriptors,
+                            np.tile(
+                                image_descriptor, (selected_descriptors.shape[0], 1)
+                            ),
+                        )
+                    )
                     all_x.append(x)
                 x_train = np.vstack(all_x)
                 y_train = np.hstack(all_y)
                 y_train -= np.min(y_train)
                 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
                 clf = LinearDiscriminantAnalysis()
                 clf.fit(x_train, y_train)
                 y_pred = clf.predict(x_train)
 
                 train_dataset = VAEDataset(x_train)
-                train_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+                train_loader = DataLoader(
+                    dataset=train_dataset, batch_size=self.batch_size, shuffle=True
+                )
                 self.vae.train()
 
                 overall_loss = 0
@@ -194,7 +212,7 @@ class BaseTrainer:
                         self.optimizer.zero_grad()
 
                         x_hat = self.vae(x)
-                        loss = nn.functional.l1_loss(x_hat, x, reduction='sum')
+                        loss = nn.functional.l1_loss(x_hat, x, reduction="sum")
 
                         overall_loss += loss.item()
                         mse_loss += torch.sum(torch.abs(x_hat - x)).item()
@@ -212,9 +230,11 @@ class BaseTrainer:
 
                         mse_loss_before += torch.sum(torch.abs(x_hat - x)).item()
 
-                tqdm.write(f"{overall_loss/len(train_loader)/nb_epochs_per_work}, "
-                           f"{mse_loss_before/len(train_loader)}")
-                pbar.update(len(work)*nb_epochs_per_work)
+                tqdm.write(
+                    f"{overall_loss/len(train_loader)/nb_epochs_per_work}, "
+                    f"{mse_loss_before/len(train_loader)}"
+                )
+                pbar.update(len(work) * nb_epochs_per_work)
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -266,12 +286,14 @@ class BaseTrainer:
         image, scale = read_and_preprocess(name, self.local_desc_conf)
         if self.local_desc_model_name == "sdf2":
             model, extractor, conf = self.local_desc_model
-            pred = extractor(model, img=torch.from_numpy(image).unsqueeze(0).cuda(),
-                             topK=conf["model"]["max_keypoints"],
-                             mask=None,
-                             conf_th=conf["model"]["conf_th"],
-                             scales=conf["model"]["scales"],
-                             )
+            pred = extractor(
+                model,
+                img=torch.from_numpy(image).unsqueeze(0).cuda(),
+                topK=conf["model"]["max_keypoints"],
+                mask=None,
+                conf_th=conf["model"]["conf_th"],
+                scales=conf["model"]["scales"],
+            )
             pred["descriptors"] = pred["descriptors"].T
         else:
             pred = self.local_desc_model(
@@ -352,7 +374,9 @@ class BaseTrainer:
                         pid2count[pid] = 1
                     else:
                         pid2count[pid] += 1
-                        pid2descriptors[pid] = pid2descriptors[pid] + selected_descriptors[idx]
+                        pid2descriptors[pid] = (
+                            pid2descriptors[pid] + selected_descriptors[idx]
+                        )
 
             features_h5.close()
             all_pid = list(pid2descriptors.keys())
@@ -543,7 +567,9 @@ class RobotCarTrainer(BaseTrainer):
                         pid2count[pid] = 1
                     else:
                         pid2count[pid] += 1
-                        pid2descriptors[pid] = pid2descriptors[pid] + selected_descriptors[idx]
+                        pid2descriptors[pid] = (
+                            pid2descriptors[pid] + selected_descriptors[idx]
+                        )
 
             features_h5.close()
             self.image2desc.clear()
@@ -712,9 +738,7 @@ class RobotCarTrainer(BaseTrainer):
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
 
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
-        )
+        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
         if not os.path.isfile(global_descriptors_path):
             global_features_h5 = h5py.File(
                 str(global_descriptors_path), "a", libver="latest"

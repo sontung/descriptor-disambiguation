@@ -30,7 +30,7 @@ def run_function(
         conf_ns,
         conf_ns_retrieval,
         using_global_descriptors,
-        using_vae=using_vae
+        using_vae=using_vae,
     )
     trainer_.evaluate()
 
