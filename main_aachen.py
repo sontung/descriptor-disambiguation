@@ -2,9 +2,7 @@ import argparse
 
 import dd_utils
 from dataset import AachenDataset
-from trainer import (
-    BaseTrainer,
-)
+from trainer import BaseTrainer
 
 
 def run_function(
@@ -47,7 +45,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="sift",
+        default="sdf2",
     )
     parser.add_argument(
         "--local_desc_dim",

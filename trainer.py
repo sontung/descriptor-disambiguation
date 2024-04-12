@@ -12,10 +12,14 @@ import numpy as np
 import pycolmap
 import torch
 from pykdtree.kdtree import KDTree
+from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess
+from vae_test import Model as VAE_model, VAEDataset
+from torch.optim import Adam
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -56,19 +60,25 @@ class BaseTrainer:
         using_global_descriptors,
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
+        using_vae=False
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
         self.using_global_descriptors = using_global_descriptors
         self.global_feature_dim = global_feature_dim
+        self.using_vae = using_vae
 
         self.name2uv = {}
         self.ds_name = self.dataset.ds_type
         out_dir = Path(f"output/{self.ds_name}")
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        self.local_desc_model_name = local_desc_model.conf["name"]
+        try:
+            self.local_desc_model_name = local_desc_model.conf["name"]
+        except AttributeError:
+            if type(local_desc_model) == tuple:
+                self.local_desc_model_name = "sdf2"
         self.global_desc_model_name = (
             f"{global_desc_model.conf['name']}{global_feature_dim}"
         )
@@ -98,6 +108,16 @@ class BaseTrainer:
             self.test_features_path = None
 
         if self.using_global_descriptors:
+            if using_vae:
+                self.vae_x_dim = self.feature_dim+self.global_feature_dim
+                self.vae_hidden_dim = self.feature_dim * 2
+                self.vae_latent_dim = self.feature_dim
+                self.lr = 1e-3
+                self.batch_size = 100
+                self.epochs = 30
+                self.vae = VAE_model(self.vae_x_dim, self.vae_hidden_dim, self.vae_latent_dim).to("cuda")
+                self.optimizer = Adam(self.vae.parameters(), lr=self.lr)
+
             self.image2desc = self.collect_image_descriptors()
         else:
             self.image2desc = {}
@@ -120,6 +140,81 @@ class BaseTrainer:
             self.pid2ind = None
             self.all_ind_in_train_set = None
             self.ind2pid = None
+
+    def train_vae(self, features_h5):
+        img_ids = list(range(len(self.dataset)))
+        nb_epochs = 10
+        nb_epochs_per_work = 10
+        pbar = tqdm(total=nb_epochs*len(img_ids)*nb_epochs_per_work, desc="Training VAE")
+
+        for epoch in range(nb_epochs):
+            np.random.shuffle(img_ids)
+            works = np.array_split(img_ids, len(img_ids)//20)
+            for work in works:
+                all_x = []
+                all_y = []
+                for img_id in work:
+                    example = self.dataset[img_id]
+                    keypoints, descriptors = dd_utils.read_kp_and_desc(
+                        example[1], features_h5
+                    )
+                    pid_list = example[3]
+                    uv = example[-1]
+                    selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+                    idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                    selected_descriptors = descriptors[idx_arr]
+                    all_y.append(selected_pid[ind2])
+                    try:
+                        image_descriptor = self.image2desc[example[1]]
+                    except KeyError:
+                        image_descriptor = self.image2desc[example[1].replace("datasets/robotcar",
+                                                                              "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons")]
+                    x = np.hstack((selected_descriptors, np.tile(image_descriptor, (selected_descriptors.shape[0], 1))))
+                    all_x.append(x)
+                x_train = np.vstack(all_x)
+                y_train = np.hstack(all_y)
+                y_train -= np.min(y_train)
+                from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+                clf = LinearDiscriminantAnalysis()
+                clf.fit(x_train, y_train)
+                y_pred = clf.predict(x_train)
+
+                train_dataset = VAEDataset(x_train)
+                train_loader = DataLoader(dataset=train_dataset, batch_size=self.batch_size, shuffle=True)
+                self.vae.train()
+
+                overall_loss = 0
+                mse_loss = 0
+                mse_loss_before = 0
+                for _ in range(nb_epochs_per_work):
+                    for batch_idx, x in enumerate(train_loader):
+                        x = x.to("cuda").float()
+
+                        self.optimizer.zero_grad()
+
+                        x_hat = self.vae(x)
+                        loss = nn.functional.l1_loss(x_hat, x, reduction='sum')
+
+                        overall_loss += loss.item()
+                        mse_loss += torch.sum(torch.abs(x_hat - x)).item()
+                        loss.backward()
+                        self.optimizer.step()
+
+                with torch.no_grad():
+                    self.vae.eval()
+                    for batch_idx, x in enumerate(train_loader):
+                        x = x.to("cuda").float()
+
+                        self.optimizer.zero_grad()
+
+                        x_hat = self.vae(x)
+
+                        mse_loss_before += torch.sum(torch.abs(x_hat - x)).item()
+
+                tqdm.write(f"{overall_loss/len(train_loader)/nb_epochs_per_work}, "
+                           f"{mse_loss_before/len(train_loader)}")
+                pbar.update(len(work)*nb_epochs_per_work)
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -146,7 +241,10 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
         image2desc = {}
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx, : self.feature_dim]
+            if self.using_vae:
+                image2desc[name] = all_desc[idx]
+            else:
+                image2desc[name] = all_desc[idx, : self.feature_dim]
         return image2desc
 
     def produce_image_descriptor(self, name):
@@ -166,10 +264,20 @@ class BaseTrainer:
 
     def produce_local_descriptors(self, name, fd):
         image, scale = read_and_preprocess(name, self.local_desc_conf)
-        pred = self.local_desc_model(
-            {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-        )
-        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+        if self.local_desc_model_name == "sdf2":
+            model, extractor, conf = self.local_desc_model
+            pred = extractor(model, img=torch.from_numpy(image).unsqueeze(0).cuda(),
+                             topK=conf["model"]["max_keypoints"],
+                             mask=None,
+                             conf_th=conf["model"]["conf_th"],
+                             scales=conf["model"]["scales"],
+                             )
+            pred["descriptors"] = pred["descriptors"].T
+        else:
+            pred = self.local_desc_model(
+                {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+            )
+            pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
         dict_ = {
             "scale": scale,
             "keypoints": pred["keypoints"],
@@ -215,6 +323,7 @@ class BaseTrainer:
             pid2descriptors = {}
             pid2count = {}
             features_h5 = h5py.File(features_path, "r")
+
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 if example is None:
                     continue
@@ -408,6 +517,10 @@ class RobotCarTrainer(BaseTrainer):
             pid2descriptors = {}
             pid2count = {}
             features_h5 = h5py.File(features_path, "r")
+
+            if self.using_global_descriptors and self.using_vae:
+                self.train_vae(features_h5)
+
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 keypoints, descriptors = dd_utils.read_kp_and_desc(
                     example[1], features_h5

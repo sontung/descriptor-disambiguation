@@ -57,6 +57,7 @@ def read_nvm_file(file_name):
     image2points = {}
     image2uvs = {}
     xyz_arr = np.zeros((nb_points, 3), np.float64)
+    # nb_points = 100
     for j in tqdm(range(nb_points), desc="Reading points"):
         point_info = lines[5 + nb_cameras + j].split(" ")
         x, y, z, r, g, b, nb_features = point_info[:7]

@@ -1,43 +1,23 @@
 import logging
-import math
-import os
 import pickle
-import random
-import re
 from pathlib import Path
-from types import SimpleNamespace
 
-import poselib
-import pycolmap
-from PIL import Image
-import cv2
 import h5py
 import numpy as np
+import pycolmap
 import torch
-import torch.nn.functional as F
-import torchvision.transforms.functional as TF
-from hloc import extractors
-from hloc.utils.base_model import dynamic_load
+from hloc.pipelines.RobotCar.pipeline import CONDITIONS
 from pykdtree.kdtree import KDTree
 from skimage import color
 from skimage import io
-from skimage.transform import rotate, resize
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
-from torchvision import transforms
 from tqdm import tqdm
 
-from hloc.pipelines.RobotCar.pipeline import CONDITIONS, generate_query_list
 import ace_util
 import colmap_read
 import dd_utils
-from ace_network import Regressor
-from skimage.transform import rotate as ski_rotate
-from skimage.transform import resize as ski_resize
-from os import listdir
-from os.path import isfile, join
 from ace_util import project_using_pose
-import faiss
 
 _logger = logging.getLogger(__name__)
 

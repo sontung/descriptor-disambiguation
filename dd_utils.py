@@ -1009,14 +1009,23 @@ def write_to_h5_file(fd, name, dict_):
 
 def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
     conf, default_conf = hloc_conf_for_all_models()
-    model_dict = conf[local_desc_model]["model"]
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    Model = dynamic_load(extractors, model_dict["name"])
-    encoder = Model(model_dict).eval().to(device)
-    conf_ns = SimpleNamespace(**{**default_conf, **conf})
-    conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-    conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
+    try:
+        model_dict = conf[local_desc_model]["model"]
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        Model = dynamic_load(extractors, model_dict["name"])
+        encoder = Model(model_dict).eval().to(device)
+        conf_ns = SimpleNamespace(**{**default_conf, **conf})
+        conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
+        conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
+    except KeyError:
+        if local_desc_model == "sdf2":
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+            import sdf2_models
+            encoder = sdf2_models.return_models()
 
     if retrieval_model == "mixvpr":
         encoder_global = MVModel(global_desc_dim)
