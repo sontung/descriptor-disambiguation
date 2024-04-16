@@ -17,6 +17,11 @@ def run_function(
     encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
         local_model, retrieval_model, global_desc_dim
     )
+    if using_global_descriptors:
+        print(f"Using {local_model} and {retrieval_model}-{global_desc_dim}")
+    else:
+        print(f"Using {local_model}")
+
     folders = [
         item.name
         for item in Path(root_dir_).iterdir()
@@ -79,12 +84,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="eigenplaces",
+        default="mixvpr",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=2048,
+        default=4096,
     )
     args = parser.parse_args()
     results = run_function(

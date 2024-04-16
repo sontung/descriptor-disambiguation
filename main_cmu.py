@@ -18,6 +18,10 @@ def run_function(
     encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
         local_desc_model, retrieval_model, global_desc_dim
     )
+    if using_global_descriptors:
+        print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
+    else:
+        print(f"Using {local_desc_model}")
     results = []
     for slice_ in TEST_SLICES:
         print(f"Processing slice {slice_}")

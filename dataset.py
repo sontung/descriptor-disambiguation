@@ -219,7 +219,6 @@ class AachenDataset(Dataset):
                 xyz_arr = np.zeros((pid_arr.shape[0], 3))
                 for idx, pid in enumerate(pid_arr):
                     xyz_arr[idx] = self.recon_points[pid].xyz
-                    # self.pid2images.setdefault(pid, []).append(img_id)
                 self.image_id2points[img_id] = xyz_arr
             self.img_ids = list(self.image_name2id.values())
         else:
@@ -259,7 +258,6 @@ class AachenDataset(Dataset):
             intrinsics[1, 2] = cy
             qvec = self.recon_images[img_id].qvec
             tvec = self.recon_images[img_id].tvec
-            # pose = utils.return_pose_mat(qvec, tvec)
             pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
 
             xyz_gt = self.image_id2points[img_id]

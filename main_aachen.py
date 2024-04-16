@@ -13,6 +13,11 @@ def run_function(
     global_desc_dim,
     using_global_descriptors,
 ):
+    if using_global_descriptors:
+        print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
+    else:
+        print(f"Using {local_desc_model}")
+
     encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
         local_desc_model, retrieval_model, global_desc_dim
     )
