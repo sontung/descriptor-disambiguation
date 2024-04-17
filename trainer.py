@@ -445,6 +445,11 @@ class BaseTrainer:
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
+                    if self.using_pca:
+                        image_descriptor = self.pca.transform(
+                            image_descriptor.reshape(1, -1)
+                        )
+
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
@@ -777,6 +782,11 @@ class RobotCarTrainer(BaseTrainer):
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
+                    if self.using_pca:
+                        image_descriptor = self.pca.transform(
+                            image_descriptor.reshape(1, -1)
+                        )
+
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
@@ -885,6 +895,11 @@ class CMUTrainer(BaseTrainer):
                         image_descriptor = dd_utils.read_global_desc(
                             name, global_features_h5
                         )
+                        if self.using_pca:
+                            image_descriptor = self.pca.transform(
+                                image_descriptor.reshape(1, -1)
+                            )
+
                         descriptors = 0.5 * (
                             descriptors + image_descriptor[: descriptors.shape[1]]
                         )
@@ -1164,7 +1179,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     #     image_descriptor = image_descriptor.cpu().numpy()
 
                     if self.using_pca:
-                        image_descriptor = self.pca.transform(image_descriptor.reshape(1, -1))
+                        image_descriptor = self.pca.transform(
+                            image_descriptor.reshape(1, -1)
+                        )
 
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
@@ -1416,4 +1433,3 @@ class ConcatenateTrainer(BaseTrainer):
         features_h5.close()
         result_file.close()
         global_features_h5.close()
-
