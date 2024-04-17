@@ -14,8 +14,6 @@ class Encoder(nn.Module):
 
         self.FC_input = nn.Linear(input_dim, hidden_dim)
         self.FC_input2 = nn.Linear(hidden_dim, hidden_dim)
-        self.FC_input3 = nn.Linear(hidden_dim, hidden_dim)
-        self.FC_input4 = nn.Linear(hidden_dim, hidden_dim)
         self.FC_mean = nn.Linear(hidden_dim, latent_dim)
 
         self.LeakyReLU = nn.LeakyReLU(0.2)
@@ -25,8 +23,6 @@ class Encoder(nn.Module):
     def forward(self, x):
         h_ = self.LeakyReLU(self.FC_input(x))
         h_ = self.LeakyReLU(self.FC_input2(h_))
-        h_ = self.LeakyReLU(self.FC_input3(h_))
-        h_ = self.LeakyReLU(self.FC_input4(h_))
         h_ = self.FC_mean(h_)
         return h_
 
@@ -36,8 +32,6 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
         self.FC_hidden2 = nn.Linear(hidden_dim, hidden_dim)
-        self.FC_hidden3 = nn.Linear(hidden_dim, hidden_dim)
-        self.FC_hidden4 = nn.Linear(hidden_dim, hidden_dim)
         self.FC_output = nn.Linear(hidden_dim, output_dim)
 
         self.LeakyReLU = nn.LeakyReLU(0.2)
@@ -45,8 +39,6 @@ class Decoder(nn.Module):
     def forward(self, x):
         h = self.LeakyReLU(self.FC_hidden(x))
         h = self.LeakyReLU(self.FC_hidden2(h))
-        h = self.LeakyReLU(self.FC_hidden3(h))
-        h = self.LeakyReLU(self.FC_hidden4(h))
         product = self.FC_output(h)
         return product
 
