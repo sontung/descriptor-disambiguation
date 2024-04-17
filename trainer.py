@@ -549,7 +549,7 @@ class RobotCarTrainer(BaseTrainer):
             pid2count = {}
             features_h5 = h5py.File(features_path, "r")
 
-            if self.using_global_descriptors and self.using_vae:
+            if self.using_global_descriptors:
                 self.train_vae(features_h5)
 
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
