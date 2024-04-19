@@ -226,7 +226,7 @@ class BaseTrainer:
                 )
                 pbar.update(len(work) * nb_epochs_per_work)
 
-    def collect_image_descriptors(self, using_pca=True):
+    def collect_image_descriptors(self, using_pca=False):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         file_name2 = f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         if os.path.isfile(file_name1):
@@ -548,6 +548,9 @@ class RobotCarTrainer(BaseTrainer):
             pid2descriptors = {}
             pid2count = {}
             features_h5 = h5py.File(features_path, "r")
+
+            if self.using_global_descriptors:
+                self.train_vae(features_h5)
 
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 keypoints, descriptors = dd_utils.read_kp_and_desc(

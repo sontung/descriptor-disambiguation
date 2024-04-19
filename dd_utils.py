@@ -1039,7 +1039,7 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             model_dict.update(
                 {
                     "variant": "EigenPlaces",
-                    "backbone": "ResNet101",
+                    "backbone": "ResNet50",
                     "fc_output_dim": global_desc_dim,
                 }
             )
