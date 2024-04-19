@@ -1043,7 +1043,10 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
                     "fc_output_dim": global_desc_dim,
                 }
             )
-        encoder_global = Model(model_dict).eval().to(device)
+            encoder_global = Model(model_dict).eval().to(device)
+            encoder_global.conf["name"] = f"eigenplaces_{model_dict['backbone']}"
+        else:
+            encoder_global = Model(model_dict).eval().to(device)
         conf_ns_retrieval = SimpleNamespace(**{**default_conf, **conf})
         conf_ns_retrieval.resize_max = conf[retrieval_model]["preprocessing"][
             "resize_max"
