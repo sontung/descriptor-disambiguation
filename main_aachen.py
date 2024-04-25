@@ -50,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="sdf2",
+        default="r2d2",
     )
     parser.add_argument(
         "--local_desc_dim",

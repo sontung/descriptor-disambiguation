@@ -57,12 +57,14 @@ def read_nvm_file(file_name):
     image2points = {}
     image2uvs = {}
     xyz_arr = np.zeros((nb_points, 3), np.float64)
+    rgb_arr = np.zeros((nb_points, 3), np.float64)
     # nb_points = 100
     for j in tqdm(range(nb_points), desc="Reading points"):
         point_info = lines[5 + nb_cameras + j].split(" ")
         x, y, z, r, g, b, nb_features = point_info[:7]
         x, y, z = map(float, [x, y, z])
         xyz_arr[j] = [x, y, z]
+        rgb_arr[j] = [r, g, b]
         features_info = point_info[7:]
         nb_features = int(nb_features)
         for k in range(nb_features):
@@ -72,7 +74,7 @@ def read_nvm_file(file_name):
             image2points.setdefault(image_id, []).append(j)
             image2uvs.setdefault(image_id, []).append([u, v])
 
-    return xyz_arr, image2points, image2name, image2pose, image2info, image2uvs
+    return xyz_arr, image2points, image2name, image2pose, image2info, image2uvs, rgb_arr
 
 
 def return_pose_mat(pose_q, pose_t):

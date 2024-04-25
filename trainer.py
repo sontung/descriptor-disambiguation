@@ -261,7 +261,7 @@ class BaseTrainer:
         return image2desc
 
     def produce_image_descriptor(self, name):
-        if "mixvpr" in self.global_desc_model_name:
+        if "mixvpr" in self.global_desc_model_name or "crica" in self.global_desc_model_name:
             image_descriptor = self.global_desc_model.process(name)
         else:
             image, _ = read_and_preprocess(name, self.global_desc_conf)
@@ -548,9 +548,6 @@ class RobotCarTrainer(BaseTrainer):
             pid2descriptors = {}
             pid2count = {}
             features_h5 = h5py.File(features_path, "r")
-
-            if self.using_global_descriptors:
-                self.train_vae(features_h5)
 
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 keypoints, descriptors = dd_utils.read_kp_and_desc(
@@ -1029,7 +1026,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
 
         return uv_arr, pred_scene_coords_b3
 
-    def evaluate(self):
+    def evaluate(self, return_name2err=False):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
@@ -1057,6 +1054,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         rErrs = []
         tErrs = []
         testset = self.test_dataset
+        name2err = {}
         with torch.no_grad():
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
@@ -1065,9 +1063,6 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
-                    # if self.using_vae:
-                    #     image_descriptor = self.vae.Encoder(torch.from_numpy(image_descriptor).cuda().float())
-                    #     image_descriptor = image_descriptor.cpu().numpy()
 
                     if self.using_pca:
                         image_descriptor = self.pca.transform(
@@ -1092,6 +1087,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 )
 
                 t_err, r_err = compute_pose_error(pose, example[4])
+                name2err[name] = t_err
 
                 # Save the errors.
                 rErrs.append(r_err)
@@ -1108,6 +1104,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         median_idx = total_frames // 2
         median_rErr = rErrs[median_idx]
         median_tErr = tErrs[median_idx]
+        if return_name2err:
+            return median_tErr, median_rErr, name2err
         return median_tErr, median_rErr
 
 

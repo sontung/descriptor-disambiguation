@@ -30,8 +30,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        # if ds_name != "Cambridge_GreatCourt":
-        #     continue
+        if ds_name != "Cambridge_GreatCourt":
+            continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=f"{root_dir_}/{ds_name}"
@@ -86,12 +86,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="mixvpr",
+        default="crica",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=4096,
+        default=10752,
     )
     args = parser.parse_args()
     results = run_function(

@@ -13,11 +13,12 @@ from skimage import io
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
 from tqdm import tqdm
-
+import torchvision.transforms
 import ace_util
 import colmap_read
 import dd_utils
 from ace_util import project_using_pose
+from PIL import Image
 
 _logger = logging.getLogger(__name__)
 
@@ -64,8 +65,34 @@ class CambridgeLandmarksDataset(Dataset):
             self.image2pose,
             self.image2info,
             self.image2uvs,
+            self.rgb_arr,
         ) = ace_util.read_nvm_file(self.sfm_model_dir)
         self.name2id = {v: u for u, v in self.image2name.items()}
+
+        # pid2images = {}
+        # for img in self.image2points:
+        #     for pid_ in self.image2points[img]:
+        #         pid2images.setdefault(pid_, []).append(img)
+        #
+        # points = self.image2points[self.name2id["seq4/frame00224.jpg"]]
+        # import random
+        # pid0 = random.choice(points)
+        # images0 = pid2images[pid0]
+        # for img in images0:
+        #     pose0 = self.image2pose[img]
+        #     break
+        #
+        # import open3d as o3d
+        #
+        # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr))
+        # cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5)
+        # cl.colors = o3d.utility.Vector3dVector(rgb_arr[inlier_ind]/255)
+        #
+        # vis = o3d.visualization.Visualizer()
+        # vis.create_window(width=1920, height=1025)
+        # vis.add_geometry(cl)
+        # vis.run()
+        # vis.destroy_window()
 
         if self.train:
             root_dir = root_dir / "train"
@@ -338,6 +365,7 @@ class RobotCarDataset(Dataset):
                 self.image2pose,
                 self.image2info,
                 self.image2uvs,
+                self.rgb_arr,
             ) = ace_util.read_nvm_file(self.sfm_model_dir)
             self.name2image = {v: k for k, v in self.image2name.items()}
             self.img_ids = list(self.image2name.keys())
@@ -735,7 +763,7 @@ class RobotCarDataset(Dataset):
             img_id = name1
             pid_list = []
             if type(self.name2mat[name0]) == np.ndarray:
-                pose_inv = torch.from_numpy(self.name2mat[name0]).inverse()
+                pose_inv = torch.from_numpy(self.name2mat[name0])
             else:
                 pose_inv = None
             xyz_gt = None
@@ -1007,17 +1035,58 @@ class SevenScenesDataset(Dataset):
         )
 
 
+class CricaInferenceDataset(Dataset):
+    def __init__(self, image_names):
+        self.image_names = image_names
+        self.transform = torchvision.transforms.Compose([
+    torchvision.transforms.ToTensor(),
+    torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+    def __len__(self):
+        return len(self.image_names)
+
+    def __getitem__(self, idx):
+        name = self.image_names[idx]
+        image = Image.open(name).convert("RGB")
+        image = self.transform(image)
+        image = torchvision.transforms.functional.resize(image, (224, 224))
+
+        return image
+
+
 if __name__ == "__main__":
     # testset = CambridgeLandmarksDataset(
     #     train=True, ds_name="GC", root_dir="../ace/datasets/Cambridge_GreatCourt"
     # )
     # for t in testset:
     #     continue
+    import sys
+    sys.path.append("../CricaVPR")
+    import network
+    from torch.utils.data import DataLoader
 
-    testset = SevenScenesDataset(
-        train=True,
-        img_dir="../ace/datasets/7scenes_chess",
-        sfm_model_dir="../7scenes_reference_models/chess/sfm_gt",
+    train_ds_ = CambridgeLandmarksDataset(
+        train=True, ds_name="Cambridge_GreatCourt", root_dir=f"../ace/datasets/Cambridge_GreatCourt"
     )
-    for t in testset:
-        continue
+    names = [str(du) for du in train_ds_.rgb_files]
+    crica_ds = CricaInferenceDataset(names)
+    database_dataloader = DataLoader(dataset=crica_ds,
+                                     batch_size=16)
+    model = network.CricaVPRNet()
+
+    checkpoint = torch.load("../CricaVPR/CricaVPR.pth")
+    from collections import OrderedDict
+
+    if 'model_state_dict' in checkpoint:
+        state_dict = checkpoint['model_state_dict']
+    else:
+        state_dict = checkpoint
+    if list(state_dict.keys())[0].startswith('module'):
+        state_dict = OrderedDict({k.replace('module.', ''): v for (k, v) in state_dict.items()})
+    model.load_state_dict(state_dict)
+
+    model = model.to("cuda")
+    for t in database_dataloader:
+        pred = model(t.cuda())
+        break
