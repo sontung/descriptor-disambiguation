@@ -86,12 +86,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="crica",
+        default="salad",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=10752,
+        default=8448,
     )
     args = parser.parse_args()
     results = run_function(

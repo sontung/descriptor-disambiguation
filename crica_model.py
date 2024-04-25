@@ -35,5 +35,5 @@ class CricaModel:
         image = self.transform(image)
         image = torchvision.transforms.functional.resize(image, (224, 224))
         image_descriptor = self.model(image.unsqueeze(0).cuda())
-        image_descriptor = image_descriptor.squeeze().cpu().numpy()
+        image_descriptor = image_descriptor.squeeze().cpu().numpy()  # 10752
         return image_descriptor

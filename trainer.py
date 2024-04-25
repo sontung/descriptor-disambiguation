@@ -261,7 +261,7 @@ class BaseTrainer:
         return image2desc
 
     def produce_image_descriptor(self, name):
-        if "mixvpr" in self.global_desc_model_name or "crica" in self.global_desc_model_name:
+        if "mixvpr" in self.global_desc_model_name or "crica" in self.global_desc_model_name or "salad" in self.global_desc_model_name:
             image_descriptor = self.global_desc_model.process(name)
         else:
             image, _ = read_and_preprocess(name, self.global_desc_conf)

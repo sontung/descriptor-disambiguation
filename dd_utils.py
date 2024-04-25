@@ -21,9 +21,6 @@ from hloc import extractors
 from hloc.utils.base_model import dynamic_load
 from pathlib import Path
 
-from crica_model import CricaModel
-from mix_vpr_model import MVModel
-
 
 def create_sampling_matrix(out_w, out_h):
     mat = np.zeros((out_h, out_w, 2))
@@ -1030,10 +1027,21 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             encoder = sdf2_models.return_models()
 
     if retrieval_model == "mixvpr":
+        from mix_vpr_model import MVModel
+
         encoder_global = MVModel(global_desc_dim)
         conf_ns_retrieval = None
     elif retrieval_model == "crica":
+        from crica_model import CricaModel
+
         encoder_global = CricaModel()
+        conf_ns_retrieval = None
+    elif retrieval_model == "salad":
+        # sys.path.append("../salad")
+        # from model_loader_for_dd import SaladModel
+        from salad_model import SaladModel
+
+        encoder_global = SaladModel()
         conf_ns_retrieval = None
     else:
         model_dict = conf[retrieval_model]["model"]
@@ -1043,7 +1051,7 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             model_dict.update(
                 {
                     "variant": "EigenPlaces",
-                    "backbone": "ResNet50",
+                    "backbone": "ResNet101",
                     "fc_output_dim": global_desc_dim,
                 }
             )
