@@ -448,14 +448,14 @@ class BaseTrainer:
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
-                    if self.using_pca:
-                        image_descriptor = self.pca.transform(
-                            image_descriptor.reshape(1, -1)
-                        )
 
-                    descriptors = 0.5 * (
-                        descriptors + image_descriptor[: descriptors.shape[1]]
+                    descriptors = (1 + self.lambda_val) * (
+                            self.lambda_val * descriptors + image_descriptor[: descriptors.shape[1]]
                     )
+
+                    # descriptors = 0.5 * (
+                    #     descriptors + image_descriptor[: descriptors.shape[1]]
+                    # )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
