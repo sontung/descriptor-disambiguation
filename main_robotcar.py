@@ -45,7 +45,7 @@ if __name__ == "__main__":
         default="datasets/robotcar",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--use_global", type=int, default=0)
 
     parser.add_argument(
         "--local_desc",

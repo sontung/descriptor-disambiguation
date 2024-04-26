@@ -515,7 +515,7 @@ class BaseTrainer:
 
 
 class RobotCarTrainer(BaseTrainer):
-    def collect_descriptors(self, vis=False):
+    def collect_descriptors(self, vis=False, reduce_map_size=True):
         if self.using_global_descriptors:
             if self.using_pca:
                 file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
@@ -530,6 +530,32 @@ class RobotCarTrainer(BaseTrainer):
             file_name2 = (
                 f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}.npy"
             )
+
+        if reduce_map_size:
+            index_map_file_name = f"output/{self.ds_name}/indices.npy"
+            if os.path.isfile(index_map_file_name):
+                inlier_ind = np.load(index_map_file_name)
+            else:
+                import open3d as o3d
+
+                point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.dataset.xyz_arr))
+                cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5, print_progress=True)
+
+                np.save(index_map_file_name, np.array(inlier_ind))
+
+                # vis = o3d.visualization.Visualizer()
+                # vis.create_window(width=1920, height=1025)
+                # vis.add_geometry(point_cloud)
+                # vis.run()
+                # vis.destroy_window()
+            img2points2 = {}
+            inlier_ind_set = set(inlier_ind)
+            for img in tqdm(self.dataset.image2points, desc="Removing outlier points in the map"):
+                pid_list = self.dataset.image2points[img]
+                img2points2[img] = [pid for pid in pid_list if pid in inlier_ind_set]
+                mask = [True if pid in inlier_ind_set else False for pid in pid_list]
+                self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[mask]
+            self.dataset.image2points = img2points2
 
         features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
