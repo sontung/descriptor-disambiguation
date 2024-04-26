@@ -23,19 +23,6 @@ def run_function(
     train_ds_ = RobotCarDataset(ds_dir=ds_dir)
     test_ds_ = RobotCarDataset(ds_dir=ds_dir, train=False, evaluate=True)
 
-    all_names = []
-    from tqdm import tqdm
-
-    for example in tqdm(train_ds_):
-        if example is None:
-            continue
-        all_names.append(example[1])
-
-    lighting = set([])
-    for name in all_names:
-        wea = name.split("/")[3]
-        lighting.add(wea)
-
     trainer_ = RobotCarTrainer(
         train_ds_,
         test_ds_,
