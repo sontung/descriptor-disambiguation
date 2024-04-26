@@ -62,7 +62,7 @@ class BaseTrainer:
         using_global_descriptors,
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
-        lambda_val=0,
+        lambda_val=1,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -123,7 +123,7 @@ class BaseTrainer:
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
                 self.pid2ind,
-            ) = self.collect_descriptors(lambda_val=self.lambda_val)
+            ) = self.collect_descriptors()
             if self.pid2ind:
                 self.all_ind_in_train_set = np.array(
                     [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
@@ -303,7 +303,7 @@ class BaseTrainer:
         }
         dd_utils.write_to_h5_file(fd, name, dict_)
 
-    def collect_descriptors(self, vis=False, lambda_val=0):
+    def collect_descriptors(self, vis=False):
         if self.using_global_descriptors:
             if self.using_pca:
                 file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
@@ -365,8 +365,8 @@ class BaseTrainer:
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
-                    selected_descriptors = (1+lambda_val)*(
-                        lambda_val*selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                    selected_descriptors = (1+self.lambda_val)*(
+                        self.lambda_val*selected_descriptors + image_descriptor[: descriptors.shape[1]]
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
