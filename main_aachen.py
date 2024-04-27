@@ -58,7 +58,7 @@ if __name__ == "__main__":
         default="datasets/aachen_v1.1",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=0)
+    parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument(
         "--local_desc",
         type=str,
