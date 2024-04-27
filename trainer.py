@@ -264,7 +264,11 @@ class BaseTrainer:
         return image2desc
 
     def produce_image_descriptor(self, name):
-        if "mixvpr" in self.global_desc_model_name or "crica" in self.global_desc_model_name or "salad" in self.global_desc_model_name:
+        if (
+            "mixvpr" in self.global_desc_model_name
+            or "crica" in self.global_desc_model_name
+            or "salad" in self.global_desc_model_name
+        ):
             image_descriptor = self.global_desc_model.process(name)
         else:
             image, _ = read_and_preprocess(name, self.global_desc_conf)
@@ -365,8 +369,9 @@ class BaseTrainer:
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
-                    selected_descriptors = (1+self.lambda_val)*(
-                        self.lambda_val*selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                    selected_descriptors = (1 + self.lambda_val) * (
+                        self.lambda_val * selected_descriptors
+                        + image_descriptor[: descriptors.shape[1]]
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
@@ -450,7 +455,8 @@ class BaseTrainer:
                     )
 
                     descriptors = (1 + self.lambda_val) * (
-                            self.lambda_val * descriptors + image_descriptor[: descriptors.shape[1]]
+                        self.lambda_val * descriptors
+                        + image_descriptor[: descriptors.shape[1]]
                     )
 
                     # descriptors = 0.5 * (
@@ -541,8 +547,12 @@ class RobotCarTrainer(BaseTrainer):
             else:
                 import open3d as o3d
 
-                point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.dataset.xyz_arr))
-                cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5, print_progress=True)
+                point_cloud = o3d.geometry.PointCloud(
+                    o3d.utility.Vector3dVector(self.dataset.xyz_arr)
+                )
+                cl, inlier_ind = point_cloud.remove_radius_outlier(
+                    nb_points=16, radius=5, print_progress=True
+                )
 
                 np.save(index_map_file_name, np.array(inlier_ind))
 
@@ -553,11 +563,15 @@ class RobotCarTrainer(BaseTrainer):
                 # vis.destroy_window()
             img2points2 = {}
             inlier_ind_set = set(inlier_ind)
-            for img in tqdm(self.dataset.image2points, desc="Removing outlier points in the map"):
+            for img in tqdm(
+                self.dataset.image2points, desc="Removing outlier points in the map"
+            ):
                 pid_list = self.dataset.image2points[img]
                 img2points2[img] = [pid for pid in pid_list if pid in inlier_ind_set]
                 mask = [True if pid in inlier_ind_set else False for pid in pid_list]
-                self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[mask]
+                self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[
+                    mask
+                ]
             self.dataset.image2points = img2points2
 
         features_path = (

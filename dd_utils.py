@@ -1075,7 +1075,9 @@ def concat_images_different_sizes(images):
     for img in images:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
         w1 = img.shape[0]
-        img = cv2.copyMakeBorder(img, 0, ww - w1, 0, 0, borderType=cv2.BORDER_CONSTANT, value=(0, 0, 0, 0))
+        img = cv2.copyMakeBorder(
+            img, 0, ww - w1, 0, 0, borderType=cv2.BORDER_CONSTANT, value=(0, 0, 0, 0)
+        )
         new_images.append(img)
 
     # stack images vertically

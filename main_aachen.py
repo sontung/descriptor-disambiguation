@@ -23,7 +23,18 @@ def run_function(
     )
     train_ds_ = AachenDataset(ds_dir=ds_dir)
     test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
-    for lambda_val in [ 0, 0.1, 0.25, 0.5, 0.75, 1, 1/0.75, 1/0.5, 1/0.25, 1/0.1]:
+    for lambda_val in [
+        0,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        1 / 0.75,
+        1 / 0.5,
+        1 / 0.25,
+        1 / 0.1,
+    ]:
         trainer_ = BaseTrainer(
             train_ds_,
             test_ds_,
@@ -34,7 +45,7 @@ def run_function(
             conf_ns,
             conf_ns_retrieval,
             using_global_descriptors,
-            lambda_val=lambda_val
+            lambda_val=lambda_val,
         )
         trainer_.evaluate()
 
@@ -47,7 +58,7 @@ if __name__ == "__main__":
         default="datasets/aachen_v1.1",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--use_global", type=int, default=0)
     parser.add_argument(
         "--local_desc",
         type=str,

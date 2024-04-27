@@ -72,7 +72,9 @@ def run_function(
         err = torch.mean(torch.abs(torch.from_numpy(uv_arr_pred) - uv_arr_from_kp), 1)
 
         min_data = torch.min(err.reshape((-1, nb_matches)), 1)
-        uv_kp_0 = uv_arr_from_kp.reshape((-1, nb_matches, 2))[range(keypoints.shape[0]), min_data.indices, :]
+        uv_kp_0 = uv_arr_from_kp.reshape((-1, nb_matches, 2))[
+            range(keypoints.shape[0]), min_data.indices, :
+        ]
         pid_0 = feature_indices[range(keypoints.shape[0]), min_data.indices]
         mask = min_data.values < 5
         uv_arr, xyz_pred = (
@@ -94,14 +96,18 @@ def run_function(
         )
         mask = info["inliers"]
 
-        cam = o3d.geometry.LineSet.create_camera_visualization(1024, 1024,
-                                                               example[5].double().numpy(),
-                                                               example[4].double().inverse().numpy(),
-                                                               )
-        cam2 = o3d.geometry.LineSet.create_camera_visualization(1024, 1024,
-                                                               example[5].double().numpy(),
-                                                               np.vstack([pose.Rt, [0, 0, 0, 1]]),
-                                                               )
+        cam = o3d.geometry.LineSet.create_camera_visualization(
+            1024,
+            1024,
+            example[5].double().numpy(),
+            example[4].double().inverse().numpy(),
+        )
+        cam2 = o3d.geometry.LineSet.create_camera_visualization(
+            1024,
+            1024,
+            example[5].double().numpy(),
+            np.vstack([pose.Rt, [0, 0, 0, 1]]),
+        )
         vis = o3d.visualization.Visualizer()
         vis.create_window(width=1920, height=1025)
         vis.add_geometry(cam)
@@ -123,7 +129,11 @@ def run_function(
             cv2.circle(image0, uv_arr[idx].astype(int), 20, (255, 0, 0), -1)
             images = [image0]
             for img_id, (u, v) in pid2images[pid_0[mask][idx]]:
-                image1 = cv2.imread(f"datasets/robotcar/images{train_ds_.image2name[img_id][1:]}".replace("png", "jpg"))
+                image1 = cv2.imread(
+                    f"datasets/robotcar/images{train_ds_.image2name[img_id][1:]}".replace(
+                        "png", "jpg"
+                    )
+                )
                 cv2.circle(image1, (int(u), int(v)), 20, (255, 0, 0), -1)
                 images.append(image1)
                 if len(images) > 10:

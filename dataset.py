@@ -1,4 +1,5 @@
 import logging
+import os
 import pickle
 from pathlib import Path
 
@@ -240,13 +241,43 @@ class AachenDataset(Dataset):
             self.image_id2points = {}
             self.pid2images = {}
 
+            index_map_file_name = f"output/{self.ds_type}/indices.npy"
+            Path(f"output/{self.ds_type}").mkdir(parents=True, exist_ok=True)
+
+            xyz_arr = np.zeros((len(self.recon_points), 3))
+            all_pids = np.zeros(len(self.recon_points), dtype=int)
+            for idx, pid in enumerate(list(self.recon_points.keys())):
+                xyz_arr[idx] = self.recon_points[pid].xyz
+                all_pids[idx] = pid
+
+            if os.path.isfile(index_map_file_name):
+                inlier_ind = np.load(index_map_file_name)
+            else:
+                import open3d as o3d
+
+                point_cloud = o3d.geometry.PointCloud(
+                    o3d.utility.Vector3dVector(xyz_arr)
+                )
+                cl, inlier_ind = point_cloud.remove_radius_outlier(
+                    nb_points=16, radius=5, print_progress=True
+                )
+
+                np.save(index_map_file_name, np.array(inlier_ind))
+
+                # vis = o3d.visualization.Visualizer()
+                # vis.create_window(width=1920, height=1025)
+                # vis.add_geometry(cl)
+                # vis.run()
+                # vis.destroy_window()
+
+            self.good_pids = set(all_pids[inlier_ind])
+            self.image_id2pids = {}
+            self.image_id2uvs = {}
             for img_id in tqdm(self.recon_images, desc="Gathering points per image"):
                 pid_arr = self.recon_images[img_id].point3D_ids
-                pid_arr = pid_arr[pid_arr >= 0]
-                xyz_arr = np.zeros((pid_arr.shape[0], 3))
-                for idx, pid in enumerate(pid_arr):
-                    xyz_arr[idx] = self.recon_points[pid].xyz
-                self.image_id2points[img_id] = xyz_arr
+                mask = [True if pid in self.good_pids else False for pid in pid_arr]
+                self.image_id2pids[img_id] = pid_arr[mask]
+                self.image_id2uvs[img_id] = self.recon_images[img_id].xys[mask]
             self.img_ids = list(self.image_name2id.values())
         else:
             name2params1 = read_intrinsic(self.day_intrinsic_file)
@@ -287,11 +318,9 @@ class AachenDataset(Dataset):
             tvec = self.recon_images[img_id].tvec
             pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
 
-            xyz_gt = self.image_id2points[img_id]
-            pid_list = self.recon_images[img_id].point3D_ids
-            mask = pid_list >= 0
-            pid_list = pid_list[mask]
-            uv_gt = self.recon_images[img_id].xys[mask]
+            pid_list = self.image_id2pids[img_id]
+            uv_gt = self.image_id2uvs[img_id]
+            xyz_gt = None
 
             pose_inv = torch.from_numpy(pose_inv)
 
@@ -1038,10 +1067,14 @@ class SevenScenesDataset(Dataset):
 class CricaInferenceDataset(Dataset):
     def __init__(self, image_names):
         self.image_names = image_names
-        self.transform = torchvision.transforms.Compose([
-    torchvision.transforms.ToTensor(),
-    torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+        self.transform = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
 
     def __len__(self):
         return len(self.image_names)
@@ -1062,28 +1095,32 @@ if __name__ == "__main__":
     # for t in testset:
     #     continue
     import sys
+
     sys.path.append("../CricaVPR")
     import network
     from torch.utils.data import DataLoader
 
     train_ds_ = CambridgeLandmarksDataset(
-        train=True, ds_name="Cambridge_GreatCourt", root_dir=f"../ace/datasets/Cambridge_GreatCourt"
+        train=True,
+        ds_name="Cambridge_GreatCourt",
+        root_dir=f"../ace/datasets/Cambridge_GreatCourt",
     )
     names = [str(du) for du in train_ds_.rgb_files]
     crica_ds = CricaInferenceDataset(names)
-    database_dataloader = DataLoader(dataset=crica_ds,
-                                     batch_size=16)
+    database_dataloader = DataLoader(dataset=crica_ds, batch_size=16)
     model = network.CricaVPRNet()
 
     checkpoint = torch.load("../CricaVPR/CricaVPR.pth")
     from collections import OrderedDict
 
-    if 'model_state_dict' in checkpoint:
-        state_dict = checkpoint['model_state_dict']
+    if "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
     else:
         state_dict = checkpoint
-    if list(state_dict.keys())[0].startswith('module'):
-        state_dict = OrderedDict({k.replace('module.', ''): v for (k, v) in state_dict.items()})
+    if list(state_dict.keys())[0].startswith("module"):
+        state_dict = OrderedDict(
+            {k.replace("module.", ""): v for (k, v) in state_dict.items()}
+        )
     model.load_state_dict(state_dict)
 
     model = model.to("cuda")
