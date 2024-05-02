@@ -3,25 +3,22 @@ import os
 import pickle
 import sys
 from pathlib import Path
-import poselib
 
 import cv2
 import faiss
 import h5py
 import numpy as np
-import pycolmap
+import poselib
 import torch
 from pykdtree.kdtree import KDTree
+from sklearn.decomposition import PCA
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import dd_utils
-from sklearn.decomposition import PCA
-
 from ace_util import read_and_preprocess
-from vae_test import Model as VAE_model, VAEDataset
-from torch.optim import Adam
+from vae_test import VAEDataset
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -114,10 +111,10 @@ class BaseTrainer:
         self.using_pca = False
         self.lambda_val = lambda_val
         print(f"using lambda val={self.lambda_val}")
+        self.global_desc_mean = 0
+        self.global_desc_std = 1
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
-            self.global_desc_mean = 0
-            self.global_desc_std = 1
         else:
             self.image2desc = {}
 
@@ -378,6 +375,10 @@ class BaseTrainer:
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
+                    if self.normalize:
+                        image_descriptor = (
+                            image_descriptor - self.global_desc_mean
+                        ) / self.global_desc_std
                     selected_descriptors = (1 + self.lambda_val) * (
                         self.lambda_val * selected_descriptors
                         + image_descriptor[: descriptors.shape[1]]
@@ -864,11 +865,6 @@ class CMUTrainer(BaseTrainer):
                     )
 
                     camera = example[6]
-                    # res = pycolmap.absolute_pose_estimation(
-                    #     uv_arr,
-                    #     xyz_pred,
-                    #     camera,
-                    # )
 
                     camera_dict = {
                         "model": "OPENCV",
@@ -882,7 +878,6 @@ class CMUTrainer(BaseTrainer):
                         camera_dict,
                     )
 
-                    # mat = res["cam_from_world"]
                     qvec = " ".join(map(str, pose.q))
                     tvec = " ".join(map(str, pose.t))
                     line = f"{image_id} {qvec} {tvec}"
