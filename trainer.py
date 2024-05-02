@@ -63,12 +63,14 @@ class BaseTrainer:
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=1,
+        normalize=True,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
         self.using_global_descriptors = using_global_descriptors
         self.global_feature_dim = global_feature_dim
+        self.normalize = normalize
 
         self.name2uv = {}
         self.ds_name = self.dataset.ds_type
@@ -114,6 +116,8 @@ class BaseTrainer:
         print(f"using lambda val={self.lambda_val}")
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
+            self.global_desc_mean = 0
+            self.global_desc_std = 1
         else:
             self.image2desc = {}
 
@@ -259,6 +263,9 @@ class BaseTrainer:
             all_desc = self.pca.fit_transform(all_desc)
             self.using_pca = True
 
+        self.global_desc_mean = np.mean(all_desc)
+        self.global_desc_std = np.std(all_desc)
+
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx, : self.feature_dim]
         return image2desc
@@ -268,6 +275,7 @@ class BaseTrainer:
             "mixvpr" in self.global_desc_model_name
             or "crica" in self.global_desc_model_name
             or "salad" in self.global_desc_model_name
+            or "gcl" in self.global_desc_model_name
         ):
             image_descriptor = self.global_desc_model.process(name)
         else:
@@ -314,9 +322,9 @@ class BaseTrainer:
                 file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
                 file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.pkl"
             else:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
-                file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.pkl"
+                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.npy"
+                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.npy"
+                file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.pkl"
         else:
             file_name1 = (
                 f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
@@ -332,6 +340,7 @@ class BaseTrainer:
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
         if os.path.isfile(file_name1):
+            print(f"Loading codebook from {file_name1}")
             pid2mean_desc = np.load(file_name1)
             all_pid = np.load(file_name2)
             afile = open(file_name3, "rb")
@@ -453,6 +462,11 @@ class BaseTrainer:
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
+
+                    if self.normalize:
+                        image_descriptor = (
+                            image_descriptor - self.global_desc_mean
+                        ) / self.global_desc_std
 
                     descriptors = (1 + self.lambda_val) * (
                         self.lambda_val * descriptors
@@ -604,6 +618,10 @@ class RobotCarTrainer(BaseTrainer):
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
+                    if self.normalize:
+                        image_descriptor = (
+                            image_descriptor - self.global_desc_mean
+                        ) / self.global_desc_std
                     selected_descriptors = 0.5 * (
                         selected_descriptors + image_descriptor[: descriptors.shape[1]]
                     )
@@ -718,6 +736,10 @@ class RobotCarTrainer(BaseTrainer):
                             image_descriptor.reshape(1, -1)
                         )
 
+                    if self.normalize:
+                        image_descriptor = (
+                            image_descriptor - self.global_desc_mean
+                        ) / self.global_desc_std
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
@@ -826,10 +848,10 @@ class CMUTrainer(BaseTrainer):
                         image_descriptor = dd_utils.read_global_desc(
                             name, global_features_h5
                         )
-                        if self.using_pca:
-                            image_descriptor = self.pca.transform(
-                                image_descriptor.reshape(1, -1)
-                            )
+                        if self.normalize:
+                            image_descriptor = (
+                                image_descriptor - self.global_desc_mean
+                            ) / self.global_desc_std
 
                         descriptors = 0.5 * (
                             descriptors + image_descriptor[: descriptors.shape[1]]
@@ -962,76 +984,60 @@ class SevenScenesTrainer(BaseTrainer):
 
 class CambridgeLandmarksTrainer(BaseTrainer):
     def collect_descriptors(self, vis=False):
-        if self.using_global_descriptors:
-            if self.using_pca:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_pca.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_pca.npy"
-            else:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}.npy"
-        else:
-            file_name1 = (
-                f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
-            )
-            file_name2 = (
-                f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}.npy"
-            )
-
         features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
-        if os.path.isfile(file_name1):
-            pid2mean_desc = np.load(file_name1)
-            all_pid = np.load(file_name2)
-        else:
-            if not os.path.isfile(features_path):
-                features_h5 = h5py.File(str(features_path), "a", libver="latest")
-                with torch.no_grad():
-                    for example in tqdm(self.dataset, desc="Detecting features"):
-                        self.produce_local_descriptors(example[1], features_h5)
-                features_h5.close()
 
-            pid2descriptors = {}
-            features_h5 = h5py.File(features_path, "r")
-            for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-                keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Detecting features"):
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
+
+        pid2descriptors = {}
+        features_h5 = h5py.File(features_path, "r")
+        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+            pid_list = example[3]
+            uv = example[-1]
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+            selected_descriptors = descriptors[idx_arr]
+            if self.using_global_descriptors:
+                image_descriptor = self.image2desc[example[1]]
+                if self.normalize:
+                    image_descriptor = (
+                        image_descriptor - self.global_desc_mean
+                    ) / self.global_desc_std
+
+                selected_descriptors = (1 + self.lambda_val) * (
+                    self.lambda_val * selected_descriptors
+                    + image_descriptor[: descriptors.shape[1]]
                 )
-                pid_list = example[3]
-                uv = example[-1]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-                selected_descriptors = descriptors[idx_arr]
-                if self.using_global_descriptors:
-                    image_descriptor = self.image2desc[example[1]]
-                    selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor[: descriptors.shape[1]]
+            for idx, pid in enumerate(selected_pid[ind2]):
+                if pid not in pid2descriptors:
+                    pid2descriptors[pid] = selected_descriptors[idx]
+                else:
+                    pid2descriptors[pid] = 0.5 * (
+                        pid2descriptors[pid] + selected_descriptors[idx]
                     )
 
-                for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in pid2descriptors:
-                        pid2descriptors[pid] = selected_descriptors[idx]
-                    else:
-                        pid2descriptors[pid] = 0.5 * (
-                            pid2descriptors[pid] + selected_descriptors[idx]
-                        )
+        features_h5.close()
+        self.image2desc.clear()
 
-            features_h5.close()
-            self.image2desc.clear()
+        all_pid = list(pid2descriptors.keys())
+        all_pid = np.array(all_pid)
+        pid2mean_desc = np.zeros(
+            (all_pid.shape[0], self.feature_dim),
+            pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+        )
 
-            all_pid = list(pid2descriptors.keys())
-            all_pid = np.array(all_pid)
-            pid2mean_desc = np.zeros(
-                (all_pid.shape[0], self.feature_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
-            )
+        for ind, pid in enumerate(all_pid):
+            pid2mean_desc[ind] = pid2descriptors[pid]
 
-            for ind, pid in enumerate(all_pid):
-                pid2mean_desc[ind] = pid2descriptors[pid]
-
-            np.save(file_name1, pid2mean_desc)
-            np.save(file_name2, all_pid)
         if pid2mean_desc.shape[0] > all_pid.shape[0]:
             pid2mean_desc = pid2mean_desc[all_pid]
         self.xyz_arr = self.dataset.xyz_arr[all_pid]
@@ -1107,13 +1113,14 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                         name, global_features_h5
                     )
 
-                    if self.using_pca:
-                        image_descriptor = self.pca.transform(
-                            image_descriptor.reshape(1, -1)
-                        )
+                    if self.normalize:
+                        image_descriptor = (
+                            image_descriptor - self.global_desc_mean
+                        ) / self.global_desc_std
 
-                    descriptors = 0.5 * (
-                        descriptors + image_descriptor[: descriptors.shape[1]]
+                    descriptors = (1 + self.lambda_val) * (
+                        self.lambda_val * descriptors
+                        + image_descriptor[: descriptors.shape[1]]
                     )
 
                 uv_arr, xyz_pred = self.legal_predict(
@@ -1150,218 +1157,3 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         if return_name2err:
             return median_tErr, median_rErr, name2err
         return median_tErr, median_rErr
-
-
-class ConcatenateTrainer(BaseTrainer):
-    def collect_image_descriptors(self):
-        file_name1 = (
-            f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_all.npy"
-        )
-        file_name2 = f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}_all.npy"
-        if os.path.isfile(file_name1):
-            all_desc = np.load(file_name1)
-            afile = open(file_name2, "rb")
-            all_names = pickle.load(afile)
-            afile.close()
-        else:
-            all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
-            all_names = []
-            idx = 0
-            with torch.no_grad():
-                for example in tqdm(self.dataset, desc="Collecting image descriptors"):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    all_desc[idx] = image_descriptor
-                    all_names.append(example[1])
-                    idx += 1
-            np.save(file_name1, all_desc)
-            with open(file_name2, "wb") as handle:
-                pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        image2desc = {}
-        for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx]
-        return image2desc
-
-    def collect_descriptors(self, vis=False):
-        print("Using child method")
-        file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_concat.npy"
-        file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_concat.npy"
-        file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_concat.pkl"
-
-        features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
-        )
-        print(f"Checking if {file_name1} exists")
-        if os.path.isfile(file_name1):
-            pid2mean_desc = np.load(file_name1)
-            all_pid = np.load(file_name2)
-            afile = open(file_name3, "rb")
-            pid2ind = pickle.load(afile)
-            afile.close()
-        else:
-            if not os.path.isfile(features_path):
-                features_h5 = h5py.File(str(features_path), "a", libver="latest")
-                with torch.no_grad():
-                    for example in tqdm(self.dataset, desc="Detecting features"):
-                        self.produce_local_descriptors(example[1], features_h5)
-                features_h5.close()
-
-            pid2descriptors = {}
-
-            features_h5 = h5py.File(features_path, "r")
-            for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-                keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
-                )
-                pid_list = example[3]
-                uv = example[-1] + 0.5
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                image_descriptor = self.image2desc[example[1]]
-                selected_descriptors = descriptors[idx_arr]
-                g1 = np.sqrt(0.5 / selected_descriptors.shape[1])
-                g2 = np.sqrt(0.5 / image_descriptor.shape[0])
-                selected_descriptors = np.hstack(
-                    (
-                        selected_descriptors * g1,
-                        np.tile(
-                            image_descriptor * g2, (selected_descriptors.shape[0], 1)
-                        ),
-                    )
-                )
-
-                for idx, pid in enumerate(selected_pid[ind2]):
-                    pid2descriptors.setdefault(pid, []).append(
-                        selected_descriptors[idx]
-                    )
-
-            features_h5.close()
-            all_pid = list(pid2descriptors.keys())
-            all_pid = np.array(all_pid)
-            pid2mean_desc = np.zeros(
-                (
-                    len(self.dataset.recon_points),
-                    self.feature_dim,
-                ),
-                pid2descriptors[list(pid2descriptors.keys())[0]][0].dtype,
-            )
-
-            pid2ind = {}
-            ind = 0
-            for pid in pid2descriptors:
-                pid2mean_desc[ind] = np.mean(pid2descriptors[pid], 0)
-                pid2ind[pid] = ind
-                ind += 1
-            np.save(file_name1, pid2mean_desc)
-            np.save(file_name2, all_pid)
-            with open(file_name3, "wb") as handle:
-                pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        return pid2mean_desc, all_pid, pid2ind
-
-    def legal_predict_with_img_desc(
-        self,
-        uv_arr,
-        features_ori,
-        gpu_index_flat,
-        img_desc,
-    ):
-        distances, feature_indices = gpu_index_flat.search(features_ori, 10)
-        pid2global_desc = {}
-        res2 = []
-        for uv_id, ind_arr in enumerate(feature_indices):
-            pid_arr = [self.ind2pid[ind] for ind in ind_arr]
-            all_desc_np = np.zeros(
-                (len(pid_arr), self.global_feature_dim), img_desc.dtype
-            )
-            for ind1, pid in enumerate(pid_arr):
-                if pid not in pid2global_desc:
-                    image_ids = [
-                        self.dataset.recon_images[img_id].name
-                        for img_id in self.dataset.pid2images[pid]
-                    ]
-                    all_desc = [
-                        self.image2desc[f"{self.dataset.images_dir_str}/{img_id}"]
-                        for img_id in image_ids
-                    ]
-                    global_desc = np.mean(all_desc, 0)
-                    pid2global_desc[pid] = global_desc
-                else:
-                    global_desc = pid2global_desc[pid]
-
-                all_desc_np[ind1] = global_desc
-            diff2 = np.mean(np.abs(all_desc_np - img_desc), 1)
-            pid_wanted = pid_arr[np.argmin(diff2)]
-            res2.append(pid_wanted)
-
-        pred_scene_coords_b3 = np.array(
-            [self.dataset.recon_points[pid].xyz for pid in res2]
-        )
-        return uv_arr, pred_scene_coords_b3
-
-    def evaluate(self):
-        """
-        write to pose file as name.jpg qw qx qy qz tx ty tz
-        :return:
-        """
-
-        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
-
-        result_file = open(
-            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_cc.txt",
-            "w",
-        )
-
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
-        )
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
-
-        features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
-
-        with torch.no_grad():
-            for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
-                name = example[1]
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
-
-                g1 = np.sqrt(0.5 / descriptors.shape[1])
-                g2 = np.sqrt(0.5 / image_descriptor.shape[0])
-                descriptors = np.hstack(
-                    (
-                        descriptors * g1,
-                        np.tile(image_descriptor * g2, (descriptors.shape[0], 1)),
-                    )
-                )
-
-                uv_arr, xyz_pred = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
-                )
-                camera = example[6]
-                res = pycolmap.absolute_pose_estimation(uv_arr, xyz_pred, camera)
-                mat = res["cam_from_world"]
-                qvec = " ".join(map(str, mat.rotation.quat[[3, 0, 1, 2]]))
-                tvec = " ".join(map(str, mat.translation))
-                image_id = example[2].split("/")[-1]
-                print(f"{image_id} {qvec} {tvec}", file=result_file)
-        features_h5.close()
-        result_file.close()
-        global_features_h5.close()

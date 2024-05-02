@@ -1037,11 +1037,14 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
         encoder_global = CricaModel()
         conf_ns_retrieval = None
     elif retrieval_model == "salad":
-        # sys.path.append("../salad")
-        # from model_loader_for_dd import SaladModel
         from salad_model import SaladModel
 
         encoder_global = SaladModel()
+        conf_ns_retrieval = None
+    elif retrieval_model == "gcl":
+        from gcl_model import GCLModel
+
+        encoder_global = GCLModel()
         conf_ns_retrieval = None
     else:
         model_dict = conf[retrieval_model]["model"]
