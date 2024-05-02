@@ -60,7 +60,7 @@ class BaseTrainer:
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=1,
-        normalize=True,
+        normalize=False,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -379,7 +379,7 @@ class BaseTrainer:
                         image_descriptor = (
                             image_descriptor - self.global_desc_mean
                         ) / self.global_desc_std
-                    selected_descriptors = (1 + self.lambda_val) * (
+                    selected_descriptors = 1/(1 + self.lambda_val) * (
                         self.lambda_val * selected_descriptors
                         + image_descriptor[: descriptors.shape[1]]
                     )
@@ -469,7 +469,7 @@ class BaseTrainer:
                             image_descriptor - self.global_desc_mean
                         ) / self.global_desc_std
 
-                    descriptors = (1 + self.lambda_val) * (
+                    descriptors = 1/(1 + self.lambda_val) * (
                         self.lambda_val * descriptors
                         + image_descriptor[: descriptors.shape[1]]
                     )
@@ -1007,7 +1007,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                         image_descriptor - self.global_desc_mean
                     ) / self.global_desc_std
 
-                selected_descriptors = (1 + self.lambda_val) * (
+                selected_descriptors = 1/(1 + self.lambda_val) * (
                     self.lambda_val * selected_descriptors
                     + image_descriptor[: descriptors.shape[1]]
                 )
@@ -1113,7 +1113,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                             image_descriptor - self.global_desc_mean
                         ) / self.global_desc_std
 
-                    descriptors = (1 + self.lambda_val) * (
+                    descriptors = 1/(1 + self.lambda_val) * (
                         self.lambda_val * descriptors
                         + image_descriptor[: descriptors.shape[1]]
                     )
