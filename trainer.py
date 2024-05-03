@@ -125,6 +125,7 @@ class BaseTrainer:
                 self.all_pid_in_train_set,
                 self.pid2ind,
             ) = self.collect_descriptors()
+            self.improve_codebook()
             if self.pid2ind:
                 self.all_ind_in_train_set = np.array(
                     [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
@@ -137,98 +138,8 @@ class BaseTrainer:
             self.all_ind_in_train_set = None
             self.ind2pid = None
 
-    def train_vae(self, features_h5):
-        img_ids = list(range(len(self.dataset)))
-        nb_epochs = 10
-        nb_epochs_per_work = 10
-        pbar = tqdm(
-            total=nb_epochs * len(img_ids) * nb_epochs_per_work, desc="Training VAE"
-        )
-
-        for epoch in range(nb_epochs):
-            np.random.shuffle(img_ids)
-            works = np.array_split(img_ids, len(img_ids) // 20)
-            for work in works:
-                all_x = []
-                all_y = []
-                for img_id in work:
-                    example = self.dataset[img_id]
-                    keypoints, descriptors = dd_utils.read_kp_and_desc(
-                        example[1], features_h5
-                    )
-                    pid_list = example[3]
-                    uv = example[-1]
-                    selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                    idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                    selected_descriptors = descriptors[idx_arr]
-                    all_y.append(selected_pid[ind2])
-                    try:
-                        image_descriptor = self.image2desc[example[1]]
-                    except KeyError:
-                        image_descriptor = self.image2desc[
-                            example[1].replace(
-                                "datasets/robotcar",
-                                "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons",
-                            )
-                        ]
-                    x = np.hstack(
-                        (
-                            selected_descriptors,
-                            np.tile(
-                                image_descriptor, (selected_descriptors.shape[0], 1)
-                            ),
-                        )
-                    )
-                    all_x.append(x)
-                x_train = np.vstack(all_x)
-                y_train = np.hstack(all_y)
-                y_train -= np.min(y_train)
-                from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-
-                clf = LinearDiscriminantAnalysis()
-                clf.fit(x_train, y_train)
-                y_pred = clf.predict(x_train)
-
-                train_dataset = VAEDataset(x_train)
-                train_loader = DataLoader(
-                    dataset=train_dataset, batch_size=self.batch_size, shuffle=True
-                )
-                self.vae.train()
-
-                overall_loss = 0
-                mse_loss = 0
-                mse_loss_before = 0
-                for _ in range(nb_epochs_per_work):
-                    for batch_idx, x in enumerate(train_loader):
-                        x = x.to("cuda").float()
-
-                        self.optimizer.zero_grad()
-
-                        x_hat = self.vae(x)
-                        loss = nn.functional.l1_loss(x_hat, x, reduction="sum")
-
-                        overall_loss += loss.item()
-                        mse_loss += torch.sum(torch.abs(x_hat - x)).item()
-                        loss.backward()
-                        self.optimizer.step()
-
-                with torch.no_grad():
-                    self.vae.eval()
-                    for batch_idx, x in enumerate(train_loader):
-                        x = x.to("cuda").float()
-
-                        self.optimizer.zero_grad()
-
-                        x_hat = self.vae(x)
-
-                        mse_loss_before += torch.sum(torch.abs(x_hat - x)).item()
-
-                tqdm.write(
-                    f"{overall_loss/len(train_loader)/nb_epochs_per_work}, "
-                    f"{mse_loss_before/len(train_loader)}"
-                )
-                pbar.update(len(work) * nb_epochs_per_work)
+    def improve_codebook(self):
+        print()
 
     def collect_image_descriptors(self, using_pca=False):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
