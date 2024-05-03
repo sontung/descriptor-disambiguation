@@ -53,7 +53,7 @@ print(f"Configs for feature matchers:\n{pformat(match_features.confs)}")
 
 # pick one of the configurations for extraction and matching
 retrieval_conf = extract_features.confs["eigenplaces"]
-feature_conf = extract_features.confs["d2net-ss"]
+feature_conf = extract_features.confs["r2d2"]
 matcher_conf = match_features.confs["NN-ratio"]
 
 features = extract_features.main(feature_conf, images, outputs)
