@@ -1,10 +1,9 @@
+import argparse
 from pathlib import Path
 from pprint import pformat
-import argparse
 
-from hloc import extract_features, match_features, triangulation
-from hloc import pairs_from_covisibility, pairs_from_retrieval, localize_sfm
-
+from hloc import extract_features, match_features
+from hloc import pairs_from_retrieval
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -53,18 +52,11 @@ print(f"Configs for feature extractors:\n{pformat(extract_features.confs)}")
 print(f"Configs for feature matchers:\n{pformat(match_features.confs)}")
 
 # pick one of the configurations for extraction and matching
-retrieval_conf = extract_features.confs["netvlad"]
-feature_conf = extract_features.confs["superpoint_max"]
-matcher_conf = match_features.confs["superglue"]
+retrieval_conf = extract_features.confs["eigenplaces"]
+feature_conf = extract_features.confs["d2net-ss"]
+matcher_conf = match_features.confs["NN-ratio"]
 
 features = extract_features.main(feature_conf, images, outputs)
-
-pairs_from_covisibility.main(sift_sfm, sfm_pairs, num_matched=args.num_covis)
-sfm_matches = match_features.main(
-    matcher_conf, sfm_pairs, feature_conf["output"], outputs
-)
-
-triangulation.main(reference_sfm, sift_sfm, images, sfm_pairs, features, sfm_matches)
 
 global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 pairs_from_retrieval.main(
@@ -77,13 +69,3 @@ pairs_from_retrieval.main(
 loc_matches = match_features.main(
     matcher_conf, loc_pairs, feature_conf["output"], outputs
 )
-
-localize_sfm.main(
-    reference_sfm,
-    dataset / "queries/*_time_queries_with_intrinsics.txt",
-    loc_pairs,
-    features,
-    loc_matches,
-    results,
-    covisibility_clustering=False,
-)  # not required with SuperPoint+SuperGlue

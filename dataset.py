@@ -59,16 +59,17 @@ class CambridgeLandmarksDataset(Dataset):
         root_dir = Path(root_dir)
         self.sfm_model_dir = root_dir / "reconstruction.nvm"
 
-        (
-            self.xyz_arr,
-            self.image2points,
-            self.image2name,
-            self.image2pose,
-            self.image2info,
-            self.image2uvs,
-            self.rgb_arr,
-        ) = ace_util.read_nvm_file(self.sfm_model_dir)
-        self.name2id = {v: u for u, v in self.image2name.items()}
+        if self.train:
+            (
+                self.xyz_arr,
+                self.image2points,
+                self.image2name,
+                self.image2pose,
+                self.image2info,
+                self.image2uvs,
+                self.rgb_arr,
+            ) = ace_util.read_nvm_file(self.sfm_model_dir)
+            self.name2id = {v: u for u, v in self.image2name.items()}
 
         # pid2images = {}
         # for img in self.image2points:
@@ -156,16 +157,21 @@ class CambridgeLandmarksDataset(Dataset):
         intrinsics[0, 2] = image.shape[1] / 2  # 427
         intrinsics[1, 2] = image.shape[0] / 2  # 240
 
-        key_ = image_name.split("/")[-1].replace("_", "/").replace("png", "jpg")
-        key_ = self.name2id[key_]
-        pid_list = self.image2points[key_]
-        xyz_gt = self.xyz_arr[pid_list]
+        if self.train:
+            key_ = image_name.split("/")[-1].replace("_", "/").replace("png", "jpg")
+            key_ = self.name2id[key_]
+            pid_list = self.image2points[key_]
+            xyz_gt = self.xyz_arr[pid_list]
 
-        uv_gt = project_using_pose(
-            pose_inv.unsqueeze(0).cuda().float(),
-            intrinsics.unsqueeze(0).cuda().float(),
-            xyz_gt,
-        )
+            uv_gt = project_using_pose(
+                pose_inv.unsqueeze(0).cuda().float(),
+                intrinsics.unsqueeze(0).cuda().float(),
+                xyz_gt,
+            )
+        else:
+            pid_list = []
+            xyz_gt = []
+            uv_gt = []
 
         focal_length = intrinsics[0, 0].item()
         c1 = intrinsics[0, 2].item()
@@ -177,12 +183,6 @@ class CambridgeLandmarksDataset(Dataset):
             "width": image.shape[1],
             "params": [focal_length, c1, c2],
         }
-
-        # pose, info = poselib.estimate_absolute_pose(
-        #     uv_gt,
-        #     xyz_gt,
-        #     camera,
-        # )
 
         return (
             image,

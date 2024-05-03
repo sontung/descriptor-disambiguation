@@ -379,9 +379,10 @@ class BaseTrainer:
                         image_descriptor = (
                             image_descriptor - self.global_desc_mean
                         ) / self.global_desc_std
-                    selected_descriptors = 1/(1 + self.lambda_val) * (
+                    selected_descriptors = (
                         self.lambda_val * selected_descriptors
-                        + image_descriptor[: descriptors.shape[1]]
+                        + (1 - self.lambda_val)
+                        * image_descriptor[: descriptors.shape[1]]
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
@@ -469,9 +470,10 @@ class BaseTrainer:
                             image_descriptor - self.global_desc_mean
                         ) / self.global_desc_std
 
-                    descriptors = 1/(1 + self.lambda_val) * (
+                    descriptors = (
                         self.lambda_val * descriptors
-                        + image_descriptor[: descriptors.shape[1]]
+                        + (1 - self.lambda_val)
+                        * image_descriptor[: descriptors.shape[1]]
                     )
 
                     # descriptors = 0.5 * (
@@ -1007,9 +1009,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                         image_descriptor - self.global_desc_mean
                     ) / self.global_desc_std
 
-                selected_descriptors = 1/(1 + self.lambda_val) * (
+                selected_descriptors = (
                     self.lambda_val * selected_descriptors
-                    + image_descriptor[: descriptors.shape[1]]
+                    + (1 - self.lambda_val) * image_descriptor[: descriptors.shape[1]]
                 )
 
             for idx, pid in enumerate(selected_pid[ind2]):
@@ -1113,9 +1115,10 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                             image_descriptor - self.global_desc_mean
                         ) / self.global_desc_std
 
-                    descriptors = 1/(1 + self.lambda_val) * (
+                    descriptors = (
                         self.lambda_val * descriptors
-                        + image_descriptor[: descriptors.shape[1]]
+                        + (1 - self.lambda_val)
+                        * image_descriptor[: descriptors.shape[1]]
                     )
 
                 uv_arr, xyz_pred = self.legal_predict(

@@ -1,5 +1,7 @@
 import argparse
 
+import numpy as np
+
 import dd_utils
 from dataset import AachenDataset
 from trainer import BaseTrainer
@@ -23,18 +25,7 @@ def run_function(
     )
     train_ds_ = AachenDataset(ds_dir=ds_dir)
     test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
-    for lambda_val in [
-        # 0,
-        # 0.1,
-        # 0.25,
-        # 0.5,
-        # 0.75,
-        1,
-        # 1 / 0.75,
-        # 1 / 0.5,
-        # 1 / 0.25,
-        # 1 / 0.1,
-    ]:
+    for lambda_val in np.linspace(0.05, 0.125, 5):
         trainer_ = BaseTrainer(
             train_ds_,
             test_ds_,

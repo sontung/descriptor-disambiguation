@@ -62,9 +62,7 @@ class GCLModel:
     def __init__(self):
         self.conf = {"name": "gcl"}
         model_file = "../generalized_contrastive_loss/Models/Models/MSLS/MSLS_vgg16_GeM_480_GCL.pth"
-        test_net = gcl_create_model(
-            "vgg16", "GeM", norm="L2", mode="single"
-        )
+        test_net = gcl_create_model("vgg16", "GeM", norm="L2", mode="single")
         test_net.load_state_dict(torch.load(model_file)["model_state_dict"])
 
         test_net.eval()
