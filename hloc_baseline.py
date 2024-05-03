@@ -38,7 +38,6 @@ images = dataset / "images_upright/"
 sift_sfm = dataset / "3D-models/aachen_v_1_1"
 
 outputs = args.outputs  # where everything will be saved
-reference_sfm = outputs / "sfm_superpoint+superglue"  # the SfM model we will build
 sfm_pairs = (
     outputs / f"pairs-db-covis{args.num_covis}.txt"
 )  # top-k most covisible in SIFT model
@@ -64,7 +63,7 @@ pairs_from_retrieval.main(
     loc_pairs,
     args.num_loc,
     query_prefix="query",
-    db_model=reference_sfm,
+    db_model=sift_sfm,
 )
 loc_matches = match_features.main(
     matcher_conf, loc_pairs, feature_conf["output"], outputs
