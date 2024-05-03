@@ -47,7 +47,7 @@ loc_pairs = (
 results = outputs / f"Aachen-v1.1_hloc_superpoint+superglue_netvlad{args.num_loc}.txt"
 
 # pick one of the configurations for extraction and matching
-retrieval_conf = extract_features.confs["netvlad"]
+retrieval_conf = extract_features.confs["eigenplaces"]
 feature_conf = extract_features.confs["d2net-ss"]
 matcher_conf = match_features.confs["NN-ratio"]
 

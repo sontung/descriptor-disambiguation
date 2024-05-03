@@ -46,38 +46,38 @@ def run(args):
     loc_pairs = outputs / f"pairs-query-netvlad{args.num_loc}.txt"
 
     # pick one of the configurations for extraction and matching
-    retrieval_conf = extract_features.confs["netvlad"]
-    feature_conf = extract_features.confs["superpoint_aachen"]
-    matcher_conf = match_features.confs["superglue"]
+    retrieval_conf = extract_features.confs["eigenplaces"]
+    feature_conf = extract_features.confs["d2net-ss"]
+    matcher_conf = match_features.confs["NN-ratio"]
 
-    extract_features.main(
-        extract_features.confs["d2net-ss"],
-        images,
-        Path(
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar"
-        ),
+    # extract_features.main(
+    #     extract_features.confs["d2net-ss"],
+    #     images,
+    #     Path(
+    #         "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar"
+    #     ),
+    # )
+
+    colmap_from_nvm.main(
+        dataset / "3D-models/all-merged/all.nvm",
+        dataset / "3D-models/overcast-reference.db",
+        sift_sfm,
     )
 
-    # colmap_from_nvm.main(
-    #     dataset / "3D-models/all-merged/all.nvm",
-    #     dataset / "3D-models/overcast-reference.db",
-    #     sift_sfm,
-    # )
-    #
-    # global_descriptors = extract_features.main(retrieval_conf, images, outputs)
-    #
-    # pairs_from_retrieval.main(
-    #     global_descriptors,
-    #     loc_pairs,
-    #     args.num_loc,
-    #     db_model=sift_sfm,
-    # )
-    #
-    # features = extract_features.main(feature_conf, images, outputs)
-    #
-    # loc_matches = match_features.main(
-    #     matcher_conf, loc_pairs, feature_conf["output"], outputs
-    # )
+    global_descriptors = extract_features.main(retrieval_conf, images, outputs)
+
+    pairs_from_retrieval.main(
+        global_descriptors,
+        loc_pairs,
+        args.num_loc,
+        db_model=sift_sfm,
+    )
+
+    features = extract_features.main(feature_conf, images, outputs)
+
+    loc_matches = match_features.main(
+        matcher_conf, loc_pairs, feature_conf["output"], outputs
+    )
 
 
 if __name__ == "__main__":
