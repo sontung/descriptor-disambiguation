@@ -7,18 +7,7 @@ from hloc import (
     match_features,
     pairs_from_retrieval,
 )
-
-CONDITIONS = [
-    "dawn",
-    "dusk",
-    "night",
-    "night-rain",
-    "overcast-summer",
-    "overcast-winter",
-    "rain",
-    "snow",
-    "sun",
-]
+from hloc.pipelines.RobotCar import colmap_from_nvm
 
 
 def generate_query_list(dataset, image_dir, path):
@@ -52,8 +41,8 @@ def run(args):
 
     outputs = args.outputs  # where everything will be saved
     outputs.mkdir(exist_ok=True, parents=True)
-    query_list = outputs / "{condition}_queries_with_intrinsics.txt"
-    reference_sfm = outputs / "sfm_superpoint+superglue"
+    sift_sfm = outputs / "sfm_sift"
+
     loc_pairs = outputs / f"pairs-query-netvlad{args.num_loc}.txt"
 
     # pick one of the configurations for extraction and matching
@@ -61,12 +50,11 @@ def run(args):
     feature_conf = extract_features.confs["superpoint_aachen"]
     matcher_conf = match_features.confs["superglue"]
 
-    # for condition in CONDITIONS:
-    #     generate_query_list(
-    #         dataset, images / condition, str(query_list).format(condition=condition)
-    #     )
-
-    features = extract_features.main(feature_conf, images, outputs)
+    colmap_from_nvm.main(
+        dataset / "3D-models/all-merged/all.nvm",
+        dataset / "3D-models/overcast-reference.db",
+        sift_sfm,
+    )
 
     global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 
@@ -74,9 +62,11 @@ def run(args):
         global_descriptors,
         loc_pairs,
         args.num_loc,
-        query_prefix=CONDITIONS,
-        db_model=reference_sfm,
+        db_model=sift_sfm,
     )
+
+    features = extract_features.main(feature_conf, images, outputs)
+
     loc_matches = match_features.main(
         matcher_conf, loc_pairs, feature_conf["output"], outputs
     )
