@@ -4,13 +4,9 @@ from pathlib import Path
 
 from hloc import (
     extract_features,
-    localize_sfm,
     match_features,
-    pairs_from_covisibility,
     pairs_from_retrieval,
-    triangulation,
 )
-from hloc.pipelines.RobotCar import colmap_from_nvm
 
 CONDITIONS = [
     "dawn",
@@ -57,40 +53,23 @@ def run(args):
     outputs = args.outputs  # where everything will be saved
     outputs.mkdir(exist_ok=True, parents=True)
     query_list = outputs / "{condition}_queries_with_intrinsics.txt"
-    sift_sfm = outputs / "sfm_sift"
     reference_sfm = outputs / "sfm_superpoint+superglue"
-    sfm_pairs = outputs / f"pairs-db-covis{args.num_covis}.txt"
     loc_pairs = outputs / f"pairs-query-netvlad{args.num_loc}.txt"
-    results = outputs / f"RobotCar_hloc_superpoint+superglue_netvlad{args.num_loc}.txt"
 
     # pick one of the configurations for extraction and matching
     retrieval_conf = extract_features.confs["netvlad"]
     feature_conf = extract_features.confs["superpoint_aachen"]
     matcher_conf = match_features.confs["superglue"]
 
-    for condition in CONDITIONS:
-        generate_query_list(
-            dataset, images / condition, str(query_list).format(condition=condition)
-        )
+    # for condition in CONDITIONS:
+    #     generate_query_list(
+    #         dataset, images / condition, str(query_list).format(condition=condition)
+    #     )
 
-    features = extract_features.main(feature_conf, images, outputs, as_half=True)
-
-    colmap_from_nvm.main(
-        dataset / "3D-models/all-merged/all.nvm",
-        dataset / "3D-models/overcast-reference.db",
-        sift_sfm,
-    )
-    pairs_from_covisibility.main(sift_sfm, sfm_pairs, num_matched=args.num_covis)
-    sfm_matches = match_features.main(
-        matcher_conf, sfm_pairs, feature_conf["output"], outputs
-    )
-
-    triangulation.main(
-        reference_sfm, sift_sfm, images, sfm_pairs, features, sfm_matches
-    )
+    features = extract_features.main(feature_conf, images, outputs)
 
     global_descriptors = extract_features.main(retrieval_conf, images, outputs)
-    # TODO: do per location and per camera
+
     pairs_from_retrieval.main(
         global_descriptors,
         loc_pairs,
@@ -100,17 +79,6 @@ def run(args):
     )
     loc_matches = match_features.main(
         matcher_conf, loc_pairs, feature_conf["output"], outputs
-    )
-
-    localize_sfm.main(
-        reference_sfm,
-        Path(str(query_list).format(condition="*")),
-        loc_pairs,
-        features,
-        loc_matches,
-        results,
-        covisibility_clustering=False,
-        prepend_camera_name=True,
     )
 
 
