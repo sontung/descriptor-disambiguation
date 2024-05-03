@@ -114,6 +114,11 @@ class BaseTrainer:
         print(f"using lambda val={self.lambda_val}")
         self.global_desc_mean = 0
         self.global_desc_std = 1
+
+        self.local_features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
+        )
+
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
         else:
@@ -121,12 +126,14 @@ class BaseTrainer:
 
         self.xyz_arr = None
         if collect_code_book:
+            self.pid2descriptors = {}
+            self.pid2count = {}
+            self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
                 self.pid2ind,
             ) = self.collect_descriptors()
-            self.improve_codebook()
             if self.pid2ind:
                 self.all_ind_in_train_set = np.array(
                     [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
@@ -139,17 +146,44 @@ class BaseTrainer:
             self.all_ind_in_train_set = None
             self.ind2pid = None
 
-    def improve_codebook(self):
+    def improve_codebook(self, vis=False):
         img_dir_str = self.dataset.images_dir_str
         available_images_dir = Path(img_dir_str)
-        available_images = [str(file).split(f"{img_dir_str}/")[-1] for file in available_images_dir.rglob('*') if file.is_file()]
-        used_img_names = [self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids]
+        available_images = [
+            str(file).split(f"{img_dir_str}/")[-1]
+            for file in available_images_dir.rglob("*")
+            if file.is_file()
+        ]
+        used_img_names = [
+            self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids
+        ]
 
-        matches_h5 = h5py.File(str("outputs/aachen_v1.1/feats-r2d2-n5000-r1024_matches-NN-mutual-ratio.8_pairs-query-netvlad50.h5"), "a", libver="latest")
-        features_h5 = h5py.File(str("outputs/aachen_v1.1/feats-r2d2-n5000-r1024.h5"), "a", libver="latest")
+        matches_h5 = h5py.File(
+            str(
+                "outputs/aachen_v1.1/feats-superpoint-n4096-r1024_matches-superglue_pairs-query-netvlad50.h5"
+            ),
+            "a",
+            libver="latest",
+        )
+        features_h5 = h5py.File(
+            str("outputs/aachen_v1.1/feats-r2d2-n5000-r1024.h5"), "a", libver="latest"
+        )
+        features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
 
+        image2desc = {}
+        if self.using_global_descriptors:
+            for image_name in tqdm(available_images, desc="Processing global descriptors for extra images"):
+                if image_name not in used_img_names:
+                    image_name_for_matching_db = image_name.replace("/", "-")
+                    if image_name_for_matching_db in matches_h5:
+                        image_descriptor = self.produce_image_descriptor(
+                            f"{img_dir_str}/{image_name}"
+                        )
+                        image2desc[image_name] = image_descriptor
+
+        print(f"Got {len(image2desc)} extra images")
         count = 0
-        for image_name in tqdm(available_images):
+        for image_name in tqdm(available_images, desc="Improving codebook with extra images"):
             if image_name not in used_img_names:
                 image_name_for_matching_db = image_name.replace("/", "-")
                 if image_name_for_matching_db in matches_h5:
@@ -157,39 +191,77 @@ class BaseTrainer:
                     for db_img in data:
                         matches = data[db_img]
                         indices = np.array(matches["matches0"])
-                        mask = indices > -1
-                        if np.sum(mask) < 100:
+                        mask0 = indices > -1
+                        if np.sum(mask0) < 10:
                             continue
                         uv0 = np.array(features_h5[image_name]["keypoints"])
                         db_img_normal = db_img.replace("-", "/")
                         uv1 = np.array(features_h5[db_img_normal]["keypoints"])
-                        uv0 = uv0[mask]
-                        uv1 = uv1[indices[mask]]
-                        img0 = cv2.imread(f"{img_dir_str}/{image_name}")
-                        img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
-                        img2 = concat_images_different_sizes([img0, img1])
-                        uv0 = uv0.astype(int)
-                        uv1 = uv1.astype(int)
-                        for idx in range(uv0.shape[0]):
-                            u0, v0 = uv0[idx]
-                            u1, v1 = uv1[idx]
-                            cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
-                            cv2.circle(img2, (u1+img0.shape[0], v1), 10, (255, 0, 0, 255), -1)
-                            cv2.line(img2, (u0, v0), (u1+img0.shape[0], v1), (255, 0, 0, 255), 2)
-                        cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
-                        count += 1
-                        break
-                    break
+                        descriptors0 = np.array(
+                            features_h5[image_name]["descriptors"]
+                        ).T
+                        descriptors0 = descriptors0[mask0]
+                        uv0 = uv0[mask0]
+                        uv1 = uv1[indices[mask0]]
 
-        for extra_image_name in matches_h5:
-            print(extra_image_name)
-            data = matches_h5[extra_image_name]
-            for db_img in data:
-                matches = data[db_img]
-            break
+                        db_img_id = self.dataset.image_name2id[db_img_normal]
+                        pid_list = self.dataset.image_id2pids[db_img_id]
+                        uv_gt = self.dataset.image_id2uvs[db_img_id]
+                        selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
+                        idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                        selected_descriptors = descriptors0[idx_arr]
+                        if self.using_global_descriptors:
+                            image_descriptor = image2desc[image_name]
+                            selected_descriptors = (
+                                self.lambda_val * selected_descriptors
+                                + (1 - self.lambda_val)
+                                * image_descriptor[: descriptors0.shape[1]]
+                            )
+
+                        for idx, pid in enumerate(selected_pid[ind2]):
+                            if pid not in self.pid2descriptors:
+                                self.pid2descriptors[pid] = selected_descriptors[idx]
+                                self.pid2count[pid] = 1
+                            else:
+                                self.pid2count[pid] += 1
+                                self.pid2descriptors[pid] = (
+                                    self.pid2descriptors[pid]
+                                    + selected_descriptors[idx]
+                                )
+
+                        count += 1
+
+                        if vis:
+                            img0 = cv2.imread(f"{img_dir_str}/{image_name}")
+                            img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
+                            img2 = concat_images_different_sizes([img0, img1])
+                            uv0 = uv0.astype(int)
+                            uv1 = uv1.astype(int)
+                            for idx in range(uv0.shape[0]):
+                                u0, v0 = uv0[idx]
+                                u1, v1 = uv1[idx]
+                                cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
+                                cv2.circle(
+                                    img2,
+                                    (u1 + img0.shape[1], v1),
+                                    10,
+                                    (255, 0, 0, 255),
+                                    -1,
+                                )
+                                cv2.line(
+                                    img2,
+                                    (u0, v0),
+                                    (u1 + img0.shape[1], v1),
+                                    (255, 0, 0, 255),
+                                    2,
+                                )
+                            cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
 
         matches_h5.close()
-        print()
+        features_h5.close()
+        features_db_h5.close()
+        print(f"Codebook improved from {count} pairs.")
 
     def collect_image_descriptors(self, using_pca=False):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -229,23 +301,24 @@ class BaseTrainer:
         return image2desc
 
     def produce_image_descriptor(self, name):
-        if (
-            "mixvpr" in self.global_desc_model_name
-            or "crica" in self.global_desc_model_name
-            or "salad" in self.global_desc_model_name
-            or "gcl" in self.global_desc_model_name
-        ):
-            image_descriptor = self.global_desc_model.process(name)
-        else:
-            image, _ = read_and_preprocess(name, self.global_desc_conf)
-            image_descriptor = (
-                self.global_desc_model(
-                    {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
-                )["global_descriptor"]
-                .squeeze()
-                .cpu()
-                .numpy()
-            )
+        with torch.no_grad():
+            if (
+                "mixvpr" in self.global_desc_model_name
+                or "crica" in self.global_desc_model_name
+                or "salad" in self.global_desc_model_name
+                or "gcl" in self.global_desc_model_name
+            ):
+                image_descriptor = self.global_desc_model.process(name)
+            else:
+                image, _ = read_and_preprocess(name, self.global_desc_conf)
+                image_descriptor = (
+                    self.global_desc_model(
+                        {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
+                    )["global_descriptor"]
+                    .squeeze()
+                    .cpu()
+                    .numpy()
+                )
         return image_descriptor
 
     def produce_local_descriptors(self, name, fd):
@@ -294,9 +367,6 @@ class BaseTrainer:
                 f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}.pkl"
             )
 
-        features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
-        )
         if os.path.isfile(file_name1):
             print(f"Loading codebook from {file_name1}")
             pid2mean_desc = np.load(file_name1)
@@ -305,8 +375,10 @@ class BaseTrainer:
             pid2ind = pickle.load(afile)
             afile.close()
         else:
-            if not os.path.isfile(features_path):
-                features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            if not os.path.isfile(self.local_features_path):
+                features_h5 = h5py.File(
+                    str(self.local_features_path), "a", libver="latest"
+                )
                 with torch.no_grad():
                     for example in tqdm(self.dataset, desc="Detecting features"):
                         if example is None:
@@ -314,9 +386,7 @@ class BaseTrainer:
                         self.produce_local_descriptors(example[1], features_h5)
                 features_h5.close()
 
-            pid2descriptors = {}
-            pid2count = {}
-            features_h5 = h5py.File(features_path, "r")
+            features_h5 = h5py.File(self.local_features_path, "r")
 
             for example in tqdm(self.dataset, desc="Collecting point descriptors"):
                 if example is None:
@@ -326,10 +396,10 @@ class BaseTrainer:
                         example[1], features_h5
                     )
                 except KeyError:
-                    print(f"Cannot read {example[1]} from {features_path}")
+                    print(f"Cannot read {example[1]} from {self.local_features_path}")
                     sys.exit()
                 pid_list = example[3]
-                uv = example[-1] + 0.5
+                uv = example[-1]
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
@@ -347,30 +417,32 @@ class BaseTrainer:
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in pid2descriptors:
-                        pid2descriptors[pid] = selected_descriptors[idx]
-                        pid2count[pid] = 1
+                    if pid not in self.pid2descriptors:
+                        self.pid2descriptors[pid] = selected_descriptors[idx]
+                        self.pid2count[pid] = 1
                     else:
-                        pid2count[pid] += 1
-                        pid2descriptors[pid] = (
-                            pid2descriptors[pid] + selected_descriptors[idx]
+                        self.pid2count[pid] += 1
+                        self.pid2descriptors[pid] = (
+                            self.pid2descriptors[pid] + selected_descriptors[idx]
                         )
 
             features_h5.close()
-            all_pid = list(pid2descriptors.keys())
+            all_pid = list(self.pid2descriptors.keys())
             all_pid = np.array(all_pid)
 
             pid2mean_desc = np.zeros(
                 (all_pid.shape[0], self.feature_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+                self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
             )
 
             pid2ind = {}
             ind = 0
-            for pid in pid2descriptors:
-                pid2mean_desc[ind] = pid2descriptors[pid] / pid2count[pid]
+            for pid in self.pid2descriptors:
+                pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
                 pid2ind[pid] = ind
                 ind += 1
+            if np.sum(np.isnan(pid2mean_desc)) > 0:
+                print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
             # np.save(file_name1, pid2mean_desc)
             # np.save(file_name2, all_pid)
             # with open(file_name3, "wb") as handle:

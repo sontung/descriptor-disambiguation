@@ -319,7 +319,7 @@ class AachenDataset(Dataset):
             pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
 
             pid_list = self.image_id2pids[img_id]
-            uv_gt = self.image_id2uvs[img_id]
+            uv_gt = self.image_id2uvs[img_id] + 0.5
             xyz_gt = None
 
             pose_inv = torch.from_numpy(pose_inv)
