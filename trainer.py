@@ -160,13 +160,13 @@ class BaseTrainer:
 
         matches_h5 = h5py.File(
             str(
-                "outputs/aachen_v1.1/feats-superpoint-n4096-r1024_matches-superglue_pairs-query-netvlad50.h5"
+                "outputs/aachen_v1.1/d2net_nn.h5"
             ),
             "a",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str("outputs/aachen_v1.1/feats-r2d2-n5000-r1024.h5"), "a", libver="latest"
+            str("outputs/aachen_v1.1/d2net.h5"), "a", libver="latest"
         )
         features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
 
