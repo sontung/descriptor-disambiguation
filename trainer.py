@@ -19,6 +19,7 @@ from tqdm import tqdm
 import dd_utils
 from ace_util import read_and_preprocess
 from vae_test import VAEDataset
+from dd_utils import concat_images_different_sizes
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -139,6 +140,55 @@ class BaseTrainer:
             self.ind2pid = None
 
     def improve_codebook(self):
+        img_dir_str = self.dataset.images_dir_str
+        available_images_dir = Path(img_dir_str)
+        available_images = [str(file).split(f"{img_dir_str}/")[-1] for file in available_images_dir.rglob('*') if file.is_file()]
+        used_img_names = [self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids]
+
+        matches_h5 = h5py.File(str("outputs/aachen_v1.1/feats-r2d2-n5000-r1024_matches-NN-mutual-ratio.8_pairs-query-netvlad50.h5"), "a", libver="latest")
+        features_h5 = h5py.File(str("outputs/aachen_v1.1/feats-r2d2-n5000-r1024.h5"), "a", libver="latest")
+
+        count = 0
+        for image_name in tqdm(available_images):
+            if image_name not in used_img_names:
+                image_name_for_matching_db = image_name.replace("/", "-")
+                if image_name_for_matching_db in matches_h5:
+                    data = matches_h5[image_name_for_matching_db]
+                    for db_img in data:
+                        matches = data[db_img]
+                        indices = np.array(matches["matches0"])
+                        mask = indices > -1
+                        if np.sum(mask) < 100:
+                            continue
+                        uv0 = np.array(features_h5[image_name]["keypoints"])
+                        db_img_normal = db_img.replace("-", "/")
+                        uv1 = np.array(features_h5[db_img_normal]["keypoints"])
+                        uv0 = uv0[mask]
+                        uv1 = uv1[indices[mask]]
+                        img0 = cv2.imread(f"{img_dir_str}/{image_name}")
+                        img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
+                        img2 = concat_images_different_sizes([img0, img1])
+                        uv0 = uv0.astype(int)
+                        uv1 = uv1.astype(int)
+                        for idx in range(uv0.shape[0]):
+                            u0, v0 = uv0[idx]
+                            u1, v1 = uv1[idx]
+                            cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
+                            cv2.circle(img2, (u1+img0.shape[0], v1), 10, (255, 0, 0, 255), -1)
+                            cv2.line(img2, (u0, v0), (u1+img0.shape[0], v1), (255, 0, 0, 255), 2)
+                        cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
+                        count += 1
+                        break
+                    break
+
+        for extra_image_name in matches_h5:
+            print(extra_image_name)
+            data = matches_h5[extra_image_name]
+            for db_img in data:
+                matches = data[db_img]
+            break
+
+        matches_h5.close()
         print()
 
     def collect_image_descriptors(self, using_pca=False):

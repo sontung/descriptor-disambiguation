@@ -51,10 +51,9 @@ print(f"Configs for feature extractors:\n{pformat(extract_features.confs)}")
 print(f"Configs for feature matchers:\n{pformat(match_features.confs)}")
 
 # pick one of the configurations for extraction and matching
-retrieval_conf = extract_features.confs["eigenplaces"]
-# feature_conf = extract_features.confs["r2d2"]
-feature_conf = extract_features.confs["d2net-ss"]
-matcher_conf = match_features.confs["NN-ratio"]
+retrieval_conf = extract_features.confs["netvlad"]
+feature_conf = extract_features.confs["superpoint_aachen"]
+matcher_conf = match_features.confs["superglue"]
 
 features = extract_features.main(feature_conf, images, outputs)
 
