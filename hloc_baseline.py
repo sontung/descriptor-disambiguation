@@ -51,22 +51,22 @@ retrieval_conf = extract_features.confs["netvlad"]
 feature_conf = extract_features.confs["superpoint_aachen"]
 matcher_conf = match_features.confs["superglue"]
 
-extract_features.main(
-    extract_features.confs["d2net-ss"],
-    images,
-    Path("/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/aachen_v1.1"),
-)
+# extract_features.main(
+#     extract_features.confs["d2net-ss"],
+#     images,
+#     Path("/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/aachen_v1.1"),
+# )
 
-# features = extract_features.main(feature_conf, images, outputs)
-#
-# global_descriptors = extract_features.main(retrieval_conf, images, outputs)
-# pairs_from_retrieval.main(
-#     global_descriptors,
-#     loc_pairs,
-#     args.num_loc,
-#     query_prefix="query",
-#     db_model=sift_sfm,
-# )
-# loc_matches = match_features.main(
-#     matcher_conf, loc_pairs, feature_conf["output"], outputs
-# )
+features = extract_features.main(feature_conf, images, outputs)
+
+global_descriptors = extract_features.main(retrieval_conf, images, outputs)
+pairs_from_retrieval.main(
+    global_descriptors,
+    loc_pairs,
+    args.num_loc,
+    query_prefix="query",
+    db_model=sift_sfm,
+)
+loc_matches = match_features.main(
+    matcher_conf, loc_pairs, feature_conf["output"], outputs
+)
