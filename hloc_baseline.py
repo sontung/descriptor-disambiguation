@@ -48,8 +48,8 @@ results = outputs / f"Aachen-v1.1_hloc_superpoint+superglue_netvlad{args.num_loc
 
 # pick one of the configurations for extraction and matching
 retrieval_conf = extract_features.confs["netvlad"]
-feature_conf = extract_features.confs["superpoint_aachen"]
-matcher_conf = match_features.confs["superglue"]
+feature_conf = extract_features.confs["d2net-ss"]
+matcher_conf = match_features.confs["NN-ratio"]
 
 # extract_features.main(
 #     extract_features.confs["d2net-ss"],
