@@ -683,9 +683,9 @@ class RobotCarTrainer(BaseTrainer):
             for file in available_images_dir.rglob("*")
             if file.is_file()
         ]
-        used_img_names = [
+        used_img_names = set([
             self.dataset._process_id_to_name(img_id).split(f"{img_dir_str}/")[-1] for img_id in self.dataset.img_ids
-        ]
+        ])
 
         matches_h5 = h5py.File(
             str(
@@ -701,14 +701,14 @@ class RobotCarTrainer(BaseTrainer):
 
         image2desc = {}
         if self.using_global_descriptors:
+            available_images = [im for im in available_images if im not in used_img_names]
             for image_name in tqdm(available_images, desc="Processing global descriptors for extra images"):
-                if image_name not in used_img_names:
-                    image_name_for_matching_db = image_name.replace("/", "-")
-                    if image_name_for_matching_db in matches_h5:
-                        image_descriptor = self.produce_image_descriptor(
-                            f"{img_dir_str}/{image_name}"
-                        )
-                        image2desc[image_name] = image_descriptor
+                image_name_for_matching_db = image_name.replace("/", "-")
+                if image_name_for_matching_db in matches_h5:
+                    image_descriptor = self.produce_image_descriptor(
+                        f"{img_dir_str}/{image_name}"
+                    )
+                    image2desc[image_name] = image_descriptor
 
         print(f"Got {len(image2desc)} extra images")
         count = 0
@@ -722,7 +722,11 @@ class RobotCarTrainer(BaseTrainer):
                 if np.sum(mask0) < 10:
                     continue
                 uv0 = np.array(features_h5[image_name]["keypoints"])
-                db_img_normal = db_img.replace("-", "/")
+                if len(db_img.split("-")) == 3:
+
+                    db_img_normal = db_img.replace("-", "/")
+                else:
+                    db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
                 uv1 = np.array(features_h5[db_img_normal]["keypoints"])
                 descriptors0 = np.array(
                     features_h5[image_name]["descriptors"]
@@ -731,9 +735,11 @@ class RobotCarTrainer(BaseTrainer):
                 uv0 = uv0[mask0]
                 uv1 = uv1[indices[mask0]]
 
-                db_img_id = self.dataset.image_name2id[db_img_normal]
-                pid_list = self.dataset.image_id2pids[db_img_id]
-                uv_gt = self.dataset.image_id2uvs[db_img_id]
+                db_img_id = self.dataset.name2image[f"./{db_img_normal.replace('jpg', 'png')}"]
+
+                pid_list = self.dataset.image2points[db_img_id]
+                uv_gt = np.array(self.dataset.image2uvs[db_img_id])
+
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
