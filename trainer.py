@@ -689,13 +689,13 @@ class RobotCarTrainer(BaseTrainer):
 
         matches_h5 = h5py.File(
             str(
-                f"/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/{self.local_desc_model_name}_nn.h5"
+                f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"
             ),
             "a",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str(f"/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/{self.local_desc_model_name}.h5"), "a", libver="latest"
+            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"), "a", libver="latest"
         )
         features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
 
