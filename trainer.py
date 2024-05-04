@@ -146,7 +146,7 @@ class BaseTrainer:
             self.all_ind_in_train_set = None
             self.ind2pid = None
 
-    def improve_codebook2(self, vis=False):
+    def improve_codebook(self, vis=False):
         img_dir_str = self.dataset.images_dir_str
         available_images_dir = Path(img_dir_str)
         available_images = [
@@ -261,7 +261,7 @@ class BaseTrainer:
         features_db_h5.close()
         print(f"Codebook improved from {count} pairs.")
 
-    def improve_codebook(self, vis=False):
+    def improve_codebook2(self, vis=False):
         img_dir_str = self.dataset.images_dir_str
         available_images_dir = Path(img_dir_str)
         available_images = [

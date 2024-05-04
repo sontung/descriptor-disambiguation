@@ -15,7 +15,8 @@ parser.add_argument(
 parser.add_argument(
     "--outputs",
     type=Path,
-    default="outputs/aachen_v1.1",
+    # default="outputs/aachen_v1.1",
+    default="/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/aachen_v1.1",
     help="Path to the output directory, default: %(default)s",
 )
 parser.add_argument(
@@ -38,11 +39,8 @@ images = dataset / "images_upright/"
 sift_sfm = dataset / "3D-models/aachen_v_1_1"
 
 outputs = args.outputs  # where everything will be saved
-sfm_pairs = (
-    outputs / f"pairs-db-covis{args.num_covis}.txt"
-)  # top-k most covisible in SIFT model
 loc_pairs = (
-    outputs / f"pairs-query-netvlad{args.num_loc}.txt"
+    outputs / f"pairs-query-{args.num_loc}.txt"
 )  # top-k retrieved by NetVLAD
 results = outputs / f"Aachen-v1.1_hloc_superpoint+superglue_netvlad{args.num_loc}.txt"
 
