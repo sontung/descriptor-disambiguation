@@ -684,7 +684,7 @@ class RobotCarTrainer(BaseTrainer):
             if file.is_file()
         ]
         used_img_names = [
-            self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids
+            self.dataset._process_id_to_name(img_id).split(f"{img_dir_str}/")[-1] for img_id in self.dataset.img_ids
         ]
 
         matches_h5 = h5py.File(
