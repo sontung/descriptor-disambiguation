@@ -689,13 +689,13 @@ class RobotCarTrainer(BaseTrainer):
 
         matches_h5 = h5py.File(
             str(
-                f"outputs/aachen_v1.1/{self.local_desc_model_name}_nn.h5"
+                f"/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/{self.local_desc_model_name}_nn.h5"
             ),
             "a",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str(f"outputs/aachen_v1.1/{self.local_desc_model_name}.h5"), "a", libver="latest"
+            str(f"/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/{self.local_desc_model_name}.h5"), "a", libver="latest"
         )
         features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
 
@@ -758,32 +758,6 @@ class RobotCarTrainer(BaseTrainer):
                         )
 
                 count += 1
-
-                if vis:
-                        img0 = cv2.imread(f"{img_dir_str}/{image_name}")
-                        img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
-                        img2 = concat_images_different_sizes([img0, img1])
-                        uv0 = uv0.astype(int)
-                        uv1 = uv1.astype(int)
-                        for idx in range(uv0.shape[0]):
-                            u0, v0 = uv0[idx]
-                            u1, v1 = uv1[idx]
-                            cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
-                            cv2.circle(
-                                img2,
-                                (u1 + img0.shape[1], v1),
-                                10,
-                                (255, 0, 0, 255),
-                                -1,
-                            )
-                            cv2.line(
-                                img2,
-                                (u0, v0),
-                                (u1 + img0.shape[1], v1),
-                                (255, 0, 0, 255),
-                                2,
-                            )
-                        cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
 
         matches_h5.close()
         features_h5.close()
