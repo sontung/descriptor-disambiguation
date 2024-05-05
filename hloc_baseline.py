@@ -41,14 +41,14 @@ sift_sfm = dataset / "3D-models/aachen_v_1_1"
 # pick one of the configurations for extraction and matching
 retrieval_conf = extract_features.confs["eigenplaces"]
 feature_conf = extract_features.confs["d2net-ss"]
-matcher_conf = match_features.confs["NN-ratio"]
+matcher_conf = match_features.confs["NN-mutual"]
 
 # matcher_conf["output"] = matcher_conf['model']['name']
 feature_conf["output"] = feature_conf['model']['name']
 
 outputs = args.outputs  # where everything will be saved
 loc_pairs = outputs / f"pairs-query-{retrieval_conf['model']['name']}-{args.num_loc}.txt"  # top-k retrieved by NetVLAD
-results = outputs / f"Aachen-v1.1_hloc_superpoint+superglue_netvlad{args.num_loc}.txt"
+results = outputs / f"Aachen-v1.1_{args.num_loc}.txt"
 
 # extract_features.main(
 #     extract_features.confs["d2net-ss"],
@@ -89,6 +89,7 @@ train_ds_ = AachenDataset(ds_dir=dataset)
 test_ds_ = AachenDataset(ds_dir=dataset, train=False)
 img_dir_str = train_ds_.images_dir_str
 
+failed = 0
 for example in tqdm(test_ds_, desc="Computing pose"):
     image_name = example[1]
     image_name_wo_dir = image_name.split(img_dir_str)[-1][1:]
@@ -127,6 +128,7 @@ for example in tqdm(test_ds_, desc="Computing pose"):
     if len(all_matches[1]) < 10:
         qvec = "0 0 0 1"
         tvec = "0 0 0"
+        failed += 1
     else:
         uv_arr = np.vstack(all_matches[0])
         xyz_pred = np.array(
@@ -155,3 +157,4 @@ for example in tqdm(test_ds_, desc="Computing pose"):
 matches_h5.close()
 features_h5.close()
 result_file.close()
+print(f"Failed to localize {failed} images.")
