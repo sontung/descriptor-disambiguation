@@ -185,6 +185,10 @@ class BaseTrainer:
                         image2desc[image_name] = image_descriptor
 
         print(f"Got {len(image2desc)} extra images")
+        result_file = open(
+            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_2d_2d.txt",
+            "w",
+        )
         count = 0
         for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
             image_name_for_matching_db = image_name.replace("/", "-")
@@ -220,6 +224,45 @@ class BaseTrainer:
                 all_matches[2].extend(indices)
 
             if len(all_matches[1]) < 10:
+                count2 = 0
+                for db_img in data:
+                    matches = data[db_img]
+                    indices = np.array(matches["matches0"])
+                    mask0 = indices > -1
+                    print(db_img)
+                    # if np.sum(mask0) == 0:
+                    #     continue
+                    db_img_normal = db_img.replace("-", "/")
+                    uv1 = np.array(features_h5[db_img_normal]["keypoints"])
+                    uv1 = uv1[indices[mask0]]
+                    uv0_ = uv0[mask0]
+
+                    img0 = cv2.imread(f"{img_dir_str}/{image_name}")
+                    img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
+                    img2 = concat_images_different_sizes([img0, img1])
+                    uv0_ = uv0_.astype(int)
+                    uv1 = uv1.astype(int)
+                    for idx in range(uv0_.shape[0]):
+                        u0, v0 = uv0_[idx]
+                        u1, v1 = uv1[idx]
+                        cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
+                        cv2.circle(
+                            img2,
+                            (u1 + img0.shape[1], v1),
+                            10,
+                            (255, 0, 0, 255),
+                            -1,
+                        )
+                        cv2.line(
+                            img2,
+                            (u0, v0),
+                            (u1 + img0.shape[1], v1),
+                            (255, 0, 0, 255),
+                            2,
+                        )
+                    count2 += 1
+                    cv2.imwrite(f"debug/test-{image_name_for_matching_db}-{len(all_matches[1])}-{count2}.png", img2)
+
                 tqdm.write(f"Skipping {image_name} because of {len(all_matches[1])} matches")
                 continue
 
@@ -255,6 +298,13 @@ class BaseTrainer:
                     xyz_pred,
                     camera_dict,
                 )
+
+                qvec = " ".join(map(str, pose.q))
+                tvec = " ".join(map(str, pose.t))
+
+                image_id = image_name.split("/")[-1]
+                print(f"{image_id} {qvec} {tvec}", file=result_file)
+
             except KeyError:
                 continue
 
@@ -281,35 +331,10 @@ class BaseTrainer:
 
             count += 1
 
-            if vis:
-                img0 = cv2.imread(f"{img_dir_str}/{image_name}")
-                img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
-                img2 = concat_images_different_sizes([img0, img1])
-                uv0 = uv0.astype(int)
-                uv1 = uv1.astype(int)
-                for idx in range(uv0.shape[0]):
-                    u0, v0 = uv0[idx]
-                    u1, v1 = uv1[idx]
-                    cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
-                    cv2.circle(
-                        img2,
-                        (u1 + img0.shape[1], v1),
-                        10,
-                        (255, 0, 0, 255),
-                        -1,
-                    )
-                    cv2.line(
-                        img2,
-                        (u0, v0),
-                        (u1 + img0.shape[1], v1),
-                        (255, 0, 0, 255),
-                        2,
-                    )
-                cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
-
         matches_h5.close()
         features_h5.close()
         features_db_h5.close()
+        result_file.close()
         print(f"Codebook improved from {count} pairs.")
 
     def improve_codebook2(self, vis=False):
