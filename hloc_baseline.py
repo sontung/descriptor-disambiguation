@@ -28,7 +28,7 @@ parser.add_argument(
 parser.add_argument(
     "--num_loc",
     type=int,
-    default=10,
+    default=50,
     help="Number of image pairs for loc, default: %(default)s",
 )
 args = parser.parse_args()

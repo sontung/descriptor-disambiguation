@@ -48,7 +48,7 @@ def run(args):
     # pick one of the configurations for extraction and matching
     retrieval_conf = extract_features.confs["eigenplaces"]
     feature_conf = extract_features.confs["r2d2"]
-    matcher_conf = match_features.confs["NN-ratio"]
+    matcher_conf = match_features.confs["NN-mutual"]
 
     # extract_features.main(
     #     extract_features.confs["d2net-ss"],
