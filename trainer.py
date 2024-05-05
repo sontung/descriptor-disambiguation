@@ -219,6 +219,10 @@ class BaseTrainer:
                 all_matches[1].extend(pid_list)
                 all_matches[2].extend(indices)
 
+            if len(all_matches[1]) < 10:
+                tqdm.write(f"Skipping {image_name} because of {len(all_matches[1])} matches")
+                continue
+
             uv_arr = np.vstack(all_matches[0])
             xyz_pred = np.array(
                 [self.dataset.recon_points[pid].xyz for pid in all_matches[1]]
