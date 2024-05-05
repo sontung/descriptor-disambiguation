@@ -39,9 +39,7 @@ images = dataset / "images_upright/"
 sift_sfm = dataset / "3D-models/aachen_v_1_1"
 
 outputs = args.outputs  # where everything will be saved
-loc_pairs = (
-    outputs / f"pairs-query-{args.num_loc}.txt"
-)  # top-k retrieved by NetVLAD
+loc_pairs = outputs / f"pairs-query-{args.num_loc}.txt"  # top-k retrieved by NetVLAD
 results = outputs / f"Aachen-v1.1_hloc_superpoint+superglue_netvlad{args.num_loc}.txt"
 
 # pick one of the configurations for extraction and matching

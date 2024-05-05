@@ -9,6 +9,7 @@ import faiss
 import h5py
 import numpy as np
 import poselib
+import pycolmap
 import torch
 from pykdtree.kdtree import KDTree
 from sklearn.decomposition import PCA
@@ -146,121 +147,6 @@ class BaseTrainer:
             self.all_ind_in_train_set = None
             self.ind2pid = None
 
-    def improve_codebook2(self, vis=False):
-        img_dir_str = self.dataset.images_dir_str
-        available_images_dir = Path(img_dir_str)
-        available_images = [
-            str(file).split(f"{img_dir_str}/")[-1]
-            for file in available_images_dir.rglob("*")
-            if file.is_file()
-        ]
-        used_img_names = [
-            self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids
-        ]
-
-        matches_h5 = h5py.File(
-            str(
-                f"outputs/aachen_v1.1/{self.local_desc_model_name}_nn.h5"
-            ),
-            "a",
-            libver="latest",
-        )
-        features_h5 = h5py.File(
-            str(f"outputs/aachen_v1.1/{self.local_desc_model_name}.h5"), "a", libver="latest"
-        )
-        features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
-
-        image2desc = {}
-        if self.using_global_descriptors:
-            for image_name in tqdm(available_images, desc="Processing global descriptors for extra images"):
-                if image_name not in used_img_names:
-                    image_name_for_matching_db = image_name.replace("/", "-")
-                    if image_name_for_matching_db in matches_h5:
-                        image_descriptor = self.produce_image_descriptor(
-                            f"{img_dir_str}/{image_name}"
-                        )
-                        image2desc[image_name] = image_descriptor
-
-        print(f"Got {len(image2desc)} extra images")
-        count = 0
-        for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
-            image_name_for_matching_db = image_name.replace("/", "-")
-            data = matches_h5[image_name_for_matching_db]
-            for db_img in data:
-                matches = data[db_img]
-                indices = np.array(matches["matches0"])
-                mask0 = indices > -1
-                if np.sum(mask0) < 10:
-                    continue
-                uv0 = np.array(features_h5[image_name]["keypoints"])
-                db_img_normal = db_img.replace("-", "/")
-                uv1 = np.array(features_h5[db_img_normal]["keypoints"])
-                descriptors0 = np.array(
-                    features_h5[image_name]["descriptors"]
-                ).T
-                descriptors0 = descriptors0[mask0]
-                uv0 = uv0[mask0]
-                uv1 = uv1[indices[mask0]]
-
-                db_img_id = self.dataset.image_name2id[db_img_normal]
-                pid_list = self.dataset.image_id2pids[db_img_id]
-                uv_gt = self.dataset.image_id2uvs[db_img_id]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                selected_descriptors = descriptors0[idx_arr]
-                if self.using_global_descriptors:
-                    image_descriptor = image2desc[image_name]
-                    selected_descriptors = (
-                        self.lambda_val * selected_descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors0.shape[1]]
-                    )
-
-                for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in self.pid2descriptors:
-                        self.pid2descriptors[pid] = selected_descriptors[idx]
-                        self.pid2count[pid] = 1
-                    else:
-                        self.pid2count[pid] += 1
-                        self.pid2descriptors[pid] = (
-                            self.pid2descriptors[pid]
-                            + selected_descriptors[idx]
-                        )
-
-                count += 1
-
-                if vis:
-                        img0 = cv2.imread(f"{img_dir_str}/{image_name}")
-                        img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
-                        img2 = concat_images_different_sizes([img0, img1])
-                        uv0 = uv0.astype(int)
-                        uv1 = uv1.astype(int)
-                        for idx in range(uv0.shape[0]):
-                            u0, v0 = uv0[idx]
-                            u1, v1 = uv1[idx]
-                            cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
-                            cv2.circle(
-                                img2,
-                                (u1 + img0.shape[1], v1),
-                                10,
-                                (255, 0, 0, 255),
-                                -1,
-                            )
-                            cv2.line(
-                                img2,
-                                (u0, v0),
-                                (u1 + img0.shape[1], v1),
-                                (255, 0, 0, 255),
-                                2,
-                            )
-                        cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
-
-        matches_h5.close()
-        features_h5.close()
-        features_db_h5.close()
-        print(f"Codebook improved from {count} pairs.")
-
     def improve_codebook(self, vis=False):
         img_dir_str = self.dataset.images_dir_str
         available_images_dir = Path(img_dir_str)
@@ -274,9 +160,168 @@ class BaseTrainer:
         ]
 
         matches_h5 = h5py.File(
-            str(
-                "outputs/aachen_v1.1/r2d2_nn.h5"
-            ),
+            str(f"outputs/aachen_v1.1/{self.local_desc_model_name}_nn.h5"),
+            "a",
+            libver="latest",
+        )
+        features_h5 = h5py.File(
+            str(f"outputs/aachen_v1.1/{self.local_desc_model_name}.h5"),
+            "a",
+            libver="latest",
+        )
+        features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
+
+        image2desc = {}
+        if self.using_global_descriptors:
+            for image_name in tqdm(
+                available_images, desc="Processing global descriptors for extra images"
+            ):
+                if image_name not in used_img_names:
+                    image_name_for_matching_db = image_name.replace("/", "-")
+                    if image_name_for_matching_db in matches_h5:
+                        image_descriptor = self.produce_image_descriptor(
+                            f"{img_dir_str}/{image_name}"
+                        )
+                        image2desc[image_name] = image_descriptor
+
+        print(f"Got {len(image2desc)} extra images")
+        count = 0
+        for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
+            image_name_for_matching_db = image_name.replace("/", "-")
+            data = matches_h5[image_name_for_matching_db]
+            matches_2d_3d = []
+            for db_img in data:
+                matches = data[db_img]
+                indices = np.array(matches["matches0"])
+                mask0 = indices > -1
+                if np.sum(mask0) < 10:
+                    continue
+                db_img_normal = db_img.replace("-", "/")
+                uv1 = np.array(features_h5[db_img_normal]["keypoints"])
+                uv1 = uv1[indices[mask0]]
+
+                db_img_id = self.dataset.image_name2id[db_img_normal]
+                pid_list = self.dataset.image_id2pids[db_img_id]
+                uv_gt = self.dataset.image_id2uvs[db_img_id]
+                selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
+                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                matches_2d_3d.append([mask0, idx_arr, selected_pid[ind2]])
+
+            uv0 = np.array(features_h5[image_name]["keypoints"])
+            descriptors0 = np.array(features_h5[image_name]["descriptors"]).T
+            index_arr_for_kp = np.arange(uv0.shape[0])
+            all_matches = [[], [], []]
+            for mask0, idx_arr, pid_list in matches_2d_3d:
+                uv0_selected = uv0[mask0][idx_arr]
+                indices = index_arr_for_kp[mask0][idx_arr]
+                all_matches[0].append(uv0_selected)
+                all_matches[1].extend(pid_list)
+                all_matches[2].extend(indices)
+
+            uv_arr = np.vstack(all_matches[0])
+            xyz_pred = np.array(
+                [self.dataset.recon_points[pid].xyz for pid in all_matches[1]]
+            )
+            try:
+                (
+                    cam_type,
+                    width,
+                    height,
+                    focal,
+                    cx,
+                    cy,
+                    k,
+                ) = self.test_dataset.name2params[image_name]
+                camera = pycolmap.Camera(
+                    model=cam_type,
+                    width=int(width),
+                    height=int(height),
+                    params=[focal, cx, cy, k],
+                )
+
+                camera_dict = {
+                    "model": camera.model.name,
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera_dict,
+                )
+            except KeyError:
+                continue
+
+            mask = info["inliers"]
+            kp_indices = np.array(all_matches[2])[mask]
+            pid_list = np.array(all_matches[1])[mask]
+            selected_descriptors = descriptors0[kp_indices]
+            if self.using_global_descriptors:
+                image_descriptor = image2desc[image_name]
+                selected_descriptors = (
+                    self.lambda_val * selected_descriptors
+                    + (1 - self.lambda_val) * image_descriptor[: descriptors0.shape[1]]
+                )
+
+            for idx, pid in enumerate(pid_list):
+                if pid not in self.pid2descriptors:
+                    self.pid2descriptors[pid] = selected_descriptors[idx]
+                    self.pid2count[pid] = 1
+                else:
+                    self.pid2count[pid] += 1
+                    self.pid2descriptors[pid] = (
+                        self.pid2descriptors[pid] + selected_descriptors[idx]
+                    )
+
+            count += 1
+
+            if vis:
+                img0 = cv2.imread(f"{img_dir_str}/{image_name}")
+                img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
+                img2 = concat_images_different_sizes([img0, img1])
+                uv0 = uv0.astype(int)
+                uv1 = uv1.astype(int)
+                for idx in range(uv0.shape[0]):
+                    u0, v0 = uv0[idx]
+                    u1, v1 = uv1[idx]
+                    cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
+                    cv2.circle(
+                        img2,
+                        (u1 + img0.shape[1], v1),
+                        10,
+                        (255, 0, 0, 255),
+                        -1,
+                    )
+                    cv2.line(
+                        img2,
+                        (u0, v0),
+                        (u1 + img0.shape[1], v1),
+                        (255, 0, 0, 255),
+                        2,
+                    )
+                cv2.imwrite(f"debug/test{np.sum(mask)}-{count}.png", img2)
+
+        matches_h5.close()
+        features_h5.close()
+        features_db_h5.close()
+        print(f"Codebook improved from {count} pairs.")
+
+    def improve_codebook2(self, vis=False):
+        img_dir_str = self.dataset.images_dir_str
+        available_images_dir = Path(img_dir_str)
+        available_images = [
+            str(file).split(f"{img_dir_str}/")[-1]
+            for file in available_images_dir.rglob("*")
+            if file.is_file()
+        ]
+        used_img_names = [
+            self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids
+        ]
+
+        matches_h5 = h5py.File(
+            str("outputs/aachen_v1.1/r2d2_nn.h5"),
             "a",
             libver="latest",
         )
@@ -305,9 +350,7 @@ class BaseTrainer:
 
         print(f"Got {len(image2desc)} extra images")
         count = 0
-        for image_name in tqdm(
-            image2desc, desc="Improving codebook with extra images"
-        ):
+        for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
             image_name_for_matching_db = image_name.replace("/", "-")
             data = matches_h5[image_name_for_matching_db]
             for db_img in data:
@@ -332,9 +375,7 @@ class BaseTrainer:
                 uv0 = uv0[idx_arr]
 
                 uv_matches = np.array(features_h5[image_name]["keypoints"])
-                descriptors_matches = np.array(
-                    features_h5[image_name]["descriptors"]
-                ).T
+                descriptors_matches = np.array(features_h5[image_name]["descriptors"]).T
                 _, mask, ind = retrieve_pid(selected_pid, uv0, uv_matches)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
@@ -354,8 +395,7 @@ class BaseTrainer:
                     else:
                         self.pid2count[pid] += 1
                         self.pid2descriptors[pid] = (
-                            self.pid2descriptors[pid]
-                            + selected_descriptors[idx]
+                            self.pid2descriptors[pid] + selected_descriptors[idx]
                         )
 
                 count += 1
@@ -683,26 +723,33 @@ class RobotCarTrainer(BaseTrainer):
             for file in available_images_dir.rglob("*")
             if file.is_file()
         ]
-        used_img_names = set([
-            self.dataset._process_id_to_name(img_id).split(f"{img_dir_str}/")[-1] for img_id in self.dataset.img_ids
-        ])
+        used_img_names = set(
+            [
+                self.dataset._process_id_to_name(img_id).split(f"{img_dir_str}/")[-1]
+                for img_id in self.dataset.img_ids
+            ]
+        )
 
         matches_h5 = h5py.File(
-            str(
-                f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"
-            ),
+            str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
             "a",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"), "a", libver="latest"
+            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
+            "a",
+            libver="latest",
         )
         features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
 
         image2desc = {}
         if self.using_global_descriptors:
-            available_images = [im for im in available_images if im not in used_img_names]
-            for image_name in tqdm(available_images, desc="Processing global descriptors for extra images"):
+            available_images = [
+                im for im in available_images if im not in used_img_names
+            ]
+            for image_name in tqdm(
+                available_images, desc="Processing global descriptors for extra images"
+            ):
                 image_name_for_matching_db = image_name.replace("/", "-")
                 if image_name_for_matching_db in matches_h5:
                     image_descriptor = self.produce_image_descriptor(
@@ -723,19 +770,17 @@ class RobotCarTrainer(BaseTrainer):
                     continue
                 uv0 = np.array(features_h5[image_name]["keypoints"])
                 if len(db_img.split("-")) == 3:
-
                     db_img_normal = db_img.replace("-", "/")
                 else:
                     db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
                 uv1 = np.array(features_h5[db_img_normal]["keypoints"])
-                descriptors0 = np.array(
-                    features_h5[image_name]["descriptors"]
-                ).T
+                descriptors0 = np.array(features_h5[image_name]["descriptors"]).T
                 descriptors0 = descriptors0[mask0]
-                uv0 = uv0[mask0]
                 uv1 = uv1[indices[mask0]]
 
-                db_img_id = self.dataset.name2image[f"./{db_img_normal.replace('jpg', 'png')}"]
+                db_img_id = self.dataset.name2image[
+                    f"./{db_img_normal.replace('jpg', 'png')}"
+                ]
 
                 pid_list = self.dataset.image2points[db_img_id]
                 uv_gt = np.array(self.dataset.image2uvs[db_img_id])
@@ -759,8 +804,7 @@ class RobotCarTrainer(BaseTrainer):
                     else:
                         self.pid2count[pid] += 1
                         self.pid2descriptors[pid] = (
-                            self.pid2descriptors[pid]
-                            + selected_descriptors[idx]
+                            self.pid2descriptors[pid] + selected_descriptors[idx]
                         )
 
                 count += 1
