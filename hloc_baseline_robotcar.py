@@ -2,12 +2,19 @@ import argparse
 import glob
 from pathlib import Path
 
+import h5py
+import numpy as np
+import poselib
 from hloc import (
     extract_features,
     match_features,
     pairs_from_retrieval,
 )
 from hloc.pipelines.RobotCar import colmap_from_nvm
+from tqdm import tqdm
+
+from dataset import RobotCarDataset
+from trainer import retrieve_pid
 
 
 def generate_query_list(dataset, image_dir, path):
@@ -47,16 +54,10 @@ def run(args):
 
     # pick one of the configurations for extraction and matching
     retrieval_conf = extract_features.confs["eigenplaces"]
-    feature_conf = extract_features.confs["r2d2"]
+    feature_conf = extract_features.confs["d2net-ss"]
     matcher_conf = match_features.confs["NN-mutual"]
 
-    # extract_features.main(
-    #     extract_features.confs["d2net-ss"],
-    #     images,
-    #     Path(
-    #         "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar"
-    #     ),
-    # )
+    feature_conf["output"] = feature_conf["model"]["name"]
 
     colmap_from_nvm.main(
         dataset / "3D-models/all-merged/all.nvm",
@@ -79,6 +80,96 @@ def run(args):
         matcher_conf, loc_pairs, feature_conf["output"], outputs
     )
 
+    train_ds_ = RobotCarDataset(ds_dir=str(dataset))
+    test_ds_ = RobotCarDataset(ds_dir=set(dataset), train=False, evaluate=True)
+
+    result_file = open(
+        f"{str(outputs)}/Aachen_v1_1_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
+        "w",
+    )
+    matches_h5 = h5py.File(
+        loc_matches,
+        "r",
+        libver="latest",
+    )
+    features_h5 = h5py.File(
+        features,
+        "r",
+        libver="latest",
+    )
+    img_dir_str = train_ds_.images_dir_str
+
+    failed = 0
+    for example in tqdm(test_ds_, desc="Computing pose"):
+        image_name = example[1]
+        image_name_wo_dir = image_name.split(img_dir_str)[-1][1:]
+        image_name_for_matching_db = image_name_wo_dir.replace("/", "-")
+        data = matches_h5[image_name_for_matching_db]
+        matches_2d_3d = []
+        for db_img in data:
+            matches = data[db_img]
+            indices = np.array(matches["matches0"])
+            mask0 = indices > -1
+            if np.sum(mask0) < 10:
+                continue
+            if len(db_img.split("-")) == 3:
+                db_img_normal = db_img.replace("-", "/")
+            else:
+                db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
+            uv1 = np.array(features_h5[db_img_normal]["keypoints"])
+            uv1 = uv1[indices[mask0]]
+
+            db_img_id = train_ds_.name2image[f"./{db_img_normal.replace('jpg', 'png')}"]
+            pid_list = train_ds_.image2points[db_img_id]
+            uv_gt = np.array(train_ds_.image2uvs[db_img_id])
+
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+            matches_2d_3d.append([mask0, idx_arr, selected_pid[ind2]])
+
+        uv0 = np.array(features_h5[image_name_wo_dir]["keypoints"])
+        index_arr_for_kp = np.arange(uv0.shape[0])
+        all_matches = [[], [], []]
+        for mask0, idx_arr, pid_list in matches_2d_3d:
+            uv0_selected = uv0[mask0][idx_arr]
+            indices = index_arr_for_kp[mask0][idx_arr]
+            all_matches[0].append(uv0_selected)
+            all_matches[1].extend(pid_list)
+            all_matches[2].extend(indices)
+
+        if len(all_matches[1]) < 10:
+            qvec = "0 0 0 1"
+            tvec = "0 0 0"
+            failed += 1
+        else:
+            uv_arr = np.vstack(all_matches[0])
+            xyz_pred = train_ds_.xyz_arr[all_matches[1]]
+            camera = example[6]
+
+            camera_dict = {
+                "model": camera.model.name,
+                "height": camera.height,
+                "width": camera.width,
+                "params": camera.params,
+            }
+            pose, info = poselib.estimate_absolute_pose(
+                uv_arr,
+                xyz_pred,
+                camera_dict,
+            )
+
+            qvec = " ".join(map(str, pose.q))
+            tvec = " ".join(map(str, pose.t))
+
+        image_id = "/".join(example[2].split("/")[1:])
+        print(f"{image_id} {qvec} {tvec}", file=result_file)
+
+    matches_h5.close()
+    features_h5.close()
+    result_file.close()
+    print(f"Failed to localize {failed} images.")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -93,12 +184,6 @@ if __name__ == "__main__":
         type=Path,
         default="outputs/robotcar",
         help="Path to the output directory, default: %(default)s",
-    )
-    parser.add_argument(
-        "--num_covis",
-        type=int,
-        default=20,
-        help="Number of image pairs for SfM, default: %(default)s",
     )
     parser.add_argument(
         "--num_loc",

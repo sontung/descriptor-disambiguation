@@ -44,10 +44,12 @@ feature_conf = extract_features.confs["d2net-ss"]
 matcher_conf = match_features.confs["NN-mutual"]
 
 # matcher_conf["output"] = matcher_conf['model']['name']
-feature_conf["output"] = feature_conf['model']['name']
+feature_conf["output"] = feature_conf["model"]["name"]
 
 outputs = args.outputs  # where everything will be saved
-loc_pairs = outputs / f"pairs-query-{retrieval_conf['model']['name']}-{args.num_loc}.txt"  # top-k retrieved by NetVLAD
+loc_pairs = (
+    outputs / f"pairs-query-{retrieval_conf['model']['name']}-{args.num_loc}.txt"
+)  # top-k retrieved by NetVLAD
 results = outputs / f"Aachen-v1.1_{args.num_loc}.txt"
 
 # extract_features.main(
@@ -131,9 +133,7 @@ for example in tqdm(test_ds_, desc="Computing pose"):
         failed += 1
     else:
         uv_arr = np.vstack(all_matches[0])
-        xyz_pred = np.array(
-            [train_ds_.recon_points[pid].xyz for pid in all_matches[1]]
-        )
+        xyz_pred = np.array([train_ds_.recon_points[pid].xyz for pid in all_matches[1]])
         camera = example[6]
 
         camera_dict = {

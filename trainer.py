@@ -261,9 +261,14 @@ class BaseTrainer:
                             2,
                         )
                     count2 += 1
-                    cv2.imwrite(f"debug/test-{image_name_for_matching_db}-{len(all_matches[1])}-{count2}.png", img2)
+                    cv2.imwrite(
+                        f"debug/test-{image_name_for_matching_db}-{len(all_matches[1])}-{count2}.png",
+                        img2,
+                    )
 
-                tqdm.write(f"Skipping {image_name} because of {len(all_matches[1])} matches")
+                tqdm.write(
+                    f"Skipping {image_name} because of {len(all_matches[1])} matches"
+                )
                 continue
 
             uv_arr = np.vstack(all_matches[0])
@@ -760,22 +765,28 @@ class RobotCarTrainer(BaseTrainer):
         )
 
         matches_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
-            "a",
+            # str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
+            "r",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
-            "a",
+            # str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
+            "/home/n11373598/work/descriptor-disambiguation/outputs/robotcar/feats-d2net-ss.h5",
+            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
+            "r",
             libver="latest",
         )
-        features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
+        features_db_h5 = h5py.File(
+            # self.local_features_path,
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
+            "r",
+            libver="latest",
+        )
 
         image2desc = {}
+        available_images = [im for im in available_images if im not in used_img_names]
         if self.using_global_descriptors:
-            available_images = [
-                im for im in available_images if im not in used_img_names
-            ]
             for image_name in tqdm(
                 available_images, desc="Processing global descriptors for extra images"
             ):
@@ -791,6 +802,31 @@ class RobotCarTrainer(BaseTrainer):
         for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
             image_name_for_matching_db = image_name.replace("/", "-")
             data = matches_h5[image_name_for_matching_db]
+
+            matches_2d_3d = []
+            for db_img in data:
+                matches = data[db_img]
+                indices = np.array(matches["matches0"])
+                mask0 = indices > -1
+                if np.sum(mask0) < 10:
+                    continue
+                if len(db_img.split("-")) == 3:
+                    db_img_normal = db_img.replace("-", "/")
+                else:
+                    db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
+
+                uv1 = np.array(features_h5[db_img_normal]["keypoints"])
+                uv1 = uv1[indices[mask0]]
+
+                db_img_id = self.dataset.image_name2id[db_img_normal]
+                pid_list = self.dataset.image_id2pids[db_img_id]
+                uv_gt = self.dataset.image_id2uvs[db_img_id]
+                selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
+                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+                matches_2d_3d.append([mask0, idx_arr, selected_pid[ind2]])
+            break
+
             for db_img in data:
                 matches = data[db_img]
                 indices = np.array(matches["matches0"])
