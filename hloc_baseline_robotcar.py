@@ -50,7 +50,7 @@ def run(args):
     outputs.mkdir(exist_ok=True, parents=True)
     sift_sfm = outputs / "sfm_sift"
 
-    loc_pairs = outputs / f"pairs-query-netvlad{args.num_loc}.txt"
+    loc_pairs = outputs / f"pairs-query{args.num_loc}.txt"
 
     # pick one of the configurations for extraction and matching
     retrieval_conf = extract_features.confs["eigenplaces"]
@@ -81,7 +81,7 @@ def run(args):
     )
 
     train_ds_ = RobotCarDataset(ds_dir=str(dataset))
-    test_ds_ = RobotCarDataset(ds_dir=set(dataset), train=False, evaluate=True)
+    test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
 
     result_file = open(
         f"{str(outputs)}/Aachen_v1_1_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
