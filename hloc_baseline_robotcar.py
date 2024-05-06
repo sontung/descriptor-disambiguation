@@ -59,11 +59,11 @@ def run(args):
 
     feature_conf["output"] = feature_conf["model"]["name"]
 
-    colmap_from_nvm.main(
-        dataset / "3D-models/all-merged/all.nvm",
-        dataset / "3D-models/overcast-reference.db",
-        sift_sfm,
-    )
+    # colmap_from_nvm.main(
+    #     dataset / "3D-models/all-merged/all.nvm",
+    #     dataset / "3D-models/overcast-reference.db",
+    #     sift_sfm,
+    # )
 
     global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 
@@ -84,7 +84,7 @@ def run(args):
     test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
 
     result_file = open(
-        f"{str(outputs)}/Aachen_v1_1_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
+        f"{str(outputs)}/Robotcar_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
         "w",
     )
     matches_h5 = h5py.File(
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_loc",
         type=int,
-        default=20,
+        default=10,
         help="Number of image pairs for loc, default: %(default)s",
     )
     args = parser.parse_args()

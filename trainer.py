@@ -16,7 +16,7 @@ from sklearn.decomposition import PCA
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
+from dataset import RobotCarDataset
 import dd_utils
 from ace_util import read_and_preprocess
 from vae_test import VAEDataset
@@ -303,12 +303,6 @@ class BaseTrainer:
                     xyz_pred,
                     camera_dict,
                 )
-
-                qvec = " ".join(map(str, pose.q))
-                tvec = " ".join(map(str, pose.t))
-
-                image_id = image_name.split("/")[-1]
-                print(f"{image_id} {qvec} {tvec}", file=result_file)
 
             except KeyError:
                 continue
@@ -751,56 +745,49 @@ class BaseTrainer:
 class RobotCarTrainer(BaseTrainer):
     def improve_codebook(self, vis=False):
         img_dir_str = self.dataset.images_dir_str
-        available_images_dir = Path(img_dir_str)
-        available_images = [
-            str(file).split(f"{img_dir_str}/")[-1]
-            for file in available_images_dir.rglob("*")
-            if file.is_file()
-        ]
-        used_img_names = set(
-            [
-                self.dataset._process_id_to_name(img_id).split(f"{img_dir_str}/")[-1]
-                for img_id in self.dataset.img_ids
-            ]
-        )
 
         matches_h5 = h5py.File(
-            # str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
+            str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
+            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_matches-NN-mutual_pairs-query10.h5",
             "r",
             libver="latest",
         )
         features_h5 = h5py.File(
-            # str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
-            "/home/n11373598/work/descriptor-disambiguation/outputs/robotcar/feats-d2net-ss.h5",
+            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
+            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
             # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
             "r",
             libver="latest",
         )
         features_db_h5 = h5py.File(
-            # self.local_features_path,
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
+            self.local_features_path,
+            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
             "r",
             libver="latest",
         )
 
+        extra_ds = RobotCarDataset(
+            ds_dir=self.dataset.ds_dir, train=False, evaluate=False
+        )
+
         image2desc = {}
-        available_images = [im for im in available_images if im not in used_img_names]
         if self.using_global_descriptors:
-            for image_name in tqdm(
-                available_images, desc="Processing global descriptors for extra images"
+            for example in tqdm(
+                extra_ds, desc="Processing global descriptors for extra images"
             ):
-                image_name_for_matching_db = image_name.replace("/", "-")
+                image_name = example[1]
+                image_name_wo_dir = image_name.split(img_dir_str)[-1][1:]
+                image_name_for_matching_db = image_name_wo_dir.replace("/", "-")
                 if image_name_for_matching_db in matches_h5:
-                    image_descriptor = self.produce_image_descriptor(
-                        f"{img_dir_str}/{image_name}"
-                    )
+                    image_descriptor = self.produce_image_descriptor(image_name)
                     image2desc[image_name] = image_descriptor
 
         print(f"Got {len(image2desc)} extra images")
         count = 0
-        for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
-            image_name_for_matching_db = image_name.replace("/", "-")
+        for example in tqdm(extra_ds, desc="Improving codebook with extra images"):
+            image_name = example[1]
+            image_name_wo_dir = image_name.split(img_dir_str)[-1][1:]
+            image_name_for_matching_db = image_name_wo_dir.replace("/", "-")
             data = matches_h5[image_name_for_matching_db]
 
             matches_2d_3d = []
@@ -818,42 +805,55 @@ class RobotCarTrainer(BaseTrainer):
                 uv1 = np.array(features_h5[db_img_normal]["keypoints"])
                 uv1 = uv1[indices[mask0]]
 
-                db_img_id = self.dataset.image_name2id[db_img_normal]
-                pid_list = self.dataset.image_id2pids[db_img_id]
-                uv_gt = self.dataset.image_id2uvs[db_img_id]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                matches_2d_3d.append([mask0, idx_arr, selected_pid[ind2]])
-            break
-
-            for db_img in data:
-                matches = data[db_img]
-                indices = np.array(matches["matches0"])
-                mask0 = indices > -1
-                if np.sum(mask0) < 10:
-                    continue
-                uv0 = np.array(features_h5[image_name]["keypoints"])
-                if len(db_img.split("-")) == 3:
-                    db_img_normal = db_img.replace("-", "/")
-                else:
-                    db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
-                uv1 = np.array(features_h5[db_img_normal]["keypoints"])
-                descriptors0 = np.array(features_h5[image_name]["descriptors"]).T
-                descriptors0 = descriptors0[mask0]
-                uv1 = uv1[indices[mask0]]
-
                 db_img_id = self.dataset.name2image[
                     f"./{db_img_normal.replace('jpg', 'png')}"
                 ]
-
                 pid_list = self.dataset.image2points[db_img_id]
                 uv_gt = np.array(self.dataset.image2uvs[db_img_id])
 
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
                 idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-                selected_descriptors = descriptors0[idx_arr]
+                matches_2d_3d.append([mask0, idx_arr, selected_pid[ind2]])
+
+            uv0 = np.array(features_h5[image_name_wo_dir]["keypoints"])
+            index_arr_for_kp = np.arange(uv0.shape[0])
+            all_matches = [[], [], []]
+            for mask0, idx_arr, pid_list in matches_2d_3d:
+                uv0_selected = uv0[mask0][idx_arr]
+                indices = index_arr_for_kp[mask0][idx_arr]
+                all_matches[0].append(uv0_selected)
+                all_matches[1].extend(pid_list)
+                all_matches[2].extend(indices)
+
+            if len(all_matches[1]) < 10:
+                tqdm.write(
+                    f"Skipping {image_name} because of {len(all_matches[1])} matches"
+                )
+                continue
+            else:
+                uv_arr = np.vstack(all_matches[0])
+                xyz_pred = self.dataset.xyz_arr[all_matches[1]]
+                camera = example[6]
+
+                camera_dict = {
+                    "model": camera.model.name,
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera_dict,
+                )
+
+                count += 1
+                descriptors0 = np.array(features_h5[image_name_wo_dir]["descriptors"]).T
+                mask = info["inliers"]
+                kp_indices = np.array(all_matches[2])[mask]
+                pid_list = np.array(all_matches[1])[mask]
+                selected_descriptors = descriptors0[kp_indices]
                 if self.using_global_descriptors:
                     image_descriptor = image2desc[image_name]
                     selected_descriptors = (
@@ -862,7 +862,7 @@ class RobotCarTrainer(BaseTrainer):
                         * image_descriptor[: descriptors0.shape[1]]
                     )
 
-                for idx, pid in enumerate(selected_pid[ind2]):
+                for idx, pid in enumerate(pid_list):
                     if pid not in self.pid2descriptors:
                         self.pid2descriptors[pid] = selected_descriptors[idx]
                         self.pid2count[pid] = 1
@@ -871,8 +871,6 @@ class RobotCarTrainer(BaseTrainer):
                         self.pid2descriptors[pid] = (
                             self.pid2descriptors[pid] + selected_descriptors[idx]
                         )
-
-                count += 1
 
         matches_h5.close()
         features_h5.close()
