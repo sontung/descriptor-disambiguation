@@ -798,6 +798,7 @@ class RobotCarTrainer(BaseTrainer):
         matches_h5.close()
         features_h5.close()
         features_db_h5.close()
+        image2desc.clear()
         print(f"Codebook improved from {count} pairs.")
 
     def collect_descriptors(self, vis=False, reduce_map_size=True):
@@ -832,7 +833,7 @@ class RobotCarTrainer(BaseTrainer):
                         + (1 - self.lambda_val)
                         * image_descriptor[: descriptors.shape[1]]
                 )
-                
+
             for idx, pid in enumerate(selected_pid[ind2]):
                 if pid not in pid2descriptors:
                     pid2descriptors[pid] = selected_descriptors[idx]
