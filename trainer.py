@@ -45,6 +45,14 @@ def compute_pose_error(pose, pose_gt):
     return t_err, r_err
 
 
+def combine_descriptors(local_desc, global_desc, lambda_value_):
+    res = (
+        lambda_value_ * local_desc
+        + (1 - lambda_value_) * global_desc[: local_desc.shape[1]]
+    )
+    return res
+
+
 class BaseTrainer:
     def __init__(
         self,
@@ -311,9 +319,8 @@ class BaseTrainer:
             selected_descriptors = descriptors0[kp_indices]
             if self.using_global_descriptors:
                 image_descriptor = image2desc[image_name]
-                selected_descriptors = (
-                    self.lambda_val * selected_descriptors
-                    + (1 - self.lambda_val) * image_descriptor[: descriptors0.shape[1]]
+                selected_descriptors = combine_descriptors(
+                    selected_descriptors, image_descriptor, self.lambda_val
                 )
 
             for idx, pid in enumerate(pid_list):
@@ -477,10 +484,8 @@ class BaseTrainer:
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
-                    selected_descriptors = (
-                        self.lambda_val * selected_descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors.shape[1]]
+                    selected_descriptors = combine_descriptors(
+                        selected_descriptors, image_descriptor, self.lambda_val
                     )
 
                 for idx, pid in enumerate(selected_pid[ind2]):
@@ -564,15 +569,9 @@ class BaseTrainer:
                         name, global_features_h5
                     )
 
-                    descriptors = (
-                        self.lambda_val * descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors.shape[1]]
+                    descriptors = combine_descriptors(
+                        descriptors, image_descriptor, self.lambda_val
                     )
-
-                    # descriptors = 0.5 * (
-                    #     descriptors + image_descriptor[: descriptors.shape[1]]
-                    # )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
@@ -783,10 +782,8 @@ class RobotCarTrainer(BaseTrainer):
                 selected_descriptors = descriptors0[kp_indices]
                 if self.using_global_descriptors:
                     image_descriptor = image2desc[image_name]
-                    selected_descriptors = (
-                        self.lambda_val * selected_descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors0.shape[1]]
+                    selected_descriptors = combine_descriptors(
+                        selected_descriptors, image_descriptor, self.lambda_val
                     )
 
                 for idx, pid in enumerate(pid_list):
@@ -856,11 +853,8 @@ class RobotCarTrainer(BaseTrainer):
             ind2, selected_pid, selected_descriptors = image2data[image_name]
             if self.using_global_descriptors:
                 image_descriptor = self.image2desc[example[1]]
-
-                selected_descriptors = (
-                    self.lambda_val * selected_descriptors
-                    + (1 - self.lambda_val)
-                    * image_descriptor[: selected_descriptors.shape[1]]
+                selected_descriptors = combine_descriptors(
+                    selected_descriptors, image_descriptor, self.lambda_val
                 )
             selected_indices = [pid2ind[pid] for pid in selected_pid[ind2]]
             pid2mean_desc[selected_indices] += selected_descriptors
@@ -877,68 +871,6 @@ class RobotCarTrainer(BaseTrainer):
         self.pid2descriptors.clear()
         self.xyz_arr = self.dataset.xyz_arr[all_pids]
         return pid2mean_desc, all_pids, {}
-
-    def collect_descriptors2(self, vis=False):
-        features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
-        )
-
-        if not os.path.isfile(features_path):
-            features_h5 = h5py.File(str(features_path), "a", libver="latest")
-            with torch.no_grad():
-                for example in tqdm(self.dataset, desc="Detecting features"):
-                    self.produce_local_descriptors(example[1], features_h5)
-            features_h5.close()
-
-        features_h5 = h5py.File(features_path, "r")
-
-        count = 0
-        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-            count += 1
-            if count > 5000:
-                break
-            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            pid_list = example[3]
-            uv = example[-1]
-            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-            selected_descriptors = descriptors[idx_arr]
-            if self.using_global_descriptors:
-                image_descriptor = self.image2desc[example[1]]
-
-                selected_descriptors = (
-                    self.lambda_val * selected_descriptors
-                    + (1 - self.lambda_val) * image_descriptor[: descriptors.shape[1]]
-                )
-
-            for idx, pid in enumerate(selected_pid[ind2]):
-                if pid not in self.pid2descriptors:
-                    self.pid2descriptors[pid] = selected_descriptors[idx]
-                    self.pid2count[pid] = 1
-                else:
-                    self.pid2count[pid] += 1
-                    self.pid2descriptors[pid] = (
-                        self.pid2descriptors[pid] + selected_descriptors[idx]
-                    )
-
-        features_h5.close()
-        self.image2desc.clear()
-
-        all_pid = list(self.pid2descriptors.keys())
-        all_pid = np.array(all_pid)
-        pid2mean_desc = np.zeros(
-            (all_pid.shape[0], self.feature_dim),
-            self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
-        )
-
-        for ind, pid in enumerate(all_pid):
-            pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
-
-        if pid2mean_desc.shape[0] > all_pid.shape[0]:
-            pid2mean_desc = pid2mean_desc[all_pid]
-        self.xyz_arr = self.dataset.xyz_arr[all_pid]
-        return pid2mean_desc, all_pid, {}
 
     def legal_predict(
         self,
@@ -1273,10 +1205,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
             selected_descriptors = descriptors[idx_arr]
             if self.using_global_descriptors:
                 image_descriptor = self.image2desc[example[1]]
-
-                selected_descriptors = (
-                    self.lambda_val * selected_descriptors
-                    + (1 - self.lambda_val) * image_descriptor[: descriptors.shape[1]]
+                selected_descriptors = combine_descriptors(
+                    selected_descriptors, image_descriptor, self.lambda_val
                 )
 
             for idx, pid in enumerate(selected_pid[ind2]):
@@ -1375,10 +1305,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                         name, global_features_h5
                     )
 
-                    descriptors = (
-                        self.lambda_val * descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors.shape[1]]
+                    descriptors = combine_descriptors(
+                        descriptors, image_descriptor, self.lambda_val
                     )
 
                 uv_arr, xyz_pred = self.legal_predict(
