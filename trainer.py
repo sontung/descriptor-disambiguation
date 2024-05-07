@@ -852,7 +852,7 @@ class RobotCarTrainer(BaseTrainer):
         for image_name in tqdm(image_names, desc="Collecting point descriptors"):
             ind2, selected_pid, selected_descriptors = image2data[image_name]
             if self.using_global_descriptors:
-                image_descriptor = self.image2desc[example[1]]
+                image_descriptor = self.image2desc[image_name]
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, image_descriptor, self.lambda_val
                 )
