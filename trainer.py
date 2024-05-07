@@ -822,7 +822,10 @@ class RobotCarTrainer(BaseTrainer):
 
         image2data = {}
         image_names = []
-        all_pids = []
+        if len(self.pid2descriptors) > 0:
+            all_pids = list(self.pid2descriptors.keys())
+        else:
+            all_pids = []
         for example in tqdm(self.dataset, desc="Reading database images"):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
             pid_list = example[3]
