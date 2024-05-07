@@ -129,7 +129,7 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            # self.improve_codebook()
+            self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
@@ -772,9 +772,7 @@ class RobotCarTrainer(BaseTrainer):
             pid_list = self.dataset.image2points[img]
             img2points2[img] = [pid for pid in pid_list if pid in inlier_ind_set]
             mask = [True if pid in inlier_ind_set else False for pid in pid_list]
-            self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[
-                mask
-            ]
+            self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[mask]
         self.dataset.image2points = img2points2
 
     def improve_codebook(self, vis=False):
@@ -930,35 +928,33 @@ class RobotCarTrainer(BaseTrainer):
         features_h5 = h5py.File(features_path, "r")
 
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-            keypoints, descriptors = dd_utils.read_kp_and_desc(
-                example[1], features_h5
-            )
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
             pid_list = example[3]
             uv = example[-1]
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-            # selected_descriptors = descriptors[idx_arr]
-            # if self.using_global_descriptors:
-            #     image_descriptor = self.image2desc[example[1]]
-            #     if self.normalize:
-            #         image_descriptor = (
-            #             image_descriptor - self.global_desc_mean
-            #         ) / self.global_desc_std
-            #     selected_descriptors = 0.5 * (
-            #         selected_descriptors + image_descriptor[: descriptors.shape[1]]
-            #     )
+            selected_descriptors = descriptors[idx_arr]
+            if self.using_global_descriptors:
+                image_descriptor = self.image2desc[example[1]]
+                if self.normalize:
+                    image_descriptor = (
+                        image_descriptor - self.global_desc_mean
+                    ) / self.global_desc_std
+                selected_descriptors = 0.5 * (
+                    selected_descriptors + image_descriptor[: descriptors.shape[1]]
+                )
             for idx, pid in enumerate(selected_pid[ind2]):
                 pid2descriptors[pid] = 1
 
-                # if pid not in pid2descriptors:
-                #     pid2descriptors[pid] = selected_descriptors[idx]
-                #     pid2count[pid] = 1
-                # else:
-                #     pid2count[pid] += 1
-                #     pid2descriptors[pid] = (
-                #         pid2descriptors[pid] + selected_descriptors[idx]
-                #     )
+                if pid not in pid2descriptors:
+                    pid2descriptors[pid] = selected_descriptors[idx]
+                    pid2count[pid] = 1
+                else:
+                    pid2count[pid] += 1
+                    pid2descriptors[pid] = (
+                        pid2descriptors[pid] + selected_descriptors[idx]
+                    )
 
         features_h5.close()
         self.image2desc.clear()
