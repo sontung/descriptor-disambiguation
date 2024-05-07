@@ -62,14 +62,12 @@ class BaseTrainer:
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=1,
-        normalize=False,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
         self.using_global_descriptors = using_global_descriptors
         self.global_feature_dim = global_feature_dim
-        self.normalize = normalize
 
         self.name2uv = {}
         self.ds_name = self.dataset.ds_type
@@ -336,102 +334,6 @@ class BaseTrainer:
         result_file.close()
         print(f"Codebook improved from {count} pairs.")
 
-    def improve_codebook2(self, vis=False):
-        img_dir_str = self.dataset.images_dir_str
-        available_images_dir = Path(img_dir_str)
-        available_images = [
-            str(file).split(f"{img_dir_str}/")[-1]
-            for file in available_images_dir.rglob("*")
-            if file.is_file()
-        ]
-        used_img_names = [
-            self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids
-        ]
-
-        matches_h5 = h5py.File(
-            str("outputs/aachen_v1.1/r2d2_nn.h5"),
-            "a",
-            libver="latest",
-        )
-        features_matches_h5 = h5py.File(
-            str("outputs/aachen_v1.1/r2d2.h5"),
-            "a",
-            libver="latest",
-        )
-        features_h5 = h5py.File(
-            str("outputs/aachen_v1.1/d2net.h5"), "a", libver="latest"
-        )
-        features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
-
-        image2desc = {}
-        if self.using_global_descriptors:
-            for image_name in tqdm(
-                available_images, desc="Processing global descriptors for extra images"
-            ):
-                if image_name not in used_img_names:
-                    image_name_for_matching_db = image_name.replace("/", "-")
-                    if image_name_for_matching_db in matches_h5:
-                        image_descriptor = self.produce_image_descriptor(
-                            f"{img_dir_str}/{image_name}"
-                        )
-                        image2desc[image_name] = image_descriptor
-
-        print(f"Got {len(image2desc)} extra images")
-        count = 0
-        for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
-            image_name_for_matching_db = image_name.replace("/", "-")
-            data = matches_h5[image_name_for_matching_db]
-            for db_img in data:
-                matches = data[db_img]
-                indices = np.array(matches["matches0"])
-                mask0 = indices > -1
-                if np.sum(mask0) < 10:
-                    continue
-                uv0 = np.array(features_matches_h5[image_name]["keypoints"])
-
-                db_img_normal = db_img.replace("-", "/")
-                uv1 = np.array(features_matches_h5[db_img_normal]["keypoints"])
-                uv0 = uv0[mask0]
-                uv1 = uv1[indices[mask0]]
-
-                db_img_id = self.dataset.image_name2id[db_img_normal]
-                pid_list = self.dataset.image_id2pids[db_img_id]
-                uv_gt = self.dataset.image_id2uvs[db_img_id]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-                selected_pid = selected_pid[ind2]
-                uv0 = uv0[idx_arr]
-
-                uv_matches = np.array(features_h5[image_name]["keypoints"])
-                descriptors_matches = np.array(features_h5[image_name]["descriptors"]).T
-                _, mask, ind = retrieve_pid(selected_pid, uv0, uv_matches)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                selected_descriptors = descriptors_matches[idx_arr]
-                if self.using_global_descriptors:
-                    image_descriptor = image2desc[image_name]
-                    selected_descriptors = (
-                        self.lambda_val * selected_descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors_matches.shape[1]]
-                    )
-
-                for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in self.pid2descriptors:
-                        self.pid2descriptors[pid] = selected_descriptors[idx]
-                        self.pid2count[pid] = 1
-                    else:
-                        self.pid2count[pid] += 1
-                        self.pid2descriptors[pid] = (
-                            self.pid2descriptors[pid] + selected_descriptors[idx]
-                        )
-
-                count += 1
-        matches_h5.close()
-        features_h5.close()
-        features_db_h5.close()
-        print(f"Codebook improved from {count} pairs.")
-
     def collect_image_descriptors(self, using_pca=False):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         file_name2 = f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -575,10 +477,6 @@ class BaseTrainer:
                 selected_descriptors = descriptors[idx_arr]
                 if self.using_global_descriptors:
                     image_descriptor = self.image2desc[example[1]]
-                    if self.normalize:
-                        image_descriptor = (
-                            image_descriptor - self.global_desc_mean
-                        ) / self.global_desc_std
                     selected_descriptors = (
                         self.lambda_val * selected_descriptors
                         + (1 - self.lambda_val)
@@ -612,10 +510,6 @@ class BaseTrainer:
                 ind += 1
             if np.sum(np.isnan(pid2mean_desc)) > 0:
                 print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
-            # np.save(file_name1, pid2mean_desc)
-            # np.save(file_name2, all_pid)
-            # with open(file_name3, "wb") as handle:
-            #     pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         return pid2mean_desc, all_pid, pid2ind
 
@@ -666,11 +560,6 @@ class BaseTrainer:
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
-
-                    if self.normalize:
-                        image_descriptor = (
-                            image_descriptor - self.global_desc_mean
-                        ) / self.global_desc_std
 
                     descriptors = (
                         self.lambda_val * descriptors
@@ -937,16 +826,14 @@ class RobotCarTrainer(BaseTrainer):
             selected_descriptors = descriptors[idx_arr]
             if self.using_global_descriptors:
                 image_descriptor = self.image2desc[example[1]]
-                if self.normalize:
-                    image_descriptor = (
-                        image_descriptor - self.global_desc_mean
-                    ) / self.global_desc_std
-                selected_descriptors = 0.5 * (
-                    selected_descriptors + image_descriptor[: descriptors.shape[1]]
-                )
-            for idx, pid in enumerate(selected_pid[ind2]):
-                pid2descriptors[pid] = 1
 
+                selected_descriptors = (
+                        self.lambda_val * selected_descriptors
+                        + (1 - self.lambda_val)
+                        * image_descriptor[: descriptors.shape[1]]
+                )
+                
+            for idx, pid in enumerate(selected_pid[ind2]):
                 if pid not in pid2descriptors:
                     pid2descriptors[pid] = selected_descriptors[idx]
                     pid2count[pid] = 1
@@ -1049,15 +936,7 @@ class RobotCarTrainer(BaseTrainer):
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
-                    if self.using_pca:
-                        image_descriptor = self.pca.transform(
-                            image_descriptor.reshape(1, -1)
-                        )
 
-                    if self.normalize:
-                        image_descriptor = (
-                            image_descriptor - self.global_desc_mean
-                        ) / self.global_desc_std
                     descriptors = 0.5 * (
                         descriptors + image_descriptor[: descriptors.shape[1]]
                     )
@@ -1166,10 +1045,6 @@ class CMUTrainer(BaseTrainer):
                         image_descriptor = dd_utils.read_global_desc(
                             name, global_features_h5
                         )
-                        if self.normalize:
-                            image_descriptor = (
-                                image_descriptor - self.global_desc_mean
-                            ) / self.global_desc_std
 
                         descriptors = 0.5 * (
                             descriptors + image_descriptor[: descriptors.shape[1]]
@@ -1319,10 +1194,6 @@ class CambridgeLandmarksTrainer(BaseTrainer):
             selected_descriptors = descriptors[idx_arr]
             if self.using_global_descriptors:
                 image_descriptor = self.image2desc[example[1]]
-                if self.normalize:
-                    image_descriptor = (
-                        image_descriptor - self.global_desc_mean
-                    ) / self.global_desc_std
 
                 selected_descriptors = (
                     self.lambda_val * selected_descriptors
@@ -1424,11 +1295,6 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
-
-                    if self.normalize:
-                        image_descriptor = (
-                            image_descriptor - self.global_desc_mean
-                        ) / self.global_desc_std
 
                     descriptors = (
                         self.lambda_val * descriptors
