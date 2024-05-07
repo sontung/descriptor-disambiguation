@@ -122,6 +122,7 @@ class BaseTrainer:
             self.image2desc = {}
 
         self.xyz_arr = None
+        self.map_reduction = False
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
@@ -131,6 +132,7 @@ class BaseTrainer:
                 self.all_pid_in_train_set,
                 self.pid2ind,
             ) = self.collect_descriptors()
+
             if self.pid2ind:
                 self.all_ind_in_train_set = np.array(
                     [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
@@ -511,6 +513,9 @@ class BaseTrainer:
 
         return pid2mean_desc, all_pid, pid2ind
 
+    def collect_descriptors2(self, vis=False):
+        return
+
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -631,6 +636,8 @@ class BaseTrainer:
 
 class RobotCarTrainer(BaseTrainer):
     def reduce_map_size(self):
+        if self.map_reduction:
+            return
         index_map_file_name = f"output/{self.ds_name}/indices.npy"
         if os.path.isfile(index_map_file_name):
             inlier_ind = np.load(index_map_file_name)
@@ -661,12 +668,11 @@ class RobotCarTrainer(BaseTrainer):
             mask = [True if pid in inlier_ind_set else False for pid in pid_list]
             self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[mask]
         self.dataset.image2points = img2points2
+        self.map_reduction = True
 
     def improve_codebook(self, vis=False):
         self.reduce_map_size()
-
         img_dir_str = self.dataset.images_dir_str
-
         matches_h5 = h5py.File(
             str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
             # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_matches-NN-mutual_pairs-query10.h5",
@@ -799,7 +805,8 @@ class RobotCarTrainer(BaseTrainer):
         image2desc.clear()
         print(f"Codebook improved from {count} pairs.")
 
-    def collect_descriptors(self, vis=False, reduce_map_size=True):
+    def collect_descriptors(self, vis=False):
+        self.reduce_map_size()
         features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
@@ -813,7 +820,80 @@ class RobotCarTrainer(BaseTrainer):
 
         features_h5 = h5py.File(features_path, "r")
 
+        image2data = {}
+        image_names = []
+        all_pids = []
+        for example in tqdm(self.dataset, desc="Reading database images"):
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+            pid_list = example[3]
+            uv = example[-1]
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+            selected_descriptors = descriptors[idx_arr]
+            image2data[example[1]] = [ind2, selected_pid, selected_descriptors]
+            all_pids.extend(selected_pid[ind2])
+            image_names.append(example[1])
+
+        all_pids = list(set(all_pids))
+        all_pids = np.array(all_pids)
+
+        sample0 = list(image2data.keys())[0]
+        sample_desc = image2data[sample0][-1]
+        if self.using_global_descriptors:
+            sample1 = list(self.image2desc.keys())[0]
+            sample_desc += self.image2desc[sample1]
+
+        pid2mean_desc = np.zeros(
+            (all_pids.shape[0], self.feature_dim), sample_desc.dtype
+        )
+        pid2count = np.zeros(all_pids.shape[0])
+        pid2ind = {pid: idx for idx, pid in enumerate(all_pids)}
+
+        for image_name in tqdm(image_names, desc="Collecting point descriptors"):
+            ind2, selected_pid, selected_descriptors = image2data[image_name]
+            if self.using_global_descriptors:
+                image_descriptor = self.image2desc[example[1]]
+
+                selected_descriptors = (
+                    self.lambda_val * selected_descriptors
+                    + (1 - self.lambda_val)
+                    * image_descriptor[: selected_descriptors.shape[1]]
+                )
+            selected_indices = [pid2ind[pid] for pid in selected_pid[ind2]]
+            pid2mean_desc[selected_indices] += selected_descriptors
+            pid2count[selected_indices] += 1
+
+        for pid in tqdm(self.pid2descriptors, desc="Tuning codebook from extra images"):
+            ind = pid2ind[pid]
+            pid2mean_desc[ind] += self.pid2descriptors[pid]
+            pid2count[ind] += self.pid2count[pid]
+
+        pid2mean_desc = pid2mean_desc / pid2count.reshape(-1, 1)
+        features_h5.close()
+        self.image2desc.clear()
+        self.pid2descriptors.clear()
+        self.xyz_arr = self.dataset.xyz_arr[all_pids]
+        return pid2mean_desc, all_pids, {}
+
+    def collect_descriptors2(self, vis=False):
+        features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
+        )
+
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Detecting features"):
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
+
+        features_h5 = h5py.File(features_path, "r")
+
+        count = 0
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+            count += 1
+            if count > 5000:
+                break
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
             pid_list = example[3]
             uv = example[-1]
@@ -825,9 +905,8 @@ class RobotCarTrainer(BaseTrainer):
                 image_descriptor = self.image2desc[example[1]]
 
                 selected_descriptors = (
-                        self.lambda_val * selected_descriptors
-                        + (1 - self.lambda_val)
-                        * image_descriptor[: descriptors.shape[1]]
+                    self.lambda_val * selected_descriptors
+                    + (1 - self.lambda_val) * image_descriptor[: descriptors.shape[1]]
                 )
 
             for idx, pid in enumerate(selected_pid[ind2]):
