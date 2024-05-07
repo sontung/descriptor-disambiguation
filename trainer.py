@@ -129,7 +129,7 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            self.improve_codebook()
+            # self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
@@ -743,7 +743,43 @@ class BaseTrainer:
 
 
 class RobotCarTrainer(BaseTrainer):
+    def reduce_map_size(self):
+        index_map_file_name = f"output/{self.ds_name}/indices.npy"
+        if os.path.isfile(index_map_file_name):
+            inlier_ind = np.load(index_map_file_name)
+        else:
+            import open3d as o3d
+
+            point_cloud = o3d.geometry.PointCloud(
+                o3d.utility.Vector3dVector(self.dataset.xyz_arr)
+            )
+            cl, inlier_ind = point_cloud.remove_radius_outlier(
+                nb_points=16, radius=5, print_progress=True
+            )
+
+            np.save(index_map_file_name, np.array(inlier_ind))
+
+            # vis = o3d.visualization.Visualizer()
+            # vis.create_window(width=1920, height=1025)
+            # vis.add_geometry(point_cloud)
+            # vis.run()
+            # vis.destroy_window()
+        img2points2 = {}
+        inlier_ind_set = set(inlier_ind)
+        for img in tqdm(
+            self.dataset.image2points, desc="Removing outlier points in the map"
+        ):
+            pid_list = self.dataset.image2points[img]
+            img2points2[img] = [pid for pid in pid_list if pid in inlier_ind_set]
+            mask = [True if pid in inlier_ind_set else False for pid in pid_list]
+            self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[
+                mask
+            ]
+        self.dataset.image2points = img2points2
+
     def improve_codebook(self, vis=False):
+        self.reduce_map_size()
+
         img_dir_str = self.dataset.images_dir_str
 
         matches_h5 = h5py.File(
@@ -878,118 +914,65 @@ class RobotCarTrainer(BaseTrainer):
         print(f"Codebook improved from {count} pairs.")
 
     def collect_descriptors(self, vis=False, reduce_map_size=True):
-        if self.using_global_descriptors:
-            if self.using_pca:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
-            else:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
-        else:
-            file_name1 = (
-                f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
-            )
-            file_name2 = (
-                f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}.npy"
-            )
-
-        if reduce_map_size:
-            index_map_file_name = f"output/{self.ds_name}/indices.npy"
-            if os.path.isfile(index_map_file_name):
-                inlier_ind = np.load(index_map_file_name)
-            else:
-                import open3d as o3d
-
-                point_cloud = o3d.geometry.PointCloud(
-                    o3d.utility.Vector3dVector(self.dataset.xyz_arr)
-                )
-                cl, inlier_ind = point_cloud.remove_radius_outlier(
-                    nb_points=16, radius=5, print_progress=True
-                )
-
-                np.save(index_map_file_name, np.array(inlier_ind))
-
-                # vis = o3d.visualization.Visualizer()
-                # vis.create_window(width=1920, height=1025)
-                # vis.add_geometry(point_cloud)
-                # vis.run()
-                # vis.destroy_window()
-            img2points2 = {}
-            inlier_ind_set = set(inlier_ind)
-            for img in tqdm(
-                self.dataset.image2points, desc="Removing outlier points in the map"
-            ):
-                pid_list = self.dataset.image2points[img]
-                img2points2[img] = [pid for pid in pid_list if pid in inlier_ind_set]
-                mask = [True if pid in inlier_ind_set else False for pid in pid_list]
-                self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[
-                    mask
-                ]
-            self.dataset.image2points = img2points2
-
         features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
-        if os.path.isfile(file_name1):
-            pid2mean_desc = np.load(file_name1)
-            all_pid = np.load(file_name2)
-        else:
-            if not os.path.isfile(features_path):
-                features_h5 = h5py.File(str(features_path), "a", libver="latest")
-                with torch.no_grad():
-                    for example in tqdm(self.dataset, desc="Detecting features"):
-                        self.produce_local_descriptors(example[1], features_h5)
-                features_h5.close()
 
-            pid2descriptors = {}
-            pid2count = {}
-            features_h5 = h5py.File(features_path, "r")
-
-            for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-                keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
-                )
-                pid_list = example[3]
-                uv = example[-1]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                selected_descriptors = descriptors[idx_arr]
-                if self.using_global_descriptors:
-                    image_descriptor = self.image2desc[example[1]]
-                    if self.normalize:
-                        image_descriptor = (
-                            image_descriptor - self.global_desc_mean
-                        ) / self.global_desc_std
-                    selected_descriptors = 0.5 * (
-                        selected_descriptors + image_descriptor[: descriptors.shape[1]]
-                    )
-
-                for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in pid2descriptors:
-                        pid2descriptors[pid] = selected_descriptors[idx]
-                        pid2count[pid] = 1
-                    else:
-                        pid2count[pid] += 1
-                        pid2descriptors[pid] = (
-                            pid2descriptors[pid] + selected_descriptors[idx]
-                        )
-
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Detecting features"):
+                    self.produce_local_descriptors(example[1], features_h5)
             features_h5.close()
-            self.image2desc.clear()
 
-            all_pid = list(pid2descriptors.keys())
-            all_pid = np.array(all_pid)
-            pid2mean_desc = np.zeros(
-                (all_pid.shape[0], self.feature_dim),
-                pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+        pid2descriptors = {}
+        pid2count = {}
+        features_h5 = h5py.File(features_path, "r")
+
+        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+            keypoints, descriptors = dd_utils.read_kp_and_desc(
+                example[1], features_h5
             )
+            pid_list = example[3]
+            uv = example[-1]
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-            for ind, pid in enumerate(all_pid):
-                pid2mean_desc[ind] = pid2descriptors[pid] / pid2count[pid]
+            # selected_descriptors = descriptors[idx_arr]
+            # if self.using_global_descriptors:
+            #     image_descriptor = self.image2desc[example[1]]
+            #     if self.normalize:
+            #         image_descriptor = (
+            #             image_descriptor - self.global_desc_mean
+            #         ) / self.global_desc_std
+            #     selected_descriptors = 0.5 * (
+            #         selected_descriptors + image_descriptor[: descriptors.shape[1]]
+            #     )
+            for idx, pid in enumerate(selected_pid[ind2]):
+                pid2descriptors[pid] = 1
 
-            np.save(file_name1, pid2mean_desc)
-            np.save(file_name2, all_pid)
+                # if pid not in pid2descriptors:
+                #     pid2descriptors[pid] = selected_descriptors[idx]
+                #     pid2count[pid] = 1
+                # else:
+                #     pid2count[pid] += 1
+                #     pid2descriptors[pid] = (
+                #         pid2descriptors[pid] + selected_descriptors[idx]
+                #     )
+
+        features_h5.close()
+        self.image2desc.clear()
+
+        all_pid = list(pid2descriptors.keys())
+        all_pid = np.array(all_pid)
+        pid2mean_desc = np.zeros(
+            (all_pid.shape[0], self.feature_dim),
+            pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+        )
+
+        for ind, pid in enumerate(all_pid):
+            pid2mean_desc[ind] = pid2descriptors[pid] / pid2count[pid]
+
         if pid2mean_desc.shape[0] > all_pid.shape[0]:
             pid2mean_desc = pid2mean_desc[all_pid]
         self.xyz_arr = self.dataset.xyz_arr[all_pid]
