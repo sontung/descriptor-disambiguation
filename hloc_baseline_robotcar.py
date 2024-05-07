@@ -17,30 +17,6 @@ from dataset import RobotCarDataset
 from trainer import retrieve_pid
 
 
-def generate_query_list(dataset, image_dir, path):
-    h, w = 1024, 1024
-    intrinsics_filename = "intrinsics/{}_intrinsics.txt"
-    cameras = {}
-    for side in ["left", "right", "rear"]:
-        with open(dataset / intrinsics_filename.format(side), "r") as f:
-            fx = f.readline().split()[1]
-            fy = f.readline().split()[1]
-            cx = f.readline().split()[1]
-            cy = f.readline().split()[1]
-            assert fx == fy
-            params = ["SIMPLE_RADIAL", w, h, fx, cx, cy, 0.0]
-            cameras[side] = [str(p) for p in params]
-
-    queries = glob.glob((image_dir / "**/*.jpg").as_posix(), recursive=True)
-    queries = [
-        Path(q).relative_to(image_dir.parents[0]).as_posix() for q in sorted(queries)
-    ]
-
-    out = [[q] + cameras[Path(q).parent.name] for q in queries]
-    with open(path, "w") as f:
-        f.write("\n".join(map(" ".join, out)))
-
-
 def run(args):
     # Setup the paths
     dataset = args.dataset
@@ -59,11 +35,11 @@ def run(args):
 
     feature_conf["output"] = feature_conf["model"]["name"]
 
-    # colmap_from_nvm.main(
-    #     dataset / "3D-models/all-merged/all.nvm",
-    #     dataset / "3D-models/overcast-reference.db",
-    #     sift_sfm,
-    # )
+    colmap_from_nvm.main(
+        dataset / "3D-models/all-merged/all.nvm",
+        dataset / "3D-models/overcast-reference.db",
+        sift_sfm,
+    )
 
     global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 

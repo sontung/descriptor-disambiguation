@@ -13,13 +13,11 @@ import pycolmap
 import torch
 from pykdtree.kdtree import KDTree
 from sklearn.decomposition import PCA
-from torch import nn
-from torch.utils.data import DataLoader
 from tqdm import tqdm
-from dataset import RobotCarDataset
+
 import dd_utils
 from ace_util import read_and_preprocess
-from vae_test import VAEDataset
+from dataset import RobotCarDataset
 from dd_utils import concat_images_different_sizes
 
 
@@ -813,8 +811,6 @@ class RobotCarTrainer(BaseTrainer):
                     self.produce_local_descriptors(example[1], features_h5)
             features_h5.close()
 
-        pid2descriptors = {}
-        pid2count = {}
         features_h5 = h5py.File(features_path, "r")
 
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
@@ -835,27 +831,27 @@ class RobotCarTrainer(BaseTrainer):
                 )
 
             for idx, pid in enumerate(selected_pid[ind2]):
-                if pid not in pid2descriptors:
-                    pid2descriptors[pid] = selected_descriptors[idx]
-                    pid2count[pid] = 1
+                if pid not in self.pid2descriptors:
+                    self.pid2descriptors[pid] = selected_descriptors[idx]
+                    self.pid2count[pid] = 1
                 else:
-                    pid2count[pid] += 1
-                    pid2descriptors[pid] = (
-                        pid2descriptors[pid] + selected_descriptors[idx]
+                    self.pid2count[pid] += 1
+                    self.pid2descriptors[pid] = (
+                        self.pid2descriptors[pid] + selected_descriptors[idx]
                     )
 
         features_h5.close()
         self.image2desc.clear()
 
-        all_pid = list(pid2descriptors.keys())
+        all_pid = list(self.pid2descriptors.keys())
         all_pid = np.array(all_pid)
         pid2mean_desc = np.zeros(
             (all_pid.shape[0], self.feature_dim),
-            pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+            self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
         )
 
         for ind, pid in enumerate(all_pid):
-            pid2mean_desc[ind] = pid2descriptors[pid] / pid2count[pid]
+            pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
 
         if pid2mean_desc.shape[0] > all_pid.shape[0]:
             pid2mean_desc = pid2mean_desc[all_pid]
