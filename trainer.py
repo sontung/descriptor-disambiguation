@@ -16,7 +16,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 import dd_utils
-from ace_util import read_and_preprocess
+from ace_util import read_and_preprocess, project_using_pose
 from dataset import RobotCarDataset
 from dd_utils import concat_images_different_sizes
 
@@ -673,27 +673,26 @@ class RobotCarTrainer(BaseTrainer):
         self.reduce_map_size()
         img_dir_str = self.dataset.images_dir_str
         matches_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
-            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_matches-NN-mutual_pairs-query10.h5",
+            # str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
             "r",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
-            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
-            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
+            # str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
             "r",
             libver="latest",
         )
         features_db_h5 = h5py.File(
-            self.local_features_path,
-            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
+            # self.local_features_path,
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
             "r",
             libver="latest",
         )
 
         extra_ds = RobotCarDataset(
-            ds_dir=self.dataset.ds_dir, train=False, evaluate=True
+            ds_dir=self.dataset.ds_dir, train=False, evaluate=False
         )
 
         image2desc = {}
@@ -762,21 +761,36 @@ class RobotCarTrainer(BaseTrainer):
                 xyz_pred = self.dataset.xyz_arr[all_matches[1]]
                 camera = example[6]
 
-                camera_dict = {
-                    "model": camera.model.name,
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose, info = poselib.estimate_absolute_pose(
-                    uv_arr,
+                # camera_dict = {
+                #     "model": camera.model.name,
+                #     "height": camera.height,
+                #     "width": camera.width,
+                #     "params": camera.params,
+                # }
+                # pose, info = poselib.estimate_absolute_pose(
+                #     uv_arr,
+                #     xyz_pred,
+                #     camera_dict,
+                # )
+                # mask = info["inliers"]
+
+                intrinsics = torch.eye(3)
+                focal, cx, cy, _ = camera.params
+                intrinsics[0, 0] = focal
+                intrinsics[1, 1] = focal
+                intrinsics[0, 2] = cx
+                intrinsics[1, 2] = cy
+                pose_mat = example[4]
+                uv_gt = project_using_pose(
+                    pose_mat.inverse().unsqueeze(0).cuda().float(),
+                    intrinsics.unsqueeze(0).cuda().float(),
                     xyz_pred,
-                    camera_dict,
                 )
+                diff = np.mean(np.abs(uv_gt-uv_arr), 1)
+                mask = diff < 5
 
                 count += 1
                 descriptors0 = np.array(features_h5[image_name_wo_dir]["descriptors"]).T
-                mask = info["inliers"]
                 kp_indices = np.array(all_matches[2])[mask]
                 pid_list = np.array(all_matches[1])[mask]
                 selected_descriptors = descriptors0[kp_indices]
