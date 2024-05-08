@@ -134,7 +134,7 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            self.improve_codebook()
+            # self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
