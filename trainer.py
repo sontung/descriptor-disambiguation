@@ -693,7 +693,7 @@ class RobotCarTrainer(BaseTrainer):
         )
 
         extra_ds = RobotCarDataset(
-            ds_dir=self.dataset.ds_dir, train=False, evaluate=False
+            ds_dir=self.dataset.ds_dir, train=False, evaluate=True
         )
 
         image2desc = {}
