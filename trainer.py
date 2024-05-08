@@ -134,7 +134,7 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            # self.improve_codebook()
+            self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
@@ -948,9 +948,7 @@ class RobotCarTrainer(BaseTrainer):
                         name, global_features_h5
                     )
 
-                    descriptors = 0.5 * (
-                        descriptors + image_descriptor[: descriptors.shape[1]]
-                    )
+                    descriptors = combine_descriptors(descriptors, image_descriptor, self.lambda_val)
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
@@ -1057,9 +1055,7 @@ class CMUTrainer(BaseTrainer):
                             name, global_features_h5
                         )
 
-                        descriptors = 0.5 * (
-                            descriptors + image_descriptor[: descriptors.shape[1]]
-                        )
+                        descriptors = combine_descriptors(descriptors, image_descriptor, self.lambda_val)
 
                     uv_arr, xyz_pred = self.legal_predict(
                         keypoints,
