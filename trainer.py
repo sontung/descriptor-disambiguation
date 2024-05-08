@@ -134,7 +134,7 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            # self.improve_codebook()
+            self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
@@ -175,7 +175,6 @@ class BaseTrainer:
             "a",
             libver="latest",
         )
-        features_db_h5 = h5py.File(self.local_features_path, "a", libver="latest")
 
         image2desc = {}
         if self.using_global_descriptors:
@@ -337,7 +336,6 @@ class BaseTrainer:
 
         matches_h5.close()
         features_h5.close()
-        features_db_h5.close()
         result_file.close()
         print(f"Codebook improved from {count} pairs.")
 
@@ -727,7 +725,7 @@ class RobotCarTrainer(BaseTrainer):
                 else:
                     db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
 
-                uv1 = np.array(features_h5[db_img_normal]["keypoints"])
+                uv1 = np.array(features_db_h5[db_img_normal]["keypoints"])
                 uv1 = uv1[indices[mask0]]
 
                 db_img_id = self.dataset.name2image[
@@ -833,10 +831,11 @@ class RobotCarTrainer(BaseTrainer):
 
         image2data = {}
         image_names = []
-        if len(self.pid2descriptors) > 0:
-            all_pids = list(self.pid2descriptors.keys())
-        else:
-            all_pids = []
+        # if len(self.pid2descriptors) > 0:
+        #     all_pids = list(self.pid2descriptors.keys())
+        # else:
+        #     all_pids = []
+        all_pids = []
         for example in tqdm(self.dataset, desc="Reading database images"):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
             pid_list = example[3]
