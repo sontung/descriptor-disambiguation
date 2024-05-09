@@ -675,24 +675,32 @@ class RobotCarTrainer(BaseTrainer):
 
     def index_db_points(self):
         self.reduce_map_size()
-        file_name_for_saving = f"output/{self.ds_name}/{self.local_desc_model_name}_db_info.pkl"
-        file_name_for_saving2 = f"output/{self.ds_name}/{self.local_desc_model_name}_db_selected_desc.pkl"
-        if os.path.isfile(file_name_for_saving) and os.path.isfile(file_name_for_saving2):
+        file_name_for_saving = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_db_info.pkl"
+        )
+        file_name_for_saving2 = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_db_selected_desc.pkl"
+        )
+        if os.path.isfile(file_name_for_saving) and os.path.isfile(
+            file_name_for_saving2
+        ):
             afile = open(file_name_for_saving, "rb")
-            self.image2info3d  = pickle.load(afile)
+            self.image2info3d = pickle.load(afile)
             afile.close()
             afile = open(file_name_for_saving2, "rb")
             self.image2selected_desc = pickle.load(afile)
             afile.close()
         else:
-            # features_h5 = self.load_local_features()
-            features_h5 = h5py.File(
-                "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
-                "r")
+            features_h5 = self.load_local_features()
+            # features_h5 = h5py.File(
+            #     "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
+            #     "r")
             self.image2info3d = {}
             self.image2selected_desc = {}
             for example in tqdm(self.dataset, desc="Indexing database points"):
-                keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    example[1], features_h5
+                )
                 pid_list = example[3]
                 uv = example[-1]
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
@@ -705,7 +713,10 @@ class RobotCarTrainer(BaseTrainer):
             with open(file_name_for_saving, "wb") as handle:
                 pickle.dump(self.image2info3d, handle, protocol=pickle.HIGHEST_PROTOCOL)
             with open(file_name_for_saving2, "wb") as handle:
-                pickle.dump(self.image2selected_desc, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(
+                    self.image2selected_desc, handle, protocol=pickle.HIGHEST_PROTOCOL
+                )
+            sys.exit()
 
     def improve_codebook(self, vis=False):
         self.reduce_map_size()
@@ -759,7 +770,9 @@ class RobotCarTrainer(BaseTrainer):
                 else:
                     db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
 
-                selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[f"{img_dir_str}/{db_img_normal}"]
+                selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[
+                    f"{img_dir_str}/{db_img_normal}"
+                ]
                 indices = indices[mask0]
                 mask2 = np.isin(idx_arr, indices)
                 mask3 = np.isin(indices, idx_arr)
@@ -812,7 +825,7 @@ class RobotCarTrainer(BaseTrainer):
                     intrinsics.unsqueeze(0).cuda().float(),
                     xyz_pred,
                 )
-                diff = np.mean(np.abs(uv_gt-uv_arr), 1)
+                diff = np.mean(np.abs(uv_gt - uv_arr), 1)
                 mask = diff < 5
 
                 count += 1
@@ -843,11 +856,11 @@ class RobotCarTrainer(BaseTrainer):
 
     def collect_descriptors(self, vis=False):
         self.reduce_map_size()
-        # features_h5 = self.load_local_features()
+        features_h5 = self.load_local_features()
 
-        features_h5 = h5py.File(
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
-            "r")
+        # features_h5 = h5py.File(
+        #     "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
+        #     "r")
 
         image2data = {}
         image_names = []
@@ -978,7 +991,9 @@ class RobotCarTrainer(BaseTrainer):
                         name, global_features_h5
                     )
 
-                    descriptors = combine_descriptors(descriptors, image_descriptor, self.lambda_val)
+                    descriptors = combine_descriptors(
+                        descriptors, image_descriptor, self.lambda_val
+                    )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
@@ -1085,7 +1100,9 @@ class CMUTrainer(BaseTrainer):
                             name, global_features_h5
                         )
 
-                        descriptors = combine_descriptors(descriptors, image_descriptor, self.lambda_val)
+                        descriptors = combine_descriptors(
+                            descriptors, image_descriptor, self.lambda_val
+                        )
 
                     uv_arr, xyz_pred = self.legal_predict(
                         keypoints,
