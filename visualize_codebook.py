@@ -79,13 +79,25 @@ def load_desc_robot_car(file_name1, file_name2):
     xyz_arr = np.load(file_name2)
 
     point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
-    cl, inlier_ind = point_cloud.remove_radius_outlier(
-        nb_points=16, radius=5, print_progress=True
-    )
-    colors = process_colors(pid2mean_desc[inlier_ind])
-    cl.colors = o3d.utility.Vector3dVector(colors)
+    colors = process_colors(pid2mean_desc)
+    point_cloud.colors = o3d.utility.Vector3dVector(colors)
 
-    return cl
+    return point_cloud
+
+
+def save_all_colors():
+    file_name1 = f"/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
+    pid2mean_desc = np.load(file_name1)
+    colors = process_colors(pid2mean_desc)
+    np.save(f"output/robotcar/colors0.npy", colors)
+    file_name1 = f"/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-1.npy"
+    pid2mean_desc = np.load(file_name1)
+    colors = process_colors(pid2mean_desc)
+    np.save(f"output/robotcar/colors1.npy", colors)
+    file_name1 = f"/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.5.npy"
+    pid2mean_desc = np.load(file_name1)
+    colors = process_colors(pid2mean_desc)
+    np.save(f"output/robotcar/colors0.5.npy", colors)
 
 
 def main_robot_car():
@@ -95,14 +107,14 @@ def main_robot_car():
 
     point_cloud1 = load_desc_robot_car(file_name1, file_name2)
 
-    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
-    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.npy"
+    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-1.npy"
+    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-1.npy"
 
     point_cloud2 = load_desc_robot_car(file_name1, file_name2)
     point_cloud2.translate([250, 0, 0])
 
-    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
-    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.npy"
+    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.5.npy"
+    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.5.npy"
 
     point_cloud3 = load_desc_robot_car(file_name1, file_name2)
     point_cloud3.translate([0, 250, 0])
@@ -127,4 +139,5 @@ def main_robot_car():
 
 
 if __name__ == "__main__":
-    main_robot_car()
+    save_all_colors()
+    # main_robot_car()
