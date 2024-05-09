@@ -1,5 +1,5 @@
 import pickle
-import open3d as o3d
+# import open3d as o3d
 import numpy as np
 from dataset import CambridgeLandmarksDataset
 from sklearn.decomposition import PCA
