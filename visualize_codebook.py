@@ -90,19 +90,19 @@ def load_desc_robot_car(file_name1, file_name2):
 
 def main_robot_car():
 
-    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2.npy"
-    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2.npy"
+    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
+    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.npy"
 
     point_cloud1 = load_desc_robot_car(file_name1, file_name2)
 
-    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2_mixvpr_128.npy"
-    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2_mixvpr_128.npy"
+    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
+    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.npy"
 
     point_cloud2 = load_desc_robot_car(file_name1, file_name2)
     point_cloud2.translate([250, 0, 0])
 
-    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2_mixvpr_128_0.npy"
-    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2_mixvpr_128_0.npy"
+    file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
+    file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.npy"
 
     point_cloud3 = load_desc_robot_car(file_name1, file_name2)
     point_cloud3.translate([0, 250, 0])

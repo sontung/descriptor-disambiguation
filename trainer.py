@@ -67,7 +67,7 @@ class BaseTrainer:
         using_global_descriptors,
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
-        lambda_val=1,
+        lambda_val=0.5,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
