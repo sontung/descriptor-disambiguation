@@ -716,20 +716,19 @@ class RobotCarTrainer(BaseTrainer):
                 pickle.dump(
                     self.image2selected_desc, handle, protocol=pickle.HIGHEST_PROTOCOL
                 )
-            sys.exit()
 
     def improve_codebook(self, vis=False):
         self.reduce_map_size()
         img_dir_str = self.dataset.images_dir_str
         matches_h5 = h5py.File(
-            # str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
+            str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
+            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
             "r",
             libver="latest",
         )
         features_h5 = h5py.File(
-            # str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
-            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
+            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
+            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
             "r",
             libver="latest",
         )
@@ -870,9 +869,12 @@ class RobotCarTrainer(BaseTrainer):
         #     all_pids = []
         all_pids = []
         for example in tqdm(self.dataset, desc="Reading database images"):
-            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
             selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[example[1]]
-            selected_descriptors = descriptors[idx_arr]
+            if example[1] in self.image2selected_desc:
+                selected_descriptors = self.image2selected_desc[example[1]]
+            else:
+                keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+                selected_descriptors = descriptors[idx_arr]
             image2data[example[1]] = [ind2, selected_pid, selected_descriptors]
             all_pids.extend(selected_pid[ind2])
             image_names.append(example[1])
