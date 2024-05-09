@@ -863,10 +863,6 @@ class RobotCarTrainer(BaseTrainer):
 
         image2data = {}
         image_names = []
-        # if len(self.pid2descriptors) > 0:
-        #     all_pids = list(self.pid2descriptors.keys())
-        # else:
-        #     all_pids = []
         all_pids = []
         for example in tqdm(self.dataset, desc="Reading database images"):
             selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[example[1]]
@@ -915,6 +911,9 @@ class RobotCarTrainer(BaseTrainer):
         self.image2desc.clear()
         self.pid2descriptors.clear()
         self.xyz_arr = self.dataset.xyz_arr[all_pids]
+        np.save(f"output/{self.ds_name}/pid2mean_desc{self.local_desc_model_name}-{self.global_desc_model_name}-{int(self.using_global_descriptors)}.npy", pid2mean_desc)
+        np.save(f"output/{self.ds_name}/xyz_arr{self.local_desc_model_name}-{self.global_desc_model_name}-{int(self.using_global_descriptors)}.npy", self.xyz_arr)
+        sys.exit()
         return pid2mean_desc, all_pids, {}
 
     def legal_predict(
