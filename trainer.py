@@ -67,7 +67,7 @@ class BaseTrainer:
         using_global_descriptors,
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
-        lambda_val=0.5,
+        lambda_val=0,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -863,7 +863,9 @@ class RobotCarTrainer(BaseTrainer):
 
         image2data = {}
         all_pids = []
-        image_names = [self.dataset._process_id_to_name(img_id) for img_id in self.dataset.img_ids]
+        image_names = [
+            self.dataset._process_id_to_name(img_id) for img_id in self.dataset.img_ids
+        ]
         for name in tqdm(image_names, desc="Reading database images"):
             selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[name]
             if name in self.image2selected_desc:
@@ -910,8 +912,14 @@ class RobotCarTrainer(BaseTrainer):
         self.image2desc.clear()
         self.pid2descriptors.clear()
         self.xyz_arr = self.dataset.xyz_arr[all_pids]
-        np.save(f"output/{self.ds_name}/pid2mean_desc{self.local_desc_model_name}-{self.global_desc_model_name}-{int(self.using_global_descriptors)}.npy", pid2mean_desc)
-        np.save(f"output/{self.ds_name}/xyz_arr{self.local_desc_model_name}-{self.global_desc_model_name}-{int(self.using_global_descriptors)}.npy", self.xyz_arr)
+        np.save(
+            f"output/{self.ds_name}/pid2mean_desc{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
+            pid2mean_desc,
+        )
+        np.save(
+            f"output/{self.ds_name}/xyz_arr{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
+            self.xyz_arr,
+        )
         sys.exit()
         return pid2mean_desc, all_pids, {}
 
