@@ -74,5 +74,57 @@ def main():
     return
 
 
+def load_desc_robot_car(file_name1, file_name2):
+    pid2mean_desc = np.load(file_name1)
+    xyz_arr = np.load(file_name2)
+
+    point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
+    cl, inlier_ind = point_cloud.remove_radius_outlier(
+        nb_points=16, radius=5, print_progress=True
+    )
+    colors = process_colors(pid2mean_desc[inlier_ind])
+    cl.colors = o3d.utility.Vector3dVector(colors)
+
+    return cl
+
+
+def main_robot_car():
+
+    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2.npy"
+    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2.npy"
+
+    point_cloud1 = load_desc_robot_car(file_name1, file_name2)
+
+    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2_mixvpr_128.npy"
+    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2_mixvpr_128.npy"
+
+    point_cloud2 = load_desc_robot_car(file_name1, file_name2)
+    point_cloud2.translate([250, 0, 0])
+
+    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2_mixvpr_128_0.npy"
+    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2_mixvpr_128_0.npy"
+
+    point_cloud3 = load_desc_robot_car(file_name1, file_name2)
+    point_cloud3.translate([0, 250, 0])
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    # ctr = vis.get_view_control()
+    # parameters = o3d.io.read_pinhole_camera_parameters("viewpoint.json")
+
+    vis.add_geometry(point_cloud1)
+    vis.add_geometry(point_cloud2)
+    vis.add_geometry(point_cloud3)
+    # vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
+
+    # vis.capture_screen_image("debug/test3.png", do_render=True)
+
+    vis.run()
+    # param = vis.get_view_control().convert_to_pinhole_camera_parameters()
+    # o3d.io.write_pinhole_camera_parameters("viewpoint.json", param)
+    vis.destroy_window()
+    return
+
+
 if __name__ == "__main__":
-    main()
+    main_robot_car()
