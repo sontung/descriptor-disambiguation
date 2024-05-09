@@ -862,18 +862,17 @@ class RobotCarTrainer(BaseTrainer):
         #     "r")
 
         image2data = {}
-        image_names = []
         all_pids = []
-        for example in tqdm(self.dataset, desc="Reading database images"):
-            selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[example[1]]
-            if example[1] in self.image2selected_desc:
-                selected_descriptors = self.image2selected_desc[example[1]]
+        image_names = [self.dataset._process_id_to_name(img_id) for img_id in self.dataset.img_ids]
+        for name in tqdm(image_names, desc="Reading database images"):
+            selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[name]
+            if name in self.image2selected_desc:
+                selected_descriptors = self.image2selected_desc[name]
             else:
-                keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 selected_descriptors = descriptors[idx_arr]
-            image2data[example[1]] = [ind2, selected_pid, selected_descriptors]
+            image2data[name] = [ind2, selected_pid, selected_descriptors]
             all_pids.extend(selected_pid[ind2])
-            image_names.append(example[1])
 
         all_pids = list(set(all_pids))
         all_pids = np.array(all_pids)
