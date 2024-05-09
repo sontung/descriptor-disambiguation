@@ -725,7 +725,9 @@ class RobotCarTrainer(BaseTrainer):
                 else:
                     db_img_normal = db_img.replace("-", "/").replace("/", "-", 1)
 
-                uv1 = np.array(features_db_h5[db_img_normal]["keypoints"])
+                # uv1 = np.array(features_db_h5[db_img_normal]["keypoints"])
+                uv1 = np.array(features_db_h5["/".join(db_img_normal.split("/")[1:])]["keypoints"])
+
                 uv1 = uv1[indices[mask0]]
 
                 db_img_id = self.dataset.name2image[
