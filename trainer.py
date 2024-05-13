@@ -1416,8 +1416,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         with torch.no_grad():
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
-                if name not in names:
-                    continue
+                # if name not in names:
+                #     continue
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
                 if self.using_global_descriptors:
                     image_descriptor = dd_utils.read_global_desc(

@@ -5,6 +5,7 @@ import rerun as rr
 import dd_utils
 from dataset import CambridgeLandmarksDataset
 from trainer import CambridgeLandmarksTrainer
+import open3d as o3d
 
 
 def visualize(ds):
@@ -29,30 +30,19 @@ def visualize(ds):
     )
 
 
-def visualize_matches(good_results, bad_results, dataset):
-    for idx in range(len(good_results)):
-        (
-            name1,
-            t_err1,
-            r_err1,
-            uv_arr1,
-            xyz_pred1,
-            pose1,
-            gt_pose1,
-            mask1,
-        ) = good_results[idx]
-        name2, t_err2, r_err2, uv_arr2, xyz_pred2, pose2, gt_pose2, mask2 = bad_results[
-            idx
-        ]
-        break
-
-    import open3d as o3d
-
-    point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(dataset.xyz_arr))
-    cl, inlier_ind = point_cloud.remove_radius_outlier(
-        nb_points=16, radius=5, print_progress=True
-    )
-
+def make_pic(good_result, bad_result, res_name):
+    (
+        name1,
+        t_err1,
+        r_err1,
+        uv_arr1,
+        xyz_pred1,
+        pose1,
+        gt_pose1,
+        mask1,
+    ) = good_result
+    name2, t_err2, r_err2, uv_arr2, xyz_pred2, pose2, gt_pose2, mask2 = bad_result
+    diff = t_err1-t_err2+r_err1-r_err2
     intrinsics = np.eye(3)
 
     intrinsics[0, 0] = 738
@@ -61,21 +51,21 @@ def visualize_matches(good_results, bad_results, dataset):
     intrinsics[1, 2] = 240
 
     cam1 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, np.vstack([pose1.Rt, [0, 0, 0, 1]]), scale=5
+        427 * 2, 240 * 2, intrinsics, np.vstack([pose1.Rt, [0, 0, 0, 1]]), scale=7
     )
     cam2 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, np.vstack([pose2.Rt, [0, 0, 0, 1]]), scale=5
+        427 * 2, 240 * 2, intrinsics, np.vstack([pose2.Rt, [0, 0, 0, 1]]), scale=7
     )
     cam3 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, gt_pose2.numpy(), scale=5
+        427 * 2, 240 * 2, intrinsics, gt_pose2.numpy(), scale=7
     )
 
     cam1.paint_uniform_color((0.5, 0.5, 0))
     cam2.paint_uniform_color((1, 0, 0))
     cam3.paint_uniform_color((0, 1, 0))
 
-    xyz1 = xyz_pred1[mask1]
-    xyz2 = xyz_pred2[mask2]
+    xyz1 = xyz_pred1
+    xyz2 = xyz_pred2
     pred1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1))
     pred2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2))
     ori1 = o3d.geometry.PointCloud(
@@ -97,19 +87,34 @@ def visualize_matches(good_results, bad_results, dataset):
     )
     corr1.paint_uniform_color((0.5, 0.5, 0))
     corr2.paint_uniform_color((1, 0, 0))
+    pred1.paint_uniform_color((0.5, 0.5, 0))
+    pred2.paint_uniform_color((1, 0, 0))
 
     vis = o3d.visualization.Visualizer()
-    # render_opt = vis.get_render_option()
-    vis.create_window(width=1920, height=1025)
-    vis.add_geometry(pred1)
-    vis.add_geometry(pred2)
-    vis.add_geometry(corr1)
-    vis.add_geometry(corr2)
+    # ctr = vis.get_view_control()
+
+    vis.create_window(visible=False, width=1024, height=1016)
     vis.add_geometry(cam1)
     vis.add_geometry(cam2)
     vis.add_geometry(cam3)
-    vis.run()
+    vis.add_geometry(pred2)
+    vis.add_geometry(pred1)
+    # vis.add_geometry(corr2, reset_bounding_box=False)
+    # vis.add_geometry(corr1, reset_bounding_box=False)
+    parameters = o3d.io.read_pinhole_camera_parameters("viewpoint2.json")
+    vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
+
+    diff, t_err1, t_err2, r_err1, r_err2 = map(lambda du: round(du, 2), [diff, t_err1, t_err2, r_err1, r_err2])
+    vis.capture_screen_image(f"{res_name}.png", do_render=True)
+    # vis.run()
     vis.destroy_window()
+    return
+
+
+def visualize_matches(good_results, bad_results, dataset):
+    for idx in range(len(good_results)):
+        idx_str = "{:03d}".format(idx)
+        make_pic(good_results[idx], bad_results[idx], f"debug/im-{idx_str}")
     return
 
 

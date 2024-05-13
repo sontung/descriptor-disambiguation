@@ -19,6 +19,7 @@ test3/*
 labels_test/*
 labels_train/*
 roma/*
+*.mp4
 
 # Outputs.
 output/
