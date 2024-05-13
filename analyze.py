@@ -29,6 +29,90 @@ def visualize(ds):
     )
 
 
+def visualize_matches(good_results, bad_results, dataset):
+    for idx in range(len(good_results)):
+        (
+            name1,
+            t_err1,
+            r_err1,
+            uv_arr1,
+            xyz_pred1,
+            pose1,
+            gt_pose1,
+            mask1,
+        ) = good_results[idx]
+        name2, t_err2, r_err2, uv_arr2, xyz_pred2, pose2, gt_pose2, mask2 = bad_results[
+            idx
+        ]
+        break
+
+    import open3d as o3d
+
+    point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(dataset.xyz_arr))
+    cl, inlier_ind = point_cloud.remove_radius_outlier(
+        nb_points=16, radius=5, print_progress=True
+    )
+
+    intrinsics = np.eye(3)
+
+    intrinsics[0, 0] = 738
+    intrinsics[1, 1] = 738
+    intrinsics[0, 2] = 427  # 427
+    intrinsics[1, 2] = 240
+
+    cam1 = o3d.geometry.LineSet.create_camera_visualization(
+        427 * 2, 240 * 2, intrinsics, np.vstack([pose1.Rt, [0, 0, 0, 1]]), scale=5
+    )
+    cam2 = o3d.geometry.LineSet.create_camera_visualization(
+        427 * 2, 240 * 2, intrinsics, np.vstack([pose2.Rt, [0, 0, 0, 1]]), scale=5
+    )
+    cam3 = o3d.geometry.LineSet.create_camera_visualization(
+        427 * 2, 240 * 2, intrinsics, gt_pose2.numpy(), scale=5
+    )
+
+    cam1.paint_uniform_color((0.5, 0.5, 0))
+    cam2.paint_uniform_color((1, 0, 0))
+    cam3.paint_uniform_color((0, 1, 0))
+
+    xyz1 = xyz_pred1[mask1]
+    xyz2 = xyz_pred2[mask2]
+    pred1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1))
+    pred2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2))
+    ori1 = o3d.geometry.PointCloud(
+        o3d.utility.Vector3dVector(
+            np.repeat(cam1.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
+        )
+    )
+    ori2 = o3d.geometry.PointCloud(
+        o3d.utility.Vector3dVector(
+            np.repeat(cam2.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
+        )
+    )
+
+    corr1 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
+        ori1, pred1, [[0, du] for du in range(xyz1.shape[0])]
+    )
+    corr2 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
+        ori2, pred2, [[0, du] for du in range(xyz2.shape[0])]
+    )
+    corr1.paint_uniform_color((0.5, 0.5, 0))
+    corr2.paint_uniform_color((1, 0, 0))
+
+    vis = o3d.visualization.Visualizer()
+    # render_opt = vis.get_render_option()
+    vis.create_window(width=1920, height=1025)
+    vis.add_geometry(pred1)
+    vis.add_geometry(pred2)
+    vis.add_geometry(corr1)
+    vis.add_geometry(corr2)
+    vis.add_geometry(cam1)
+    vis.add_geometry(cam2)
+    vis.add_geometry(cam3)
+    vis.run()
+    vis.destroy_window()
+    return
+
+
 def run_function(
     root_dir_,
     local_model,
@@ -54,7 +138,7 @@ def run_function(
     test_ds_ = CambridgeLandmarksDataset(
         train=False, ds_name=ds_name, root_dir=f"{root_dir_}/{ds_name}"
     )
-    visualize(train_ds_)
+    # visualize(train_ds_)
 
     set1 = set(train_ds_.rgb_files)
     set2 = set(test_ds_.rgb_files)
@@ -83,20 +167,45 @@ def run_function(
         conf_ns_retrieval,
         False,
     )
+
+    good_name_list = [
+        "rgb/seq4_frame00097.png",
+        "rgb/seq4_frame00004.png",
+        "rgb/seq1_frame00420.png",
+        "rgb/seq1_frame00422.png",
+        "rgb/seq4_frame00070.png",
+    ]
+
+    res = trainer_.process(good_name_list)
+    res2 = trainer_2.process(good_name_list)
+    visualize_matches(res, res2, train_ds_)
+
+    bad_name_list = [
+        "rgb/seq4_frame00093.png",
+        "rgb/seq4_frame00091.png",
+        "rgb/seq4_frame00086.png",
+        "rgb/seq1_frame00421.png",
+        "rgb/seq1_frame00440.png",
+    ]
+
     trans, rot, name2err = trainer_.evaluate(return_name2err=True)
     trans2, rot2, name2err2 = trainer_2.evaluate(return_name2err=True)
     all_diff = {}
     all_name = []
     for name in name2err:
-        e1 = name2err[name]
-        e2 = name2err2[name]
-        diff = e2 - e1
+        t1, r1 = name2err[name]
+        t2, r2 = name2err2[name]
+        diff = (t2 - t1) + (r2 - r1)
         all_diff[name] = diff
         all_name.append(name)
     n1 = min(all_name, key=lambda du1: all_diff[du1])
     n2 = max(all_name, key=lambda du1: all_diff[du1])
     print(n1, all_diff[n1], name2err[n1], name2err2[n1])
     print(n2, all_diff[n2], name2err[n2], name2err2[n2])
+
+    all_name_sorted = sorted(all_name, key=lambda du1: all_diff[du1])
+    for name in all_name_sorted[:5]:
+        print(all_diff[name])
     print()
 
 

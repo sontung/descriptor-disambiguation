@@ -94,14 +94,15 @@ def save_all_colors():
     pid2mean_desc = np.load(file_name1)
     colors = process_colors(pid2mean_desc)
     np.save(f"output/robotcar/colors1.npy", colors)
-    file_name1 = f"output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.5.npy"
+    file_name1 = (
+        f"output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.5.npy"
+    )
     pid2mean_desc = np.load(file_name1)
     colors = process_colors(pid2mean_desc)
     np.save(f"output/robotcar/colors0.5.npy", colors)
 
 
 def main_robot_car():
-
     file_name1 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.npy"
     file_name2 = f"/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/xyz_arrd2net-eigenplaces_ResNet101_2048-0.npy"
 

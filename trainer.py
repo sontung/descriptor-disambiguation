@@ -1231,6 +1231,9 @@ class SevenScenesTrainer(BaseTrainer):
 
 
 class CambridgeLandmarksTrainer(BaseTrainer):
+    def improve_codebook(self, vis=False):
+        return
+
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
         pid2descriptors = {}
@@ -1362,7 +1365,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 )
 
                 t_err, r_err = compute_pose_error(pose, example[4])
-                name2err[name] = t_err
+                name2err[name] = [t_err, r_err]
 
                 # Save the errors.
                 rErrs.append(r_err)
@@ -1382,3 +1385,78 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         if return_name2err:
             return median_tErr, median_rErr, name2err
         return median_tErr, median_rErr
+
+    def process(self, names):
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.pid2mean_desc)
+
+        global_descriptors_path = (
+            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
+        )
+        if not os.path.isfile(global_descriptors_path):
+            global_features_h5 = h5py.File(
+                str(global_descriptors_path), "a", libver="latest"
+            )
+            with torch.no_grad():
+                for example in tqdm(
+                    self.test_dataset, desc="Collecting global descriptors for test set"
+                ):
+                    image_descriptor = self.produce_image_descriptor(example[1])
+                    name = example[1]
+                    dict_ = {"global_descriptor": image_descriptor}
+                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
+            global_features_h5.close()
+
+        features_h5 = h5py.File(self.test_features_path, "r")
+        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        testset = self.test_dataset
+        res = []
+        with torch.no_grad():
+            for example in tqdm(testset, desc="Computing pose for test set"):
+                name = "/".join(example[1].split("/")[-2:])
+                if name not in names:
+                    continue
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+                if self.using_global_descriptors:
+                    image_descriptor = dd_utils.read_global_desc(
+                        name, global_features_h5
+                    )
+
+                    descriptors = combine_descriptors(
+                        descriptors, image_descriptor, self.lambda_val
+                    )
+
+                uv_arr, xyz_pred = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
+                )
+
+                camera = example[6]
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera,
+                )
+
+                t_err, r_err = compute_pose_error(pose, example[4])
+
+                res.append(
+                    [
+                        name,
+                        t_err,
+                        r_err,
+                        uv_arr,
+                        xyz_pred,
+                        pose,
+                        example[4],
+                        info["inliers"],
+                    ]
+                )
+
+        features_h5.close()
+        global_features_h5.close()
+
+        return res
