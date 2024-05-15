@@ -31,7 +31,7 @@ def visualize(ds):
     )
 
 
-def make_pic(good_result, bad_result, res_name):
+def make_pic(good_result, bad_result, res_name, rgb_arr):
     (
         name1,
         t_err1,
@@ -41,8 +41,19 @@ def make_pic(good_result, bad_result, res_name):
         pose1,
         gt_pose1,
         mask1,
+        pid_list1,
     ) = good_result
-    name2, t_err2, r_err2, uv_arr2, xyz_pred2, pose2, gt_pose2, mask2 = bad_result
+    (
+        name2,
+        t_err2,
+        r_err2,
+        uv_arr2,
+        xyz_pred2,
+        pose2,
+        gt_pose2,
+        mask2,
+        pid_list2,
+    ) = bad_result
     intrinsics = np.eye(3)
 
     intrinsics[0, 0] = 738
@@ -64,31 +75,42 @@ def make_pic(good_result, bad_result, res_name):
     cam2.paint_uniform_color((0, 0, 0))
     cam3.paint_uniform_color((0, 1, 0))
 
+    # ori1 = o3d.geometry.PointCloud(
+    #     o3d.utility.Vector3dVector(
+    #         np.repeat(cam1.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
+    #     )
+    # )
+    # ori2 = o3d.geometry.PointCloud(
+    #     o3d.utility.Vector3dVector(
+    #         np.repeat(cam2.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
+    #     )
+    # )
+
+    # corr1 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
+    #     ori1, pred1, [[0, du] for du in range(xyz1.shape[0])]
+    # )
+    # corr2 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
+    #     ori2, pred2, [[0, du] for du in range(xyz2.shape[0])]
+    # )
+    # corr1.paint_uniform_color((0.5, 0.5, 0))
+    # corr2.paint_uniform_color((1, 0, 0))
+    # pred1.paint_uniform_color((0, 0, 1))
+    # pred2.paint_uniform_color((1, 0, 0))
+
     xyz1 = xyz_pred1
     xyz2 = xyz_pred2
     pred1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1))
     pred2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2))
-    ori1 = o3d.geometry.PointCloud(
-        o3d.utility.Vector3dVector(
-            np.repeat(cam1.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
-        )
-    )
-    ori2 = o3d.geometry.PointCloud(
-        o3d.utility.Vector3dVector(
-            np.repeat(cam2.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
-        )
-    )
 
-    corr1 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
-        ori1, pred1, [[0, du] for du in range(xyz1.shape[0])]
-    )
-    corr2 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
-        ori2, pred2, [[0, du] for du in range(xyz2.shape[0])]
-    )
-    corr1.paint_uniform_color((0.5, 0.5, 0))
-    corr2.paint_uniform_color((1, 0, 0))
-    pred1.paint_uniform_color((0, 0, 1))
-    pred2.paint_uniform_color((1, 0, 0))
+    pred1.colors = o3d.utility.Vector3dVector(rgb_arr[pid_list1] / 255)
+    pred2.colors = o3d.utility.Vector3dVector(rgb_arr[pid_list2] / 255)
+
+    not_inlier1 = np.bitwise_not(np.array(mask1))
+    not_inlier2 = np.bitwise_not(np.array(mask2))
+    bad_points1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1[not_inlier1]))
+    bad_points2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2[not_inlier2]))
+    bad_points1.paint_uniform_color((1, 0, 0))
+    bad_points2.paint_uniform_color((1, 0, 0))
 
     vis = o3d.visualization.Visualizer()
     vis.create_window(visible=False, width=1024, height=1016)
@@ -97,6 +119,7 @@ def make_pic(good_result, bad_result, res_name):
     vis.add_geometry(cam3, reset_bounding_box=True)
     vis.add_geometry(cam2, reset_bounding_box=True)
     vis.add_geometry(pred1, reset_bounding_box=True)
+    # vis.add_geometry(bad_points1, reset_bounding_box=True)
     vis.add_geometry(pred2, reset_bounding_box=True)
     vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
     vis.remove_geometry(cam2, reset_bounding_box=False)
@@ -106,6 +129,7 @@ def make_pic(good_result, bad_result, res_name):
     vis.remove_geometry(pred1, reset_bounding_box=False)
     vis.add_geometry(cam2, reset_bounding_box=False)
     vis.add_geometry(pred2, reset_bounding_box=False)
+    # vis.add_geometry(bad_points2, reset_bounding_box=False)
     vis.capture_screen_image(f"debug/bad-{res_name}.png", do_render=True)
 
     # vis.add_geometry(corr2, reset_bounding_box=False)
@@ -116,10 +140,10 @@ def make_pic(good_result, bad_result, res_name):
     return
 
 
-def visualize_matches(good_results, bad_results, dataset):
+def visualize_matches(good_results, bad_results, rgb_arr):
     for idx in range(len(good_results)):
         idx_str = "{:03d}".format(idx)
-        make_pic(good_results[idx], bad_results[idx], idx_str)
+        make_pic(good_results[idx], bad_results[idx], idx_str, rgb_arr)
     for idx in range(len(good_results)):
         idx_str = "{:03d}".format(idx)
         im1 = cv2.imread(f"debug/good-{idx_str}.png")
@@ -194,7 +218,7 @@ def run_function(
 
     res = trainer_.process(good_name_list)
     res2 = trainer_2.process(good_name_list)
-    visualize_matches(res, res2, train_ds_)
+    visualize_matches(res, res2, trainer_.rgb_arr)
 
     bad_name_list = [
         "rgb/seq4_frame00093.png",

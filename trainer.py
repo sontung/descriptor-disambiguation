@@ -68,7 +68,7 @@ class BaseTrainer:
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=0.5,
-        convert_to_db_desc=True
+        convert_to_db_desc=True,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -114,6 +114,7 @@ class BaseTrainer:
         else:
             self.test_features_path = None
 
+        self.rgb_arr = None
         self.pca = None
         self.using_pca = False
         self.lambda_val = lambda_val
@@ -359,7 +360,7 @@ class BaseTrainer:
         result_file.close()
         print(f"Codebook improved from {count} pairs.")
 
-    def collect_image_descriptors(self, using_pca=False):
+    def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         file_name2 = f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
         if os.path.isfile(file_name1):
@@ -522,6 +523,35 @@ class BaseTrainer:
     def index_db_points(self):
         return
 
+    def process_descriptor(
+        self, name, features_h5, global_features_h5, gpu_index_flat_for_image_desc=None
+    ):
+        keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+
+        if self.using_global_descriptors:
+            image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
+
+            if self.convert_to_db_desc:
+                _, ind = gpu_index_flat_for_image_desc.search(
+                    image_descriptor.reshape(1, -1), 1
+                )
+                image_descriptor = self.all_image_desc[int(ind)]
+
+            descriptors = combine_descriptors(
+                descriptors, image_descriptor, self.lambda_val
+            )
+        return keypoints, descriptors
+
+    def return_faiss_indices(self):
+        if self.convert_to_db_desc:
+            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
+            res2 = faiss.StandardGpuResources()
+            gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
+            gpu_index_flat_for_image_desc.add(self.all_image_desc)
+        else:
+            gpu_index_flat_for_image_desc = None
+        return gpu_index_flat_for_image_desc
+
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -533,13 +563,7 @@ class BaseTrainer:
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
 
-        if self.convert_to_db_desc:
-            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
-            res2 = faiss.StandardGpuResources()
-            gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc)
-        else:
-            gpu_index_flat_for_image_desc = None
+        gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         if self.using_global_descriptors:
             result_file = open(
@@ -573,19 +597,9 @@ class BaseTrainer:
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                if self.using_global_descriptors:
-                    image_descriptor = dd_utils.read_global_desc(
-                        name, global_features_h5
-                    )
-
-                    if self.convert_to_db_desc:
-                        _, ind = gpu_index_flat_for_image_desc.search(image_descriptor.reshape(1, -1), 1)
-                        image_descriptor = self.all_image_desc[int(ind)]
-
-                    descriptors = combine_descriptors(
-                        descriptors, image_descriptor, self.lambda_val
-                    )
+                keypoints, descriptors = self.process_descriptor(
+                    name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
+                )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
@@ -969,6 +983,7 @@ class RobotCarTrainer(BaseTrainer):
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
+        gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
         if not os.path.isfile(global_descriptors_path):
@@ -1002,15 +1017,9 @@ class RobotCarTrainer(BaseTrainer):
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                if self.using_global_descriptors:
-                    image_descriptor = dd_utils.read_global_desc(
-                        name, global_features_h5
-                    )
-
-                    descriptors = combine_descriptors(
-                        descriptors, image_descriptor, self.lambda_val
-                    )
+                keypoints, descriptors = self.process_descriptor(
+                    name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
+                )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
@@ -1055,6 +1064,7 @@ class CMUTrainer(BaseTrainer):
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+        gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
             f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
@@ -1108,18 +1118,12 @@ class CMUTrainer(BaseTrainer):
                 if image_id in computed_images:
                     line = computed_images[image_id]
                 else:
-                    keypoints, descriptors = dd_utils.read_kp_and_desc(
-                        name, features_h5
+                    keypoints, descriptors = self.process_descriptor(
+                        name,
+                        features_h5,
+                        global_features_h5,
+                        gpu_index_flat_for_image_desc,
                     )
-
-                    if self.using_global_descriptors:
-                        image_descriptor = dd_utils.read_global_desc(
-                            name, global_features_h5
-                        )
-
-                        descriptors = combine_descriptors(
-                            descriptors, image_descriptor, self.lambda_val
-                        )
 
                     uv_arr, xyz_pred = self.legal_predict(
                         keypoints,
@@ -1285,6 +1289,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         if pid2mean_desc.shape[0] > all_pid.shape[0]:
             pid2mean_desc = pid2mean_desc[all_pid]
         self.xyz_arr = self.dataset.xyz_arr[all_pid]
+        self.rgb_arr = self.dataset.rgb_arr[all_pid]
         return pid2mean_desc, all_pid, {}
 
     def legal_predict(
@@ -1324,6 +1329,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
+        gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
             f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
@@ -1351,15 +1357,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         with torch.no_grad():
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                if self.using_global_descriptors:
-                    image_descriptor = dd_utils.read_global_desc(
-                        name, global_features_h5
-                    )
-
-                    descriptors = combine_descriptors(
-                        descriptors, image_descriptor, self.lambda_val
-                    )
+                keypoints, descriptors = self.process_descriptor(
+                    name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
+                )
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
@@ -1438,10 +1438,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                         descriptors, image_descriptor, self.lambda_val
                     )
 
-                uv_arr, xyz_pred = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
+                uv_arr, xyz_pred, pid_list = self.legal_predict(
+                    keypoints, descriptors, gpu_index_flat, return_pid=True
                 )
 
                 camera = example[6]
@@ -1463,6 +1461,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                         pose,
                         example[4],
                         info["inliers"],
+                        pid_list,
                     ]
                 )
 
