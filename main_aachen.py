@@ -63,12 +63,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="eigenplaces",
+        default="mixvpr",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=2048,
+        default=128,
     )
     args = parser.parse_args()
 

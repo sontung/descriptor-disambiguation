@@ -68,6 +68,7 @@ class BaseTrainer:
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=0.5,
+        convert_to_db_desc=True
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -123,7 +124,9 @@ class BaseTrainer:
         self.local_features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
         )
+        self.convert_to_db_desc = convert_to_db_desc
 
+        self.all_image_desc = None
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
         else:
@@ -137,7 +140,7 @@ class BaseTrainer:
             self.image2info3d = {}
             self.image2selected_desc = {}
             self.index_db_points()
-            self.improve_codebook()
+            # self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.all_pid_in_train_set,
@@ -381,14 +384,8 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         image2desc = {}
-        if using_pca:
-            self.pca = PCA(whiten=False, n_components=self.feature_dim)
-            all_desc = self.pca.fit_transform(all_desc)
-            self.using_pca = True
-
-        self.global_desc_mean = np.mean(all_desc)
-        self.global_desc_std = np.std(all_desc)
-
+        if self.convert_to_db_desc:
+            self.all_image_desc = all_desc
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx, : self.feature_dim]
         return image2desc
@@ -535,6 +532,15 @@ class BaseTrainer:
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+
+        if self.convert_to_db_desc:
+            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
+            res2 = faiss.StandardGpuResources()
+            gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
+            gpu_index_flat_for_image_desc.add(self.all_image_desc)
+        else:
+            gpu_index_flat_for_image_desc = None
+
         if self.using_global_descriptors:
             result_file = open(
                 f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.txt",
@@ -572,6 +578,10 @@ class BaseTrainer:
                     image_descriptor = dd_utils.read_global_desc(
                         name, global_features_h5
                     )
+
+                    if self.convert_to_db_desc:
+                        _, ind = gpu_index_flat_for_image_desc.search(image_descriptor.reshape(1, -1), 1)
+                        image_descriptor = self.all_image_desc[int(ind)]
 
                     descriptors = combine_descriptors(
                         descriptors, image_descriptor, self.lambda_val
