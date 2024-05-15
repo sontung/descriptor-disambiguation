@@ -5,6 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import poselib
+import torch
 from hloc import (
     extract_features,
     match_features,
@@ -12,9 +13,38 @@ from hloc import (
 )
 from hloc.pipelines.RobotCar import colmap_from_nvm
 from tqdm import tqdm
-
+import os
+import dd_utils
 from dataset import RobotCarDataset
 from trainer import retrieve_pid
+
+
+def run_retrieval(img_dir, out_dir, num_loc, db_images):
+    images = glob.glob(f"{img_dir}/*/*/*", recursive=True)
+
+    feature_path = f"{out_dir}/global_feats_salad.h5"
+    if not os.path.isfile(feature_path):
+        from salad_model import SaladModel
+        encoder_global = SaladModel()
+        with h5py.File(feature_path, "a", libver="latest") as fd:
+            for img in tqdm(images, desc="Running global desc"):
+                with torch.no_grad():
+                    image_descriptor = encoder_global.process(img)
+                name = img.split(str(img_dir))[-1][1:]
+                if name in fd:
+                    del fd[name]
+                dict_ = {"global_descriptor": image_descriptor}
+                grp = fd.create_group(name)
+                for k, v in dict_.items():
+                    grp.create_dataset(k, data=v)
+    loc_pairs = f"{out_dir}/pairs-query-salad-{num_loc}.txt"
+    pairs_from_retrieval.main(
+        feature_path,
+        loc_pairs,
+        num_loc,
+        db_model=db_images,
+    )
+    return Path(loc_pairs)
 
 
 def run(args):
@@ -35,20 +65,22 @@ def run(args):
 
     feature_conf["output"] = feature_conf["model"]["name"]
 
-    colmap_from_nvm.main(
-        dataset / "3D-models/all-merged/all.nvm",
-        dataset / "3D-models/overcast-reference.db",
-        sift_sfm,
-    )
+    # colmap_from_nvm.main(
+    #     dataset / "3D-models/all-merged/all.nvm",
+    #     dataset / "3D-models/overcast-reference.db",
+    #     sift_sfm,
+    # )
 
-    global_descriptors = extract_features.main(retrieval_conf, images, outputs)
+    # global_descriptors = extract_features.main(retrieval_conf, images, outputs)
+    #
+    # pairs_from_retrieval.main(
+    #     global_descriptors,
+    #     loc_pairs,
+    #     args.num_loc,
+    #     db_model=sift_sfm,
+    # )
 
-    pairs_from_retrieval.main(
-        global_descriptors,
-        loc_pairs,
-        args.num_loc,
-        db_model=sift_sfm,
-    )
+    loc_pairs = run_retrieval(images, outputs, args.num_loc, sift_sfm)
 
     features = extract_features.main(feature_conf, images, outputs)
 

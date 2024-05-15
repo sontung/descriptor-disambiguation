@@ -140,7 +140,7 @@ class BaseTrainer:
             self.pid2count = {}
             self.image2info3d = {}
             self.image2selected_desc = {}
-            self.index_db_points()
+            # self.index_db_points()
             # self.improve_codebook()
             (
                 self.pid2mean_desc,
