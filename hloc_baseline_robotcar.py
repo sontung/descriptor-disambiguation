@@ -38,12 +38,13 @@ def run_retrieval(img_dir, out_dir, num_loc, db_images):
                 for k, v in dict_.items():
                     grp.create_dataset(k, data=v)
     loc_pairs = f"{out_dir}/pairs-query-salad-{num_loc}.txt"
-    pairs_from_retrieval.main(
-        feature_path,
-        loc_pairs,
-        num_loc,
-        db_model=db_images,
-    )
+    if not os.path.isfile(loc_pairs):
+        pairs_from_retrieval.main(
+            feature_path,
+            loc_pairs,
+            num_loc,
+            db_model=db_images,
+        )
     return Path(loc_pairs)
 
 
