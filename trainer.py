@@ -255,89 +255,57 @@ class BaseTrainer:
         dd_utils.write_to_h5_file(fd, name, dict_)
 
     def collect_descriptors(self, vis=False):
-        if self.using_global_descriptors:
-            if self.using_pca:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.npy"
-                file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_pca.pkl"
-            else:
-                file_name1 = f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.npy"
-                file_name2 = f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.npy"
-                file_name3 = f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.pkl"
-        else:
-            file_name1 = (
-                f"output/{self.ds_name}/codebook_{self.local_desc_model_name}.npy"
-            )
-            file_name2 = (
-                f"output/{self.ds_name}/all_pids_{self.local_desc_model_name}.npy"
-            )
-            file_name3 = (
-                f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}.pkl"
-            )
+        features_h5 = self.load_local_features()
 
-        if (
-            os.path.isfile(file_name1)
-            and os.path.isfile(file_name2)
-            and os.path.isfile(file_name3)
-        ):
-            print(f"Loading codebook from {file_name1}")
-            pid2mean_desc = np.load(file_name1)
-            all_pid = np.load(file_name2)
-            afile = open(file_name3, "rb")
-            pid2ind = pickle.load(afile)
-            afile.close()
-        else:
-            features_h5 = self.load_local_features()
+        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+            if example is None:
+                continue
+            try:
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    example[1], features_h5
+                )
+            except KeyError:
+                print(f"Cannot read {example[1]} from {self.local_features_path}")
+                sys.exit()
+            pid_list = example[3]
+            uv = example[-1]
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-            for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-                if example is None:
-                    continue
-                try:
-                    keypoints, descriptors = dd_utils.read_kp_and_desc(
-                        example[1], features_h5
-                    )
-                except KeyError:
-                    print(f"Cannot read {example[1]} from {self.local_features_path}")
-                    sys.exit()
-                pid_list = example[3]
-                uv = example[-1]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+            selected_descriptors = descriptors[idx_arr]
+            if self.using_global_descriptors:
+                image_descriptor = self.image2desc[example[1]]
+                selected_descriptors = combine_descriptors(
+                    selected_descriptors, image_descriptor, self.lambda_val
+                )
 
-                selected_descriptors = descriptors[idx_arr]
-                if self.using_global_descriptors:
-                    image_descriptor = self.image2desc[example[1]]
-                    selected_descriptors = combine_descriptors(
-                        selected_descriptors, image_descriptor, self.lambda_val
+            for idx, pid in enumerate(selected_pid[ind2]):
+                if pid not in self.pid2descriptors:
+                    self.pid2descriptors[pid] = selected_descriptors[idx]
+                    self.pid2count[pid] = 1
+                else:
+                    self.pid2count[pid] += 1
+                    self.pid2descriptors[pid] = (
+                        self.pid2descriptors[pid] + selected_descriptors[idx]
                     )
 
-                for idx, pid in enumerate(selected_pid[ind2]):
-                    if pid not in self.pid2descriptors:
-                        self.pid2descriptors[pid] = selected_descriptors[idx]
-                        self.pid2count[pid] = 1
-                    else:
-                        self.pid2count[pid] += 1
-                        self.pid2descriptors[pid] = (
-                            self.pid2descriptors[pid] + selected_descriptors[idx]
-                        )
+        features_h5.close()
+        all_pid = list(self.pid2descriptors.keys())
+        all_pid = np.array(all_pid)
 
-            features_h5.close()
-            all_pid = list(self.pid2descriptors.keys())
-            all_pid = np.array(all_pid)
+        pid2mean_desc = np.zeros(
+            (all_pid.shape[0], self.feature_dim),
+            self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
+        )
 
-            pid2mean_desc = np.zeros(
-                (all_pid.shape[0], self.feature_dim),
-                self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
-            )
-
-            pid2ind = {}
-            ind = 0
-            for pid in self.pid2descriptors:
-                pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
-                pid2ind[pid] = ind
-                ind += 1
-            if np.sum(np.isnan(pid2mean_desc)) > 0:
-                print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
+        pid2ind = {}
+        ind = 0
+        for pid in self.pid2descriptors:
+            pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
+            pid2ind[pid] = ind
+            ind += 1
+        if np.sum(np.isnan(pid2mean_desc)) > 0:
+            print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
         return pid2mean_desc, all_pid, pid2ind
 
