@@ -25,6 +25,7 @@ def run_retrieval(img_dir, out_dir, num_loc, db_images):
     feature_path = f"{out_dir}/global_feats_salad.h5"
     if not os.path.isfile(feature_path):
         from salad_model import SaladModel
+
         encoder_global = SaladModel()
         with h5py.File(feature_path, "a", libver="latest") as fd:
             for img in tqdm(images, desc="Running global desc"):

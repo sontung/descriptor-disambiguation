@@ -275,7 +275,11 @@ class BaseTrainer:
                 f"output/{self.ds_name}/pid2ind_{self.local_desc_model_name}.pkl"
             )
 
-        if os.path.isfile(file_name1):
+        if (
+            os.path.isfile(file_name1)
+            and os.path.isfile(file_name2)
+            and os.path.isfile(file_name3)
+        ):
             print(f"Loading codebook from {file_name1}")
             pid2mean_desc = np.load(file_name1)
             all_pid = np.load(file_name2)

@@ -14,7 +14,7 @@ def run_function(
     local_desc_dim,
     global_desc_dim,
     using_global_descriptors,
-    convert
+    convert,
 ):
     if using_global_descriptors:
         print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
@@ -38,7 +38,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=lambda_val,
-            convert_to_db_desc=convert
+            convert_to_db_desc=convert,
         )
         trainer_.evaluate()
 
