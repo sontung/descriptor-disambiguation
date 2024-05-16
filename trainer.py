@@ -68,7 +68,7 @@ class BaseTrainer:
         run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=0.5,
-        convert_to_db_desc=True,
+        convert_to_db_desc=False,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -175,190 +175,7 @@ class BaseTrainer:
         return features_h5
 
     def improve_codebook(self, vis=False):
-        img_dir_str = self.dataset.images_dir_str
-        available_images_dir = Path(img_dir_str)
-        available_images = [
-            str(file).split(f"{img_dir_str}/")[-1]
-            for file in available_images_dir.rglob("*")
-            if file.is_file()
-        ]
-        used_img_names = [
-            self.dataset.recon_images[img_id].name for img_id in self.dataset.img_ids
-        ]
-
-        matches_h5 = h5py.File(
-            str(f"outputs/aachen_v1.1/{self.local_desc_model_name}_nn.h5"),
-            "a",
-            libver="latest",
-        )
-        features_h5 = h5py.File(
-            str(f"outputs/aachen_v1.1/{self.local_desc_model_name}.h5"),
-            "a",
-            libver="latest",
-        )
-
-        image2desc = {}
-        if self.using_global_descriptors:
-            for image_name in tqdm(
-                available_images, desc="Processing global descriptors for extra images"
-            ):
-                if image_name not in used_img_names:
-                    image_name_for_matching_db = image_name.replace("/", "-")
-                    if image_name_for_matching_db in matches_h5:
-                        image_descriptor = self.produce_image_descriptor(
-                            f"{img_dir_str}/{image_name}"
-                        )
-                        image2desc[image_name] = image_descriptor
-
-        print(f"Got {len(image2desc)} extra images")
-        result_file = open(
-            f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_2d_2d.txt",
-            "w",
-        )
-        count = 0
-        for image_name in tqdm(image2desc, desc="Improving codebook with extra images"):
-            image_name_for_matching_db = image_name.replace("/", "-")
-            data = matches_h5[image_name_for_matching_db]
-            matches_2d_3d = []
-            for db_img in data:
-                matches = data[db_img]
-                indices = np.array(matches["matches0"])
-                mask0 = indices > -1
-                if np.sum(mask0) < 10:
-                    continue
-                db_img_normal = db_img.replace("-", "/")
-                uv1 = np.array(features_h5[db_img_normal]["keypoints"])
-                uv1 = uv1[indices[mask0]]
-
-                db_img_id = self.dataset.image_name2id[db_img_normal]
-                pid_list = self.dataset.image_id2pids[db_img_id]
-                uv_gt = self.dataset.image_id2uvs[db_img_id]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv_gt, uv1)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-                matches_2d_3d.append([mask0, idx_arr, selected_pid[ind2]])
-
-            uv0 = np.array(features_h5[image_name]["keypoints"])
-            descriptors0 = np.array(features_h5[image_name]["descriptors"]).T
-            index_arr_for_kp = np.arange(uv0.shape[0])
-            all_matches = [[], [], []]
-            for mask0, idx_arr, pid_list in matches_2d_3d:
-                uv0_selected = uv0[mask0][idx_arr]
-                indices = index_arr_for_kp[mask0][idx_arr]
-                all_matches[0].append(uv0_selected)
-                all_matches[1].extend(pid_list)
-                all_matches[2].extend(indices)
-
-            if len(all_matches[1]) < 10:
-                count2 = 0
-                for db_img in data:
-                    matches = data[db_img]
-                    indices = np.array(matches["matches0"])
-                    mask0 = indices > -1
-                    print(db_img)
-                    # if np.sum(mask0) == 0:
-                    #     continue
-                    db_img_normal = db_img.replace("-", "/")
-                    uv1 = np.array(features_h5[db_img_normal]["keypoints"])
-                    uv1 = uv1[indices[mask0]]
-                    uv0_ = uv0[mask0]
-
-                    img0 = cv2.imread(f"{img_dir_str}/{image_name}")
-                    img1 = cv2.imread(f"{img_dir_str}/{db_img_normal}")
-                    img2 = concat_images_different_sizes([img0, img1])
-                    uv0_ = uv0_.astype(int)
-                    uv1 = uv1.astype(int)
-                    for idx in range(uv0_.shape[0]):
-                        u0, v0 = uv0_[idx]
-                        u1, v1 = uv1[idx]
-                        cv2.circle(img2, (u0, v0), 10, (255, 0, 0, 255), -1)
-                        cv2.circle(
-                            img2,
-                            (u1 + img0.shape[1], v1),
-                            10,
-                            (255, 0, 0, 255),
-                            -1,
-                        )
-                        cv2.line(
-                            img2,
-                            (u0, v0),
-                            (u1 + img0.shape[1], v1),
-                            (255, 0, 0, 255),
-                            2,
-                        )
-                    count2 += 1
-                    cv2.imwrite(
-                        f"debug/test-{image_name_for_matching_db}-{len(all_matches[1])}-{count2}.png",
-                        img2,
-                    )
-
-                tqdm.write(
-                    f"Skipping {image_name} because of {len(all_matches[1])} matches"
-                )
-                continue
-
-            uv_arr = np.vstack(all_matches[0])
-            xyz_pred = np.array(
-                [self.dataset.recon_points[pid].xyz for pid in all_matches[1]]
-            )
-            try:
-                (
-                    cam_type,
-                    width,
-                    height,
-                    focal,
-                    cx,
-                    cy,
-                    k,
-                ) = self.test_dataset.name2params[image_name]
-                camera = pycolmap.Camera(
-                    model=cam_type,
-                    width=int(width),
-                    height=int(height),
-                    params=[focal, cx, cy, k],
-                )
-
-                camera_dict = {
-                    "model": camera.model.name,
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose, info = poselib.estimate_absolute_pose(
-                    uv_arr,
-                    xyz_pred,
-                    camera_dict,
-                )
-
-            except KeyError:
-                continue
-
-            mask = info["inliers"]
-            kp_indices = np.array(all_matches[2])[mask]
-            pid_list = np.array(all_matches[1])[mask]
-            selected_descriptors = descriptors0[kp_indices]
-            if self.using_global_descriptors:
-                image_descriptor = image2desc[image_name]
-                selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val
-                )
-
-            for idx, pid in enumerate(pid_list):
-                if pid not in self.pid2descriptors:
-                    self.pid2descriptors[pid] = selected_descriptors[idx]
-                    self.pid2count[pid] = 1
-                else:
-                    self.pid2count[pid] += 1
-                    self.pid2descriptors[pid] = (
-                        self.pid2descriptors[pid] + selected_descriptors[idx]
-                    )
-
-            count += 1
-
-        matches_h5.close()
-        features_h5.close()
-        result_file.close()
-        print(f"Codebook improved from {count} pairs.")
+        return
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -548,6 +365,7 @@ class BaseTrainer:
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
+            print("Converting to DB descriptors")
         else:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat_for_image_desc
