@@ -135,6 +135,7 @@ class BaseTrainer:
 
         self.xyz_arr = None
         self.map_reduction = False
+        self.desc_dtype = np.float32
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
@@ -293,10 +294,16 @@ class BaseTrainer:
         all_pid = list(self.pid2descriptors.keys())
         all_pid = np.array(all_pid)
 
+        # pid2mean_desc = np.zeros(
+        #     (all_pid.shape[0], self.feature_dim),
+        #     self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
+        # )
+
         pid2mean_desc = np.zeros(
             (all_pid.shape[0], self.feature_dim),
-            self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
+            np.float16,
         )
+        self.desc_dtype = pid2mean_desc.dtype
 
         pid2ind = {}
         ind = 0
@@ -307,9 +314,9 @@ class BaseTrainer:
         if np.sum(np.isnan(pid2mean_desc)) > 0:
             print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
-        np.save(f"output/{self.ds_name}/codebook.npy", pid2mean_desc)
-        with open(f"output/{self.ds_name}/all_pids.pkl", "wb") as handle:
-            pickle.dump(all_pid, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # np.save(f"output/{self.ds_name}/codebook.npy", pid2mean_desc)
+        # with open(f"output/{self.ds_name}/all_pids.pkl", "wb") as handle:
+        #     pickle.dump(all_pid, handle, protocol=pickle.HIGHEST_PROTOCOL)
         # sys.exit()
         return pid2mean_desc, all_pid, pid2ind
 
@@ -342,6 +349,7 @@ class BaseTrainer:
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
+            print(f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}")
         else:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat_for_image_desc
@@ -359,8 +367,7 @@ class BaseTrainer:
 
         gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        print(f"Codebook size: {hurry.filesize.size(sys.getsizeof(gpu_index_flat))}")
-        print(f"DB desc size: {hurry.filesize.size(sys.getsizeof(gpu_index_flat_for_image_desc))}")
+        print(f"Codebook size: {hurry.filesize.size(sys.getsizeof(self.pid2mean_desc))}")
 
         if self.using_global_descriptors:
             result_file = open(
@@ -430,7 +437,7 @@ class BaseTrainer:
     def legal_predict(
         self, uv_arr, features_ori, gpu_index_flat, remove_duplicate=False
     ):
-        distances, feature_indices = gpu_index_flat.search(features_ori, 1)
+        distances, feature_indices = gpu_index_flat.search(features_ori.astype(self.desc_dtype), 1)
 
         feature_indices = feature_indices.ravel()
 
