@@ -3,22 +3,20 @@ import os
 import pickle
 import sys
 from pathlib import Path
-import hurry.filesize
+
 import cv2
 import faiss
 import h5py
+import hurry.filesize
 import numpy as np
 import poselib
-import pycolmap
 import torch
 from pykdtree.kdtree import KDTree
-from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess, project_using_pose
 from dataset import RobotCarDataset
-from dd_utils import concat_images_different_sizes
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -69,6 +67,7 @@ class BaseTrainer:
         collect_code_book=True,
         lambda_val=0.5,
         convert_to_db_desc=False,
+        codebook_dtype=np.float16,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -135,7 +134,7 @@ class BaseTrainer:
 
         self.xyz_arr = None
         self.map_reduction = False
-        self.desc_dtype = np.float32
+        self.codebook_dtype = codebook_dtype
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
@@ -145,14 +144,10 @@ class BaseTrainer:
             self.improve_codebook()
             (
                 self.pid2mean_desc,
-                self.all_pid_in_train_set,
                 self.pid2ind,
             ) = self.collect_descriptors()
 
             if self.pid2ind:
-                self.all_ind_in_train_set = np.array(
-                    [self.pid2ind[pid] for pid in self.all_pid_in_train_set]
-                )
                 self.ind2pid = {v: k for k, v in self.pid2ind.items()}
         else:
             self.pid2mean_desc = None
@@ -294,16 +289,10 @@ class BaseTrainer:
         all_pid = list(self.pid2descriptors.keys())
         all_pid = np.array(all_pid)
 
-        # pid2mean_desc = np.zeros(
-        #     (all_pid.shape[0], self.feature_dim),
-        #     self.pid2descriptors[list(self.pid2descriptors.keys())[0]].dtype,
-        # )
-
         pid2mean_desc = np.zeros(
             (all_pid.shape[0], self.feature_dim),
-            np.float16,
+            self.codebook_dtype,
         )
-        self.desc_dtype = pid2mean_desc.dtype
 
         pid2ind = {}
         ind = 0
@@ -314,11 +303,18 @@ class BaseTrainer:
         if np.sum(np.isnan(pid2mean_desc)) > 0:
             print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
-        # np.save(f"output/{self.ds_name}/codebook.npy", pid2mean_desc)
-        # with open(f"output/{self.ds_name}/all_pids.pkl", "wb") as handle:
-        #     pickle.dump(all_pid, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        # sys.exit()
-        return pid2mean_desc, all_pid, pid2ind
+        print(f"Codebook size: {hurry.filesize.size(sys.getsizeof(pid2mean_desc))}")
+        print(f"Codebook dtype: {self.codebook_dtype}")
+        np.save(
+            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            pid2mean_desc,
+        )
+        with open(
+            f"output/{self.ds_name}/pid2ind-{self.local_desc_model_name}-{self.global_desc_model_name}.pkl",
+            "wb",
+        ) as handle:
+            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        return pid2mean_desc, pid2ind
 
     def index_db_points(self):
         return
@@ -349,7 +345,9 @@ class BaseTrainer:
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
-            print(f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}")
+            print(
+                f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}"
+            )
         else:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat_for_image_desc
@@ -363,11 +361,9 @@ class BaseTrainer:
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+        gpu_index_flat.add(self.pid2mean_desc)
 
         gpu_index_flat_for_image_desc = self.return_faiss_indices()
-
-        print(f"Codebook size: {hurry.filesize.size(sys.getsizeof(self.pid2mean_desc))}")
 
         if self.using_global_descriptors:
             result_file = open(
@@ -437,7 +433,9 @@ class BaseTrainer:
     def legal_predict(
         self, uv_arr, features_ori, gpu_index_flat, remove_duplicate=False
     ):
-        distances, feature_indices = gpu_index_flat.search(features_ori.astype(self.desc_dtype), 1)
+        distances, feature_indices = gpu_index_flat.search(
+            features_ori.astype(self.codebook_dtype), 1
+        )
 
         feature_indices = feature_indices.ravel()
 
@@ -455,9 +453,7 @@ class BaseTrainer:
             uv_arr = np.array([pid2uv[pid][1] for pid in pid2uv])
             feature_indices = [pid for pid in pid2uv]
 
-        pid_pred = [
-            self.ind2pid[ind] for ind in self.all_ind_in_train_set[feature_indices]
-        ]
+        pid_pred = [self.ind2pid[ind] for ind in feature_indices]
         pred_scene_coords_b3 = np.array(
             [self.dataset.recon_points[pid].xyz for pid in pid_pred]
         )
@@ -762,20 +758,6 @@ class RobotCarTrainer(BaseTrainer):
 
         feature_indices = feature_indices.ravel()
 
-        if remove_duplicate:
-            pid2uv = {}
-            for idx in range(feature_indices.shape[0]):
-                pid = feature_indices[idx]
-                dis = distances[idx][0]
-                uv = uv_arr[idx]
-                if pid not in pid2uv:
-                    pid2uv[pid] = [dis, uv]
-                else:
-                    if dis < pid2uv[pid][0]:
-                        pid2uv[pid] = [dis, uv]
-            uv_arr = np.array([pid2uv[pid][1] for pid in pid2uv])
-            feature_indices = [pid for pid in pid2uv]
-
         pred_scene_coords_b3 = self.xyz_arr[feature_indices]
         if return_pid:
             return uv_arr, pred_scene_coords_b3, feature_indices
@@ -867,7 +849,7 @@ class CMUTrainer(BaseTrainer):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
+        gpu_index_flat.add(self.pid2mean_desc)
         gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
