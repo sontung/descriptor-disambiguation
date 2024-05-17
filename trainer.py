@@ -303,7 +303,6 @@ class BaseTrainer:
         if np.sum(np.isnan(pid2mean_desc)) > 0:
             print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
-        print(f"Codebook size: {hurry.filesize.size(sys.getsizeof(pid2mean_desc))}")
         print(f"Codebook dtype: {self.codebook_dtype}")
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
@@ -339,31 +338,32 @@ class BaseTrainer:
         return keypoints, descriptors
 
     def return_faiss_indices(self):
+        index = faiss.IndexFlatL2(self.feature_dim)
+        index.add(self.pid2mean_desc)
+        index_file_path = f"output/{self.ds_name}/codebook.index"
+        faiss.write_index(index, index_file_path)
+        index = faiss.read_index(index_file_path)
+        print(f"Codebook size: {hurry.filesize.size(os.path.getsize(index_file_path))}")
         if self.convert_to_db_desc:
-            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
-            res2 = faiss.StandardGpuResources()
-            gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc)
+            index_for_image_desc = faiss.IndexFlatL2(self.global_feature_dim)
+            index_for_image_desc.add(self.all_image_desc)
+            index_img_desc_file_path = f"output/{self.ds_name}/db_global_desc.index"
+            faiss.write_index(index, index_img_desc_file_path)
+            index_for_image_desc = faiss.read_index(index_img_desc_file_path)
             print("Converting to DB descriptors")
             print(
-                f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}"
+                f"DB desc size: {hurry.filesize.size(os.path.getsize(index_img_desc_file_path))}"
             )
         else:
-            gpu_index_flat_for_image_desc = None
-        return gpu_index_flat_for_image_desc
+            index_for_image_desc = None
+        return index, index_for_image_desc
 
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
         :return:
         """
-
-        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc)
-
-        gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         if self.using_global_descriptors:
             result_file = open(
@@ -765,11 +765,7 @@ class RobotCarTrainer(BaseTrainer):
         return uv_arr, pred_scene_coords_b3
 
     def evaluate(self):
-        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc)
-        gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
         if not os.path.isfile(global_descriptors_path):
@@ -845,12 +841,7 @@ class CMUTrainer(BaseTrainer):
         write to pose file as name.jpg qw qx qy qz tx ty tz
         :return:
         """
-
-        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc)
-        gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
             f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
