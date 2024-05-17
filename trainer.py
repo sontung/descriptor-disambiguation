@@ -307,6 +307,10 @@ class BaseTrainer:
         if np.sum(np.isnan(pid2mean_desc)) > 0:
             print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
+        np.save(f"output/{self.ds_name}/codebook.npy", pid2mean_desc)
+        with open(f"output/{self.ds_name}/all_pids.pkl", "wb") as handle:
+            pickle.dump(all_pid, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        sys.exit()
         return pid2mean_desc, all_pid, pid2ind
 
     def index_db_points(self):
