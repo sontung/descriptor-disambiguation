@@ -3,7 +3,7 @@ import os
 import pickle
 import sys
 from pathlib import Path
-
+import hurry.filesize
 import cv2
 import faiss
 import h5py
@@ -310,7 +310,7 @@ class BaseTrainer:
         np.save(f"output/{self.ds_name}/codebook.npy", pid2mean_desc)
         with open(f"output/{self.ds_name}/all_pids.pkl", "wb") as handle:
             pickle.dump(all_pid, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        sys.exit()
+        # sys.exit()
         return pid2mean_desc, all_pid, pid2ind
 
     def index_db_points(self):
@@ -358,6 +358,9 @@ class BaseTrainer:
         gpu_index_flat.add(self.pid2mean_desc[self.all_ind_in_train_set])
 
         gpu_index_flat_for_image_desc = self.return_faiss_indices()
+
+        print(f"Codebook size: {hurry.filesize.size(sys.getsizeof(gpu_index_flat))}")
+        print(f"DB desc size: {hurry.filesize.size(sys.getsizeof(gpu_index_flat_for_image_desc))}")
 
         if self.using_global_descriptors:
             result_file = open(
