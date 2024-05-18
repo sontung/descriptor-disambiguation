@@ -540,17 +540,18 @@ class RobotCarTrainer(BaseTrainer):
                 )
 
     def improve_codebook(self, vis=False):
+        return
         self.reduce_map_size()
         img_dir_str = self.dataset.images_dir_str
         matches_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
-            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
+            # str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
             "r",
             libver="latest",
         )
         features_h5 = h5py.File(
-            str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
-            # "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
+            # str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
+            "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
             "r",
             libver="latest",
         )

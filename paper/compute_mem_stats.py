@@ -10,9 +10,8 @@ files_ = {
                        f"{out_dir}/image_desc_name_eigenplaces2048_2048.npy"],
     "db_images": ["/home/n11373598/work/descriptor-disambiguation/datasets/aachen_v1.1/images_upright/db",
                   "/home/n11373598/hpc-home/work/descriptor-disambiguation/datasets/aachen_v1.1/images_upright/sequences"],
-    "codebook": [f"{out_dir}/codebook_d2net_eigenplaces_ResNet50_2048_2048.npy",
-                 f"{out_dir}/all_pids_d2net_eigenplaces_ResNet50_2048_2048.npy",
-                 f"{out_dir}/pid2ind_d2net_eigenplaces_ResNet50_2048_2048.pkl"]
+    "codebook": [f"{out_dir}/codebook-d2net-eigenplaces_ResNet101_2048.npy",
+                 f"{out_dir}/pid2ind-d2net-eigenplaces_ResNet101_2048.pkl"]
 }
 
 
@@ -40,8 +39,36 @@ methods = {
     "light": ["codebook"],
     "heavy": ["codebook", "db_global_desc"]
 }
+method2total_size = {}
+
 for method in methods:
     mem = 0
     for info in methods[method]:
         mem += mem_dict[info]
+    method2total_size[method] = mem
     print(method, hurry.filesize.size(mem))
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+fig, ax = plt.subplots()
+width = 0.6
+file2values = {
+    "uv2xyz": np.array([1, 0, 0]),
+    "db_global_desc": np.array([1, 0, 1]),
+    "codebook": np.array([0, 1, 1]),
+    "db_images": np.array([1, 0, 0]),
+}
+
+bottom = np.zeros(3)
+
+for file_, file_size in file2values.items():
+    p = ax.bar(list(methods.keys()), file_size*mem_dict[file_], width, label=file_, bottom=bottom)
+    bottom += file_size*mem_dict[file_]
+
+    ax.bar_label(p, label_type='center')
+ax.legend()
+
+plt.savefig("mem_fig.png")
+
+print()
