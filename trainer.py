@@ -743,7 +743,7 @@ class RobotCarTrainer(BaseTrainer):
             f"output/{self.ds_name}/xyz_arr{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
             self.xyz_arr,
         )
-        return pid2mean_desc, all_pids, {}
+        return pid2mean_desc, {}
 
     def legal_predict(
         self,
