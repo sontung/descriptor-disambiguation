@@ -12,6 +12,7 @@ def run_function(
     local_desc_dim,
     global_desc_dim,
     using_global_descriptors,
+    convert,
 ):
     encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
         local_desc_model, retrieval_model, global_desc_dim
@@ -33,6 +34,7 @@ def run_function(
         conf_ns,
         conf_ns_retrieval,
         using_global_descriptors,
+        convert_to_db_desc=convert,
     )
     trainer_.evaluate()
 
@@ -46,6 +48,7 @@ if __name__ == "__main__":
         help="Path to the dataset, default: %(default)s",
     )
     parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--convert", type=int, default=0)
 
     parser.add_argument(
         "--local_desc",
@@ -77,4 +80,5 @@ if __name__ == "__main__":
         int(args.local_desc_dim),
         int(args.global_desc_dim),
         bool(args.use_global),
+        bool(args.convert),
     )

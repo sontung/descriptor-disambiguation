@@ -84,17 +84,17 @@ def run(args):
 
     # loc_pairs = run_retrieval(images, outputs, args.num_loc, sift_sfm)
 
-    # features = extract_features.main(feature_conf, images, outputs)
+    features = extract_features.main(feature_conf, images, outputs)
 
-    # loc_matches = match_features.main(
-    #     matcher_conf, loc_pairs, feature_conf["output"], outputs, matches=""
-    # )
+    loc_matches = match_features.main(
+        matcher_conf, loc_pairs, feature_conf["output"], outputs
+    )
 
-    loc_matches = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5"
-    features = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5"
+    # loc_matches = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5"
+    # features = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5"
 
     train_ds_ = RobotCarDataset(ds_dir=str(dataset))
-    test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=False)
+    test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
 
     result_file = open(
         f"{str(outputs)}/Robotcar_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
