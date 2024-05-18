@@ -868,7 +868,7 @@ class CMUTrainer(BaseTrainer):
         print(f"Reading local descriptors from {self.test_features_path}")
 
         if self.using_global_descriptors:
-            result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}.txt"
+            result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{int(self.convert_to_db_desc)}.txt"
         else:
             result_file_name = (
                 f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
