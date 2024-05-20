@@ -5,6 +5,22 @@ from pathlib import Path
 from tqdm import tqdm
 
 
+def get_method_mem(mem_dict, divide=1):
+    methods = {
+        "hloc": ["uv2xyz", "db_global_desc", "db_images"],
+        "light": ["codebook"],
+        "heavy": ["codebook", "db_global_desc"]
+    }
+    method2total_size = {}
+
+    for method in methods:
+        mem = 0
+        for info in methods[method]:
+            mem += mem_dict[info]
+        method2total_size[method] = mem
+        print(method, get_size(mem/divide))
+
+
 def aachen():
     out_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/aachen"
     files_ = {
@@ -34,21 +50,9 @@ def aachen():
             mem_dict[file_] = mem
 
     for info in mem_dict:
-        print(info, hurry.filesize.size(mem_dict[info]))
+        print(info, get_size(mem_dict[info]))
 
-    methods = {
-        "hloc": ["uv2xyz", "db_global_desc", "db_images"],
-        "light": ["codebook"],
-        "heavy": ["codebook", "db_global_desc"]
-    }
-    method2total_size = {}
-
-    for method in methods:
-        mem = 0
-        for info in methods[method]:
-            mem += mem_dict[info]
-        method2total_size[method] = mem
-        print(method, hurry.filesize.size(mem))
+    get_method_mem(mem_dict)
 
 
 def cmu():
@@ -86,24 +90,36 @@ def cmu():
 
     for info in mem_dict:
         print(info, get_size(mem_dict[info]))
-
-    methods = {
-        "hloc": ["uv2xyz", "db_global_desc", "db_images"],
-        "light": ["codebook"],
-        "heavy": ["codebook", "db_global_desc"]
-    }
-    method2total_size = {}
-
-    for method in methods:
-        mem = 0
-        for info in methods[method]:
-            mem += mem_dict[info]
-        method2total_size[method] = mem
-        print(method, get_size(mem))
-
+    get_method_mem(mem_dict)
     return
 
 
+def cambridge():
+    global_model = "mixvpr_128_128"
+    local_model = "r2d2"
+    files_ = {
+        "uv2xyz": [f"../../ace/datasets/Cambridge_*/reconstruction.nvm"],
+        "db_global_desc": [f"../output/Cambridge_*/image_desc_{global_model}.npy",
+                           f"../output/Cambridge_*/image_desc_name_{global_model}.npy"],
+        "db_images": ["../../ace/datasets/Cambridge_*/train/rgb/*.png"],
+        "codebook": [f"../output/Cambridge_*/codebook_{local_model}_{global_model}.npy"]
+    }
+
+    mem_dict = {}
+    for file_ in files_:
+        values_ = files_[file_]
+        mem = 0
+        for v in values_:
+            assert len(glob.glob(v)) >= 5, glob.glob(v)
+            mem += sum([os.path.getsize(du) for du in glob.glob(v)])
+        mem_dict[file_] = mem
+    for info in mem_dict:
+        print(info, get_size(mem_dict[info]))
+    get_method_mem(mem_dict, 5)
+
+    print()
+
 if __name__ == '__main__':
     # aachen()
-    cmu()
+    # cmu()
+    cambridge()

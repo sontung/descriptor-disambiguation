@@ -57,6 +57,7 @@ def run_function(
             using_global_descriptors,
             lambda_val=0.5,
         )
+        # continue
         err = trainer_.evaluate()
         print(f"    median translation error = {err[0]}")
         print(f"    median rotation error = {err[1]}")
@@ -116,5 +117,5 @@ if __name__ == "__main__":
         t_err, r_err = results[ds]
         t0 += t_err
         r0 += r_err
-        print(f"    {ds} {t_err:.3f}/{r_err:.3f}")
-    print(f"    Avg. {t0/len(results):.3f}/{r0/len(results):.3f}")
+        print(f"    {ds} {t_err:.1f}/{r_err:.1f}")
+    print(f"    Avg. {t0/len(results):.1f}/{r0/len(results):.1f}")

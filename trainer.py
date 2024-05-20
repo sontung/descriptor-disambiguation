@@ -955,7 +955,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         all_pid = np.array(all_pid)
         pid2mean_desc = np.zeros(
             (all_pid.shape[0], self.feature_dim),
-            pid2descriptors[list(pid2descriptors.keys())[0]].dtype,
+            self.codebook_dtype,
         )
 
         for ind, pid in enumerate(all_pid):
@@ -965,7 +965,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
             pid2mean_desc = pid2mean_desc[all_pid]
         self.xyz_arr = self.dataset.xyz_arr[all_pid]
         self.rgb_arr = self.dataset.rgb_arr[all_pid]
-        return pid2mean_desc, all_pid, {}
+        np.save(f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy",
+                pid2mean_desc)
+        return pid2mean_desc, {}
 
     def legal_predict(
         self,
