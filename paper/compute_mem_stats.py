@@ -56,11 +56,11 @@ def cmu():
 
     files_ = {
         "uv2xyz": [f"/work/qvpr/data/raw/2020VisualLocalization/Extended-CMU-Seasons/slice*/sparse/images.bin"],
-        "db_global_desc": [f"../output/cmu/slice*/image_desc_salad_8448_8448.npy",
-                           f"../output/cmu/slice*/image_desc_name_salad_8448_8448.npy"],
+        "db_global_desc": [f"../output/cmu/slice*/image_desc_eigenplaces_ResNet50_2048_2048.npy",
+                           f"../output/cmu/slice*/image_desc_name_eigenplaces_ResNet50_2048_2048.npy"],
         "db_images": ["/work/qvpr/data/raw/2020VisualLocalization/Extended-CMU-Seasons/slice*/database"],
-        "codebook": [f"../output/cmu/slice*/codebook-d2net-salad_8448_8448.npy",
-                     f"../output/cmu/slice*/pid2ind-d2net-salad_8448_8448.pkl"]
+        "codebook": [f"../output/cmu/slice*/codebook-d2net-eigenplaces_ResNet50_2048_2048.npy",
+                     f"../output/cmu/slice*/pid2ind-d2net-eigenplaces_ResNet50_2048_2048.pkl"]
     }
 
     mem_dict = {}
