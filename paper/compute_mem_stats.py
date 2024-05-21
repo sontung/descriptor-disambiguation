@@ -119,7 +119,8 @@ def cambridge():
 
     print()
 
+
 if __name__ == '__main__':
     # aachen()
-    # cmu()
-    cambridge()
+    cmu()
+    # cambridge()
