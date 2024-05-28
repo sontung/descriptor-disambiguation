@@ -538,13 +538,16 @@ class RobotCarTrainer(BaseTrainer):
         self.image2desc.clear()
         self.pid2descriptors.clear()
 
+        print(f"Codebook size: {round(sys.getsizeof(pid2mean_desc)/1e9, 2)} GB")
+        print(f"Codebook dtype: {self.codebook_dtype}")
+        with open(
+            f"output/{self.ds_name}/pid2ind-{self.local_desc_model_name}-{self.global_desc_model_name}.pkl",
+            "wb",
+        ) as handle:
+            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
         np.save(
             f"output/{self.ds_name}/pid2mean_desc{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
             pid2mean_desc,
-        )
-        np.save(
-            f"output/{self.ds_name}/xyz_arr{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
-            self.xyz_arr,
         )
         return pid2mean_desc, pid2ind
 
