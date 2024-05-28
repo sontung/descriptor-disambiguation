@@ -503,7 +503,7 @@ class RobotCarTrainer(BaseTrainer):
         pid2mean_desc = np.zeros(
             (self.dataset.xyz_arr[inlier_ind].shape[0], self.feature_dim), self.codebook_dtype
         )
-        pid2count = np.zeros(self.xyz_arr.shape[0])
+        pid2count = np.zeros(self.xyz_arr.shape[0], self.codebook_dtype)
         pid2ind = {}
         index_for_array = -1
 
@@ -566,8 +566,8 @@ class RobotCarTrainer(BaseTrainer):
 
         return uv_arr, pred_scene_coords_b3
 
-    @profile
     def evaluate(self):
+        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"

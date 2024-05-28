@@ -372,6 +372,8 @@ class AachenDataset(Dataset):
 
 
 class RobotCarDataset(Dataset):
+    images_dir_str: str
+
     def __init__(self, ds_dir="datasets/robotcar", train=True, evaluate=False):
         self.ds_type = "robotcar"
         self.ds_dir = ds_dir

@@ -49,73 +49,33 @@ def run_retrieval(img_dir, out_dir, num_loc, db_images):
     return Path(loc_pairs)
 
 
-def run(args):
-    # Setup the paths
-    dataset = args.dataset
-    images = dataset / "images/"
+def perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm):
+    pairs_from_retrieval.main(
+        global_descriptors,
+        loc_pairs,
+        num_loc,
+        query_prefix="query",
+        db_model=sift_sfm,
+    )
 
-    outputs = args.outputs  # where everything will be saved
-    outputs.mkdir(exist_ok=True, parents=True)
-    sift_sfm = outputs / "sfm_sift"
 
-    loc_pairs = outputs / f"pairs-query{args.num_loc}.txt"
-
-    # pick one of the configurations for extraction and matching
-    retrieval_conf = extract_features.confs["eigenplaces"]
-    feature_conf = extract_features.confs["d2net-ss"]
-    matcher_conf = match_features.confs["NN-mutual"]
-
-    feature_conf["output"] = feature_conf["model"]["name"]
-
-    # colmap_from_nvm.main(
-    #     dataset / "3D-models/all-merged/all.nvm",
-    #     dataset / "3D-models/overcast-reference.db",
-    #     sift_sfm,
-    # )
-
-    # global_descriptors = extract_features.main(retrieval_conf, images, outputs)
-    #
-    # pairs_from_retrieval.main(
-    #     global_descriptors,
-    #     loc_pairs,
-    #     args.num_loc,
-    #     db_model=sift_sfm,
-    # )
-
-    # loc_pairs = run_retrieval(images, outputs, args.num_loc, sift_sfm)
-
-    features = extract_features.main(feature_conf, images, outputs)
-
+def perform_feature_matching(matcher_conf, loc_pairs, feature_conf, outputs):
     loc_matches = match_features.main(
-        matcher_conf, loc_pairs, feature_conf["output"], outputs
+        matcher_conf, loc_pairs, feature_conf, outputs
     )
+    return loc_matches
 
-    # loc_matches = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5"
-    # features = "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5"
 
-    train_ds_ = RobotCarDataset(ds_dir=str(dataset))
-    test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
+def db_feature_detection(feature_conf, images, outputs):
+    features = extract_features.main(feature_conf, images, outputs)
+    return features
 
-    result_file = open(
-        f"{str(outputs)}/Robotcar_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
-        "w",
-    )
-    matches_h5 = h5py.File(
-        loc_matches,
-        "r",
-        libver="latest",
-    )
-    features_h5 = h5py.File(
-        features,
-        "r",
-        libver="latest",
-    )
-    img_dir_str = train_ds_.images_dir_str
 
+def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
     failed = 0
     for example in tqdm(test_ds_, desc="Computing pose"):
         image_name = example[1]
-        image_name_wo_dir = image_name.split(img_dir_str)[-1][1:]
+        image_name_wo_dir = image_name.split(train_ds_.images_dir_str)[-1][1:]
         image_name_for_matching_db = image_name_wo_dir.replace("/", "-")
         data = matches_h5[image_name_for_matching_db]
         matches_2d_3d = []
@@ -178,10 +138,77 @@ def run(args):
         image_id = "/".join(example[2].split("/")[1:])
         print(f"{image_id} {qvec} {tvec}", file=result_file)
 
+    print(f"Failed to localize {failed} images.")
+
+
+@profile
+def main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
+             images, outputs, loc_pairs, num_loc, sift_sfm):
+    # extract local features for db images
+    features = db_feature_detection(feature_conf, images, outputs)
+
+    # extract global features for db images
+    global_descriptors = extract_features.main(retrieval_conf, images, outputs)
+
+    # perform retrieval
+    perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm)
+
+    # match query images with retrieved db images
+    loc_matches = perform_feature_matching(
+        matcher_conf, loc_pairs, feature_conf["output"], outputs
+    )
+
+    matches_h5 = h5py.File(
+        loc_matches,
+        "a",
+        libver="latest",
+    )
+    features_h5 = h5py.File(
+        features,
+        "a",
+        libver="latest",
+    )
+    result_file = open(
+        f"{str(outputs)}/Aachen_v1_1_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
+        "w",
+    )
+
+    compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file)
+
     matches_h5.close()
     features_h5.close()
     result_file.close()
-    print(f"Failed to localize {failed} images.")
+
+
+def run(args):
+    # Setup the paths
+    dataset = args.dataset
+    images = dataset / "images/"
+
+    outputs = args.outputs  # where everything will be saved
+    outputs.mkdir(exist_ok=True, parents=True)
+    sift_sfm = outputs / "sfm_sift"
+
+    loc_pairs = outputs / f"pairs-query{args.num_loc}.txt"
+
+    # pick one of the configurations for extraction and matching
+    retrieval_conf = extract_features.confs["eigenplaces"]
+    feature_conf = extract_features.confs["d2net-ss"]
+    matcher_conf = match_features.confs["NN-mutual"]
+
+    feature_conf["output"] = feature_conf["model"]["name"]
+
+    colmap_from_nvm.main(
+        dataset / "3D-models/all-merged/all.nvm",
+        dataset / "3D-models/overcast-reference.db",
+        sift_sfm,
+    )
+
+    train_ds_ = RobotCarDataset(ds_dir=str(dataset))
+    test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
+
+    main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
+             images, outputs, loc_pairs, args.num_loc, sift_sfm)
 
 
 if __name__ == "__main__":
@@ -201,7 +228,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_loc",
         type=int,
-        default=10,
+        default=20,
         help="Number of image pairs for loc, default: %(default)s",
     )
     args = parser.parse_args()
