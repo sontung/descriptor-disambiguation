@@ -63,10 +63,9 @@ class BaseTrainer:
         local_desc_conf,
         global_desc_conf,
         using_global_descriptors,
-        run_local_feature_detection_on_test_set=True,
         collect_code_book=True,
         lambda_val=0.5,
-        convert_to_db_desc=False,
+        convert_to_db_desc=True,
         codebook_dtype=np.float16,
     ):
         self.feature_dim = feature_dim
@@ -94,25 +93,7 @@ class BaseTrainer:
         self.global_desc_model = global_desc_model
         self.global_desc_conf = global_desc_conf
 
-        if run_local_feature_detection_on_test_set:
-            self.test_features_path = (
-                f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
-            )
-            if not os.path.isfile(self.test_features_path):
-                features_h5 = h5py.File(
-                    str(self.test_features_path), "a", libver="latest"
-                )
-                with torch.no_grad():
-                    for example in tqdm(
-                        self.test_dataset, desc="Detecting testing features"
-                    ):
-                        if example is None:
-                            continue
-                        self.produce_local_descriptors(example[1], features_h5)
-                features_h5.close()
-        else:
-            self.test_features_path = None
-
+        self.test_features_path = None
         self.rgb_arr = None
         self.pca = None
         self.using_pca = False
@@ -158,6 +139,23 @@ class BaseTrainer:
             self.all_ind_in_train_set = None
             self.ind2pid = None
 
+    def detect_local_features_on_test_set(self):
+        self.test_features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
+        )
+        if not os.path.isfile(self.test_features_path):
+            features_h5 = h5py.File(
+                str(self.test_features_path), "a", libver="latest"
+            )
+            with torch.no_grad():
+                for example in tqdm(
+                        self.test_dataset, desc="Detecting testing features"
+                ):
+                    if example is None:
+                        continue
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
+
     def load_local_features(self):
         features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
@@ -184,6 +182,7 @@ class BaseTrainer:
             all_names = pickle.load(afile)
             afile.close()
         else:
+            print(f"Cannot find {file_name1}")
             all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
             all_names = []
             idx = 0
@@ -255,6 +254,14 @@ class BaseTrainer:
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
 
+        pid2ind = {}
+        index_for_array = -1
+        pid2mean_desc = np.zeros(
+            (len(self.dataset.recon_points), self.feature_dim),
+            np.float64,
+        )
+        pid2count = np.zeros(len(self.dataset.recon_points))
+
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
             if example is None:
                 continue
@@ -278,30 +285,19 @@ class BaseTrainer:
                 )
 
             for idx, pid in enumerate(selected_pid[ind2]):
-                if pid not in self.pid2descriptors:
-                    self.pid2descriptors[pid] = selected_descriptors[idx]
-                    self.pid2count[pid] = 1
-                else:
-                    self.pid2count[pid] += 1
-                    self.pid2descriptors[pid] = (
-                        self.pid2descriptors[pid] + selected_descriptors[idx]
-                    )
+                if pid not in pid2ind:
+                    index_for_array += 1
+                    pid2ind[pid] = index_for_array
+                idx2 = pid2ind[pid]
+                pid2mean_desc[idx2] += selected_descriptors[idx]
+                pid2count[idx2] += 1
 
         features_h5.close()
-        all_pid = list(self.pid2descriptors.keys())
-        all_pid = np.array(all_pid)
 
-        pid2mean_desc = np.zeros(
-            (all_pid.shape[0], self.feature_dim),
-            self.codebook_dtype,
-        )
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[:index_for_array].reshape(-1, 1)
+        if pid2mean_desc.dtype != self.codebook_dtype:
+            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
 
-        pid2ind = {}
-        ind = 0
-        for pid in self.pid2descriptors:
-            pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
-            pid2ind[pid] = ind
-            ind += 1
         if np.sum(np.isnan(pid2mean_desc)) > 0:
             print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
@@ -358,11 +354,13 @@ class BaseTrainer:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat, gpu_index_flat_for_image_desc
 
+    @profile
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
         :return:
         """
+        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         if self.using_global_descriptors:
@@ -498,48 +496,7 @@ class RobotCarTrainer(BaseTrainer):
         self.map_reduction = True
 
     def index_db_points(self):
-        self.reduce_map_size()
-        file_name_for_saving = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_db_info.pkl"
-        )
-        file_name_for_saving2 = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_db_selected_desc.pkl"
-        )
-        if os.path.isfile(file_name_for_saving) and os.path.isfile(
-            file_name_for_saving2
-        ):
-            afile = open(file_name_for_saving, "rb")
-            self.image2info3d = pickle.load(afile)
-            afile.close()
-            afile = open(file_name_for_saving2, "rb")
-            self.image2selected_desc = pickle.load(afile)
-            afile.close()
-        else:
-            features_h5 = self.load_local_features()
-            # features_h5 = h5py.File(
-            #     "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
-            #     "r")
-            self.image2info3d = {}
-            self.image2selected_desc = {}
-            for example in tqdm(self.dataset, desc="Indexing database points"):
-                keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
-                )
-                pid_list = example[3]
-                uv = example[-1]
-                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-                idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-                self.image2info3d[example[1]] = [selected_pid, mask, ind, idx_arr, ind2]
-                selected_descriptors = descriptors[idx_arr]
-                self.image2selected_desc[example[1]] = selected_descriptors
-
-            features_h5.close()
-            with open(file_name_for_saving, "wb") as handle:
-                pickle.dump(self.image2info3d, handle, protocol=pickle.HIGHEST_PROTOCOL)
-            with open(file_name_for_saving2, "wb") as handle:
-                pickle.dump(
-                    self.image2selected_desc, handle, protocol=pickle.HIGHEST_PROTOCOL
-                )
+        return
 
     def improve_codebook(self, vis=False):
         img_dir_str = self.dataset.images_dir_str
@@ -608,26 +565,30 @@ class RobotCarTrainer(BaseTrainer):
             sample_desc += self.image2desc[sample1]
 
         pid2mean_desc = np.zeros(
-            (all_pids.shape[0], self.feature_dim), sample_desc.dtype
+            (all_pids.shape[0], self.feature_dim), self.codebook_dtype
         )
         pid2count = np.zeros(all_pids.shape[0])
         pid2ind = {pid: idx for idx, pid in enumerate(all_pids)}
 
-        for image_name in tqdm(image_names, desc="Collecting point descriptors"):
-            ind2, selected_pid, selected_descriptors = image2data[image_name]
+        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+
+            keypoints, descriptors = dd_utils.read_kp_and_desc(
+                example[1], features_h5
+            )
+            pid_list = example[3]
+            uv = example[-1]
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+            selected_descriptors = descriptors[idx_arr]
             if self.using_global_descriptors:
-                image_descriptor = self.image2desc[image_name]
+                image_descriptor = self.image2desc[example[1]]
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, image_descriptor, self.lambda_val
                 )
+
             selected_indices = [pid2ind[pid] for pid in selected_pid[ind2]]
             pid2mean_desc[selected_indices] += selected_descriptors
             pid2count[selected_indices] += 1
-
-        for pid in tqdm(self.pid2descriptors, desc="Tuning codebook from extra images"):
-            ind = pid2ind[pid]
-            pid2mean_desc[ind] += self.total_diff
-            pid2count[ind] += self.count
 
         pid2mean_desc = pid2mean_desc / pid2count.reshape(-1, 1)
         features_h5.close()
