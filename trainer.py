@@ -121,9 +121,6 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            self.image2info3d = {}
-            self.image2selected_desc = {}
-            self.index_db_points()
             self.improve_codebook()
             (
                 self.pid2mean_desc,
@@ -354,7 +351,6 @@ class BaseTrainer:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat, gpu_index_flat_for_image_desc
 
-    @profile
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -494,81 +490,22 @@ class RobotCarTrainer(BaseTrainer):
             self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[mask]
         self.dataset.image2points = img2points2
         self.map_reduction = True
-
-    def index_db_points(self):
-        return
-
-    def improve_codebook(self, vis=False):
-        img_dir_str = self.dataset.images_dir_str
-        # matches_h5 = h5py.File(
-        #     # str(f"outputs/robotcar/{self.local_desc_model_name}_nn.h5"),
-        #     "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_nn.h5",
-        #     "r",
-        #     libver="latest",
-        # )
-        # features_h5 = h5py.File(
-        #     # str(f"outputs/robotcar/{self.local_desc_model_name}.h5"),
-        #     "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
-        #     "r",
-        #     libver="latest",
-        # )
-
-        extra_ds = RobotCarDataset(
-            ds_dir=self.dataset.ds_dir, train=False, evaluate=False
-        )
-
-        index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
-        res2 = faiss.StandardGpuResources()
-        gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-        gpu_index_flat_for_image_desc.add(self.all_image_desc)
-        for example in tqdm(
-            extra_ds, desc="Processing global descriptors for extra images"
-        ):
-            image_name = example[1]
-            image_descriptor = self.produce_image_descriptor(image_name)
-            _, ind = gpu_index_flat_for_image_desc.search(image_descriptor.reshape(1, -1), 1)
-            ind = int(ind)
-            diff = image_descriptor-self.all_image_desc[ind]
-            self.total_diff += diff
-            self.count += 1
+        return inlier_ind
 
     def collect_descriptors(self, vis=False):
-        self.reduce_map_size()
+        inlier_ind = self.reduce_map_size()
         features_h5 = self.load_local_features()
 
         # features_h5 = h5py.File(
         #     "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_train.h5",
         #     "r")
-
-        image2data = {}
-        all_pids = []
-        image_names = [
-            self.dataset._process_id_to_name(img_id) for img_id in self.dataset.img_ids
-        ]
-        for name in tqdm(image_names, desc="Reading database images"):
-            selected_pid, mask, ind, idx_arr, ind2 = self.image2info3d[name]
-            if name in self.image2selected_desc:
-                selected_descriptors = self.image2selected_desc[name]
-            else:
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                selected_descriptors = descriptors[idx_arr]
-            image2data[name] = [ind2, selected_pid, selected_descriptors]
-            all_pids.extend(selected_pid[ind2])
-
-        all_pids = list(set(all_pids))
-        all_pids = np.array(all_pids)
-
-        sample0 = list(image2data.keys())[0]
-        sample_desc = image2data[sample0][-1]
-        if self.using_global_descriptors:
-            sample1 = list(self.image2desc.keys())[0]
-            sample_desc += self.image2desc[sample1]
-
+        self.xyz_arr = self.dataset.xyz_arr
         pid2mean_desc = np.zeros(
-            (all_pids.shape[0], self.feature_dim), self.codebook_dtype
+            (self.dataset.xyz_arr[inlier_ind].shape[0], self.feature_dim), self.codebook_dtype
         )
-        pid2count = np.zeros(all_pids.shape[0])
-        pid2ind = {pid: idx for idx, pid in enumerate(all_pids)}
+        pid2count = np.zeros(self.xyz_arr.shape[0])
+        pid2ind = {}
+        index_for_array = -1
 
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
 
@@ -586,15 +523,21 @@ class RobotCarTrainer(BaseTrainer):
                     selected_descriptors, image_descriptor, self.lambda_val
                 )
 
-            selected_indices = [pid2ind[pid] for pid in selected_pid[ind2]]
-            pid2mean_desc[selected_indices] += selected_descriptors
-            pid2count[selected_indices] += 1
+            for idx, pid in enumerate(selected_pid[ind2]):
+                if pid not in pid2ind:
+                    index_for_array += 1
+                    pid2ind[pid] = index_for_array
+                idx2 = pid2ind[pid]
+                pid2mean_desc[idx2] += selected_descriptors[idx]
+                pid2count[idx2] += 1
 
-        pid2mean_desc = pid2mean_desc / pid2count.reshape(-1, 1)
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[:index_for_array].reshape(-1, 1)
+        if pid2mean_desc.dtype != self.codebook_dtype:
+            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
         features_h5.close()
         self.image2desc.clear()
         self.pid2descriptors.clear()
-        self.xyz_arr = self.dataset.xyz_arr[all_pids]
+
         np.save(
             f"output/{self.ds_name}/pid2mean_desc{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
             pid2mean_desc,
@@ -603,7 +546,7 @@ class RobotCarTrainer(BaseTrainer):
             f"output/{self.ds_name}/xyz_arr{self.local_desc_model_name}-{self.global_desc_model_name}-{self.lambda_val}.npy",
             self.xyz_arr,
         )
-        return pid2mean_desc, {}
+        return pid2mean_desc, pid2ind
 
     def legal_predict(
         self,
@@ -616,13 +559,14 @@ class RobotCarTrainer(BaseTrainer):
         distances, feature_indices = gpu_index_flat.search(features_ori, 1)
 
         feature_indices = feature_indices.ravel()
-
-        pred_scene_coords_b3 = self.xyz_arr[feature_indices]
+        pid_pred = [self.ind2pid[ind] for ind in feature_indices]
+        pred_scene_coords_b3 = self.xyz_arr[pid_pred]
         if return_pid:
             return uv_arr, pred_scene_coords_b3, feature_indices
 
         return uv_arr, pred_scene_coords_b3
 
+    @profile
     def evaluate(self):
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
