@@ -12,6 +12,7 @@ from dataset import AachenDataset
 from trainer import retrieve_pid
 
 
+@profile
 def perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm):
     pairs_from_retrieval.main(
         global_descriptors,
@@ -22,18 +23,19 @@ def perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm):
     )
 
 
+@profile
 def perform_feature_matching(matcher_conf, loc_pairs, feature_conf, outputs):
-    loc_matches = match_features.main(
-        matcher_conf, loc_pairs, feature_conf, outputs
-    )
+    loc_matches = match_features.main(matcher_conf, loc_pairs, feature_conf, outputs)
     return loc_matches
 
 
+@profile
 def db_feature_detection(feature_conf, images, outputs):
     features = extract_features.main(feature_conf, images, outputs)
     return features
 
 
+@profile
 def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
     failed = 0
     for example in tqdm(test_ds_, desc="Computing pose"):
@@ -76,7 +78,9 @@ def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
             failed += 1
         else:
             uv_arr = np.vstack(all_matches[0])
-            xyz_pred = np.array([train_ds_.recon_points[pid].xyz for pid in all_matches[1]])
+            xyz_pred = np.array(
+                [train_ds_.recon_points[pid].xyz for pid in all_matches[1]]
+            )
             camera = example[6]
 
             camera_dict = {
@@ -100,13 +104,20 @@ def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
 
 
 @profile
-def main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
-             images, outputs, loc_pairs, num_loc, sift_sfm):
+def main_sub(
+    train_ds_,
+    test_ds_,
+    feature_conf,
+    global_descriptors,
+    matcher_conf,
+    images,
+    outputs,
+    loc_pairs,
+    num_loc,
+    sift_sfm,
+):
     # extract local features for db images
     features = db_feature_detection(feature_conf, images, outputs)
-
-    # extract global features for db images
-    global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 
     # perform retrieval
     perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm)
@@ -138,7 +149,6 @@ def main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
     result_file.close()
 
 
-@profile
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -169,7 +179,7 @@ def main():
 
     # pick one of the configurations for extraction and matching
     retrieval_conf = extract_features.confs["eigenplaces"]
-    feature_conf = extract_features.confs["d2net-ss"]
+    feature_conf = extract_features.confs["r2d2"]
     matcher_conf = match_features.confs["NN-mutual"]
 
     # matcher_conf["output"] = matcher_conf['model']['name']
@@ -182,10 +192,22 @@ def main():
 
     train_ds_ = AachenDataset(ds_dir=dataset)
     test_ds_ = AachenDataset(ds_dir=dataset, train=False)
-    main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
-             images, outputs, loc_pairs, args.num_loc, sift_sfm)
+
+    # extract global features for db images
+    global_descriptors = extract_features.main(retrieval_conf, images, outputs)
+    main_sub(
+        train_ds_,
+        test_ds_,
+        feature_conf,
+        global_descriptors,
+        matcher_conf,
+        images,
+        outputs,
+        loc_pairs,
+        args.num_loc,
+        sift_sfm,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

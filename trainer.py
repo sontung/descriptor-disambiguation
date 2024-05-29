@@ -141,12 +141,10 @@ class BaseTrainer:
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
         )
         if not os.path.isfile(self.test_features_path):
-            features_h5 = h5py.File(
-                str(self.test_features_path), "a", libver="latest"
-            )
+            features_h5 = h5py.File(str(self.test_features_path), "a", libver="latest")
             with torch.no_grad():
                 for example in tqdm(
-                        self.test_dataset, desc="Detecting testing features"
+                    self.test_dataset, desc="Detecting testing features"
                 ):
                     if example is None:
                         continue
@@ -291,7 +289,9 @@ class BaseTrainer:
 
         features_h5.close()
 
-        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[:index_for_array].reshape(-1, 1)
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
+            :index_for_array
+        ].reshape(-1, 1)
         if pid2mean_desc.dtype != self.codebook_dtype:
             pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
 
@@ -501,17 +501,15 @@ class RobotCarTrainer(BaseTrainer):
         #     "r")
         self.xyz_arr = self.dataset.xyz_arr
         pid2mean_desc = np.zeros(
-            (self.dataset.xyz_arr[inlier_ind].shape[0], self.feature_dim), self.codebook_dtype
+            (self.dataset.xyz_arr[inlier_ind].shape[0], self.feature_dim),
+            self.codebook_dtype,
         )
         pid2count = np.zeros(self.xyz_arr.shape[0], self.codebook_dtype)
         pid2ind = {}
         index_for_array = -1
 
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-
-            keypoints, descriptors = dd_utils.read_kp_and_desc(
-                example[1], features_h5
-            )
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
             pid_list = example[3]
             uv = example[-1]
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
@@ -531,7 +529,9 @@ class RobotCarTrainer(BaseTrainer):
                 pid2mean_desc[idx2] += selected_descriptors[idx]
                 pid2count[idx2] += 1
 
-        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[:index_for_array].reshape(-1, 1)
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
+            :index_for_array
+        ].reshape(-1, 1)
         if pid2mean_desc.dtype != self.codebook_dtype:
             pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
         features_h5.close()
@@ -873,8 +873,10 @@ class CambridgeLandmarksTrainer(BaseTrainer):
             pid2mean_desc = pid2mean_desc[all_pid]
         self.xyz_arr = self.dataset.xyz_arr[all_pid]
         self.rgb_arr = self.dataset.rgb_arr[all_pid]
-        np.save(f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy",
-                pid2mean_desc)
+        np.save(
+            f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy",
+            pid2mean_desc,
+        )
         return pid2mean_desc, {}
 
     def legal_predict(

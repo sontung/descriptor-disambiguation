@@ -49,28 +49,54 @@ def run_retrieval(img_dir, out_dir, num_loc, db_images):
     return Path(loc_pairs)
 
 
-def perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm):
+@profile
+def process_db_global_desc(img_dir, out_dir):
+    images = glob.glob(f"{img_dir}/*/*/*", recursive=True)
+
+    feature_path = f"{out_dir}/global_feats_salad.h5"
+    if not os.path.isfile(feature_path):
+        from salad_model import SaladModel
+
+        encoder_global = SaladModel()
+        with h5py.File(feature_path, "a", libver="latest") as fd:
+            for img in tqdm(images, desc="Running global desc"):
+                with torch.no_grad():
+                    image_descriptor = encoder_global.process(img)
+                name = img.split(str(img_dir))[-1][1:]
+                if name in fd:
+                    del fd[name]
+                dict_ = {"global_descriptor": image_descriptor}
+                grp = fd.create_group(name)
+                for k, v in dict_.items():
+                    grp.create_dataset(k, data=v)
+    return feature_path
+
+
+@profile
+def perform_retrieval(feature_path, out_dir, num_loc, db_images):
+    loc_pairs = f"{out_dir}/pairs-query-salad-{num_loc}.txt"
     pairs_from_retrieval.main(
-        global_descriptors,
+        feature_path,
         loc_pairs,
         num_loc,
-        query_prefix="query",
-        db_model=sift_sfm,
+        db_model=db_images,
     )
+    return Path(loc_pairs)
 
 
+@profile
 def perform_feature_matching(matcher_conf, loc_pairs, feature_conf, outputs):
-    loc_matches = match_features.main(
-        matcher_conf, loc_pairs, feature_conf, outputs
-    )
+    loc_matches = match_features.main(matcher_conf, loc_pairs, feature_conf, outputs)
     return loc_matches
 
 
+@profile
 def db_feature_detection(feature_conf, images, outputs):
     features = extract_features.main(feature_conf, images, outputs)
     return features
 
 
+@profile
 def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
     failed = 0
     for example in tqdm(test_ds_, desc="Computing pose"):
@@ -142,16 +168,21 @@ def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
 
 
 @profile
-def main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
-             images, outputs, loc_pairs, num_loc, sift_sfm):
-    # extract local features for db images
+def main_sub(
+    train_ds_,
+    test_ds_,
+    images,
+    feature_conf,
+    matcher_conf,
+    outputs,
+    global_features,
+    num_loc,
+    sift_sfm,
+):
     features = db_feature_detection(feature_conf, images, outputs)
 
-    # extract global features for db images
-    global_descriptors = extract_features.main(retrieval_conf, images, outputs)
-
     # perform retrieval
-    perform_retrieval(global_descriptors, loc_pairs, num_loc, sift_sfm)
+    loc_pairs = perform_retrieval(global_features, outputs, num_loc, sift_sfm)
 
     # match query images with retrieved db images
     loc_matches = perform_feature_matching(
@@ -189,26 +220,33 @@ def run(args):
     outputs.mkdir(exist_ok=True, parents=True)
     sift_sfm = outputs / "sfm_sift"
 
-    loc_pairs = outputs / f"pairs-query{args.num_loc}.txt"
-
     # pick one of the configurations for extraction and matching
-    retrieval_conf = extract_features.confs["eigenplaces"]
-    feature_conf = extract_features.confs["d2net-ss"]
+    feature_conf = extract_features.confs["r2d2"]
     matcher_conf = match_features.confs["NN-mutual"]
 
     feature_conf["output"] = feature_conf["model"]["name"]
 
-    colmap_from_nvm.main(
-        dataset / "3D-models/all-merged/all.nvm",
-        dataset / "3D-models/overcast-reference.db",
-        sift_sfm,
-    )
+    # colmap_from_nvm.main(
+    #     dataset / "3D-models/all-merged/all.nvm",
+    #     dataset / "3D-models/overcast-reference.db",
+    #     sift_sfm,
+    # )
 
     train_ds_ = RobotCarDataset(ds_dir=str(dataset))
     test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
+    global_features = process_db_global_desc(images, outputs)
 
-    main_sub(train_ds_, test_ds_, feature_conf, retrieval_conf, matcher_conf,
-             images, outputs, loc_pairs, args.num_loc, sift_sfm)
+    main_sub(
+        train_ds_,
+        test_ds_,
+        images,
+        feature_conf,
+        matcher_conf,
+        outputs,
+        global_features,
+        args.num_loc,
+        sift_sfm,
+    )
 
 
 if __name__ == "__main__":
