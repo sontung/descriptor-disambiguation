@@ -66,7 +66,7 @@ class BaseTrainer:
         collect_code_book=True,
         lambda_val=0.5,
         convert_to_db_desc=True,
-        codebook_dtype=np.float16,
+        codebook_dtype=np.float64,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
