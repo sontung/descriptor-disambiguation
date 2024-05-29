@@ -121,7 +121,6 @@ class BaseTrainer:
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
-            self.improve_codebook()
             (
                 self.pid2mean_desc,
                 self.pid2ind,
@@ -164,9 +163,6 @@ class BaseTrainer:
             features_h5.close()
         features_h5 = h5py.File(features_path, "r")
         return features_h5
-
-    def improve_codebook(self, vis=False):
-        return
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -246,17 +242,9 @@ class BaseTrainer:
         }
         dd_utils.write_to_h5_file(fd, name, dict_)
 
-    def collect_descriptors(self, vis=False):
-        features_h5 = self.load_local_features()
-
+    def collect_descriptors_loop(self, features_h5, pid2mean_desc, pid2count):
         pid2ind = {}
         index_for_array = -1
-        pid2mean_desc = np.zeros(
-            (len(self.dataset.recon_points), self.feature_dim),
-            np.float64,
-        )
-        pid2count = np.zeros(len(self.dataset.recon_points))
-
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
             if example is None:
                 continue
@@ -283,15 +271,96 @@ class BaseTrainer:
                 if pid not in pid2ind:
                     index_for_array += 1
                     pid2ind[pid] = index_for_array
-                idx2 = pid2ind[pid]
-                pid2mean_desc[idx2] += selected_descriptors[idx]
-                pid2count[idx2] += 1
 
-        features_h5.close()
+            idx2 = [pid2ind[pid] for pid in selected_pid[ind2]]
+            pid2mean_desc[idx2] += selected_descriptors
+            pid2count[idx2] += 1
 
         pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
             :index_for_array
         ].reshape(-1, 1)
+        if pid2mean_desc.dtype != self.codebook_dtype:
+            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
+
+        if np.sum(np.isnan(pid2mean_desc)) > 0:
+            print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
+
+        print(f"Codebook size: {round(sys.getsizeof(pid2mean_desc)/1e9, 2)} GB")
+        print(f"Codebook dtype: {self.codebook_dtype}")
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
+            :index_for_array
+        ].reshape(-1, 1)
+        return pid2mean_desc, pid2ind
+
+    def collect_descriptors(self, vis=False):
+        features_h5 = self.load_local_features()
+
+        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+            if example is None:
+                continue
+            try:
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    example[1], features_h5
+                )
+            except KeyError:
+                print(f"Cannot read {example[1]} from {self.local_features_path}")
+                sys.exit()
+            pid_list = example[3]
+            uv = example[-1]
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+            selected_descriptors = descriptors[idx_arr]
+            if self.using_global_descriptors:
+                image_descriptor = self.image2desc[example[1]]
+                selected_descriptors = combine_descriptors(
+                    selected_descriptors, image_descriptor, self.lambda_val
+                )
+
+            for idx, pid in enumerate(selected_pid[ind2]):
+                if pid not in self.pid2descriptors:
+                    self.pid2descriptors[pid] = selected_descriptors[idx]
+                    self.pid2count[pid] = 1
+                else:
+                    self.pid2count[pid] += 1
+                    self.pid2descriptors[pid] = (
+                            self.pid2descriptors[pid] + selected_descriptors[idx]
+                    )
+
+        features_h5.close()
+        all_pid = list(self.pid2descriptors.keys())
+        all_pid = np.array(all_pid)
+
+        pid2mean_desc = np.zeros(
+            (all_pid.shape[0], self.feature_dim),
+            self.codebook_dtype,
+        )
+
+        pid2ind = {}
+        ind = 0
+        for pid in self.pid2descriptors:
+            pid2mean_desc[ind] = self.pid2descriptors[pid] / self.pid2count[pid]
+            pid2ind[pid] = ind
+            ind += 1
+        if np.sum(np.isnan(pid2mean_desc)) > 0:
+            print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
+
+        print(f"Codebook size: {round(sys.getsizeof(pid2mean_desc) / 1e9, 2)} GB")
+        print(f"Codebook dtype: {pid2mean_desc.dtype}")
+        return pid2mean_desc, pid2ind
+
+    def collect_descriptors2(self, vis=False):
+        features_h5 = self.load_local_features()
+
+        pid2mean_desc = np.zeros(
+            (len(self.dataset.recon_points), self.feature_dim),
+            np.float64,
+        )
+        pid2count = np.zeros(len(self.dataset.recon_points))
+
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(features_h5, pid2mean_desc, pid2count)
+        features_h5.close()
+
         if pid2mean_desc.dtype != self.codebook_dtype:
             pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
 
@@ -525,9 +594,9 @@ class RobotCarTrainer(BaseTrainer):
                 if pid not in pid2ind:
                     index_for_array += 1
                     pid2ind[pid] = index_for_array
-                idx2 = pid2ind[pid]
-                pid2mean_desc[idx2] += selected_descriptors[idx]
-                pid2count[idx2] += 1
+            idx2 = [pid2ind[pid] for pid in selected_pid[ind2]]
+            pid2mean_desc[idx2] += selected_descriptors
+            pid2count[idx2] += 1
 
         pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
             :index_for_array
