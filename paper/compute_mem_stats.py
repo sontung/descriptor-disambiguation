@@ -121,10 +121,32 @@ def cambridge():
 
 
 def robotcar():
-    return
+    files_ = {
+        "uv2xyz": [f"/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons/3D-models/all-merged/all.nvm"],
+        "db_global_desc": [f"../output/robotcar/image_desc_eigenplaces_ResNet101_2048_2048.npy",
+                           f"../output/robotcar/image_desc_name_eigenplaces_ResNet101_2048_2048.npy"],
+        "db_images": ["/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons/images/*/*/*.jpg"],
+        "codebook": ["../output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.5.npy",
+                     "../output/robotcar/pid2ind-d2net-eigenplaces_ResNet101_2048.pkl"]
+    }
+
+    mem_dict = {}
+    for file_ in files_:
+        values_ = files_[file_]
+        mem = 0
+        for v in values_:
+            # assert len(glob.glob(v)) >= 5, glob.glob(v)
+            mem += sum([os.path.getsize(du) for du in glob.glob(v)])
+        mem_dict[file_] = mem
+    for info in mem_dict:
+        print(info, get_size(mem_dict[info]))
+    get_method_mem(mem_dict, 1)
+
+    print()
 
 
 if __name__ == '__main__':
+    robotcar()
     # aachen()
-    cmu()
+    # cmu()
     # cambridge()
