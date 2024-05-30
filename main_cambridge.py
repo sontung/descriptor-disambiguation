@@ -56,6 +56,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
+            convert_to_db_desc=False
         )
         # continue
         err = trainer_.evaluate()

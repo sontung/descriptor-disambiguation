@@ -269,7 +269,7 @@ class BaseTrainer:
             idx2 = [pid2ind[pid] for pid in selected_pid[ind2]]
             pid2mean_desc[idx2] += selected_descriptors
             pid2count[idx2] += 1
-
+        index_for_array += 1
         pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
             :index_for_array
         ].reshape(-1, 1)
@@ -498,7 +498,7 @@ class RobotCarTrainer(BaseTrainer):
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
-        return pid2mean_desc, pid2ind
+        return pid2mean_desc
 
     def evaluate(self):
         self.detect_local_features_on_test_set()
@@ -759,98 +759,25 @@ class SevenScenesTrainer(BaseTrainer):
 
 
 class CambridgeLandmarksTrainer(BaseTrainer):
-    def improve_codebook(self, vis=False):
-        return
-
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
-        pid2descriptors = {}
-        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
-            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            pid_list = example[3]
-            uv = example[-1]
-            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
-            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
-
-            selected_descriptors = descriptors[idx_arr]
-            if self.using_global_descriptors:
-                image_descriptor = self.image2desc[example[1]]
-                selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val
-                )
-
-            for idx, pid in enumerate(selected_pid[ind2]):
-                if pid not in pid2descriptors:
-                    pid2descriptors[pid] = selected_descriptors[idx]
-                else:
-                    pid2descriptors[pid] = 0.5 * (
-                        pid2descriptors[pid] + selected_descriptors[idx]
-                    )
-
-        features_h5.close()
-        self.image2desc.clear()
-
-        all_pid = list(pid2descriptors.keys())
-        all_pid = np.array(all_pid)
         pid2mean_desc = np.zeros(
-            (all_pid.shape[0], self.feature_dim),
-            self.codebook_dtype,
+            (self.dataset.xyz_arr.shape[0], self.feature_dim),
+            np.float64,
         )
+        pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
-        for ind, pid in enumerate(all_pid):
-            pid2mean_desc[ind] = pid2descriptors[pid]
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(features_h5, pid2mean_desc, pid2count)
+        features_h5.close()
 
-        if pid2mean_desc.shape[0] > all_pid.shape[0]:
-            pid2mean_desc = pid2mean_desc[all_pid]
-        if pid2mean_desc.dtype != self.codebook_dtype:
-            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
-        self.xyz_arr = self.dataset.xyz_arr[all_pid]
-        self.rgb_arr = self.dataset.rgb_arr[all_pid]
-        np.save(
-            f"output/{self.ds_name}/codebook_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.npy",
-            pid2mean_desc,
-        )
-        return pid2mean_desc, {}
-
-    def legal_predict(
-        self,
-        uv_arr,
-        features_ori,
-        gpu_index_flat,
-        remove_duplicate=False,
-        return_pid=False,
-    ):
-        distances, feature_indices = gpu_index_flat.search(features_ori, 1)
-
-        feature_indices = feature_indices.ravel()
-
-        if remove_duplicate:
-            pid2uv = {}
-            for idx in range(feature_indices.shape[0]):
-                pid = feature_indices[idx]
-                dis = distances[idx][0]
-                uv = uv_arr[idx]
-                if pid not in pid2uv:
-                    pid2uv[pid] = [dis, uv]
-                else:
-                    if dis < pid2uv[pid][0]:
-                        pid2uv[pid] = [dis, uv]
-            uv_arr = np.array([pid2uv[pid][1] for pid in pid2uv])
-            feature_indices = [pid for pid in pid2uv]
-
-        pred_scene_coords_b3 = self.xyz_arr[feature_indices]
-        if return_pid:
-            return uv_arr, pred_scene_coords_b3, feature_indices
-
-        return uv_arr, pred_scene_coords_b3
+        self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
+        for pid in pid2ind:
+            self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
+        return pid2mean_desc
 
     def evaluate(self, return_name2err=False):
         self.detect_local_features_on_test_set()
-        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-        gpu_index_flat.add(self.pid2mean_desc)
-        gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
             f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
