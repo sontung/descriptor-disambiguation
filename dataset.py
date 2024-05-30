@@ -2,6 +2,7 @@ import logging
 import os
 import pickle
 from pathlib import Path
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -36,13 +37,15 @@ def read_intrinsic(file_name):
     return name2params
 
 
-def read_train_poses(a_file):
+def read_train_poses(a_file, cl=False):
     with open(a_file) as file:
         lines = [line.rstrip() for line in file]
+    if cl:
+        lines = lines[4:]
     name2mat = {}
     for line in lines:
         img_name, *matrix = line.split(" ")
-        if matrix:
+        if len(matrix) == 16:
             matrix = np.array(matrix, float).reshape(4, 4)
         name2mat[img_name] = matrix
     return name2mat
@@ -56,133 +59,128 @@ class CambridgeLandmarksDataset(Dataset):
         self.ds_type = ds_name
 
         # Setup data paths.
-        root_dir = Path(root_dir)
-        self.sfm_model_dir = root_dir / "reconstruction.nvm"
+        sift_model_name = "CambridgeLandmarks_Colmap_Retriangulated_1024px"
 
         if self.train:
-            (
-                self.xyz_arr,
-                self.image2points,
-                self.image2name,
-                self.image2pose,
-                self.image2info,
-                self.image2uvs,
-                self.rgb_arr,
-            ) = ace_util.read_nvm_file(self.sfm_model_dir)
-            self.name2id = {v: u for u, v in self.image2name.items()}
+            self.sfm_model_dir = f"{str(root_dir)}/{ds_name}/sfm_sift_scaled"
+            self.recon_images = colmap_read.read_images_binary(
+                f"{self.sfm_model_dir}/images.bin"
+            )
+            self.recon_cameras = colmap_read.read_cameras_binary(
+                f"{self.sfm_model_dir}/cameras.bin"
+            )
+            self.recon_points = colmap_read.read_points3D_binary(
+                f"{self.sfm_model_dir}/points3D.bin"
+            )
+            self.image_name2id = {}
+            for image_id, image in self.recon_images.items():
+                self.image_name2id[image.name] = image_id
+            self.names = read_train_poses(
+                f"{root_dir}/{sift_model_name}/{ds_name}/list_db.txt"
+            )
+            self.image_id2points = {}
+            self.pid2images = {}
 
-        # pid2images = {}
-        # for img in self.image2points:
-        #     for pid_ in self.image2points[img]:
-        #         pid2images.setdefault(pid_, []).append(img)
-        #
-        # points = self.image2points[self.name2id["seq4/frame00224.jpg"]]
-        # import random
-        # pid0 = random.choice(points)
-        # images0 = pid2images[pid0]
-        # for img in images0:
-        #     pose0 = self.image2pose[img]
-        #     break
-        #
-        # import open3d as o3d
-        #
-        # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr))
-        # cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5)
-        # cl.colors = o3d.utility.Vector3dVector(rgb_arr[inlier_ind]/255)
-        #
-        # vis = o3d.visualization.Visualizer()
-        # vis.create_window(width=1920, height=1025)
-        # vis.add_geometry(cl)
-        # vis.run()
-        # vis.destroy_window()
+            Path(f"output/{self.ds_type}").mkdir(parents=True, exist_ok=True)
 
-        if self.train:
-            root_dir = root_dir / "train"
+            xyz_arr = np.zeros((len(self.recon_points), 3))
+            all_pids = np.zeros(len(self.recon_points), dtype=int)
+            for idx, pid in enumerate(list(self.recon_points.keys())):
+                xyz_arr[idx] = self.recon_points[pid].xyz
+                all_pids[idx] = pid
+
+            self.image_id2pids = {}
+            self.image_id2uvs = {}
+            for img_id in tqdm(self.recon_images, desc="Gathering points per image"):
+                pid_arr = self.recon_images[img_id].point3D_ids
+                mask = pid_arr >= 0
+                self.image_id2pids[img_id] = pid_arr[mask]
+                self.image_id2uvs[img_id] = self.recon_images[img_id].xys[mask]
+            self.img_ids = list(self.image_name2id.values())
+            self.img_names = list(self.names.keys())
+
         else:
-            root_dir = root_dir / "test"
+            self.sfm_model_dir = f"{root_dir}/{sift_model_name}/{ds_name}/empty_all"
+            self.recon_images = colmap_read.read_images_text(
+                f"{self.sfm_model_dir}/images.txt"
+            )
+            self.recon_cameras = colmap_read.read_cameras_text(
+                f"{self.sfm_model_dir}/cameras.txt"
+            )
+            self.recon_points = colmap_read.read_points3D_text(
+                f"{self.sfm_model_dir}/points3D.txt"
+            )
+            self.image_name2id = {}
+            for image_id, image in self.recon_images.items():
+                self.image_name2id[image.name] = image_id
+            self.name2params = read_intrinsic(
+                f"{root_dir}/{ds_name}/query_list_with_intrinsics.txt"
+            )
+            self.img_names = list(self.name2params.keys())
+        self.root_dir = root_dir
+        self.images_dir = f"{root_dir}/{ds_name}"
 
-        # Main folders.
-        rgb_dir = root_dir / "rgb"
-        pose_dir = root_dir / "poses"
-        calibration_dir = root_dir / "calibration"
+        conf, default_conf = dd_utils.hloc_conf_for_all_models()
+        self.conf_ns = SimpleNamespace(**{**default_conf, **conf})
+        self.conf_ns.grayscale = True
+        self.conf_ns.resize_max = 1024
 
-        # Find all images. The assumption is that it only contains image files.
-        self.rgb_files = sorted(rgb_dir.iterdir())
+    def _load_image(self, img_id):
+        name = self.recon_images[img_id].name
+        name2 = f"{self.images_dir}/{name}"
+        image, scale = ace_util.read_and_preprocess(name2, self.conf_ns)
 
-        # Find all ground truth pose files. One per image.
-        self.pose_files = sorted(pose_dir.iterdir())
-
-        # Load camera calibrations. One focal length per image.
-        self.calibration_files = sorted(calibration_dir.iterdir())
-
-        self.valid_file_indices = np.arange(len(self.rgb_files))
-        self.root_dir = str(root_dir)
-
-    def _load_image(self, idx):
-        image = io.imread(self.rgb_files[idx])
-
-        if len(image.shape) < 3:
-            # Convert to RGB if needed.
-            image = color.gray2rgb(image)
-
-        return image
-
-    def _load_pose(self, idx):
-        pose = np.loadtxt(self.pose_files[idx])
-        pose = torch.from_numpy(pose).float()
-        return pose
+        return image[0], name2, scale
 
     def _get_single_item(self, idx):
-        img_id = self.valid_file_indices[idx]
-        image_name = str(self.rgb_files[img_id])
-
-        # Load image.
-        image = self._load_image(img_id)
-
-        # Load intrinsics.
-        k = np.loadtxt(self.calibration_files[img_id])
-        focal_length = float(k)
-
-        # Load pose.
-        pose = self._load_pose(img_id)
-
-        # Invert the pose.
-        pose_inv = pose.inverse()
-
-        # Create the intrinsics matrix.
-        intrinsics = torch.eye(3)
-
-        intrinsics[0, 0] = focal_length
-        intrinsics[1, 1] = focal_length
-        intrinsics[0, 2] = image.shape[1] / 2  # 427
-        intrinsics[1, 2] = image.shape[0] / 2  # 240
-
         if self.train:
-            key_ = image_name.split("/")[-1].replace("_", "/").replace("png", "jpg")
-            key_ = self.name2id[key_]
-            pid_list = self.image2points[key_]
-            xyz_gt = self.xyz_arr[pid_list]
+            img_id = self.img_ids[idx]
 
-            uv_gt = project_using_pose(
-                pose_inv.unsqueeze(0).cuda().float(),
-                intrinsics.unsqueeze(0).cuda().float(),
-                xyz_gt,
-            )
+            image, image_name, scale = self._load_image(img_id)
+            camera_id = self.recon_images[img_id].camera_id
+            camera = self.recon_cameras[camera_id]
+            focal, cx, cy, k = camera.params
+            intrinsics = torch.eye(3)
+
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            qvec = self.recon_images[img_id].qvec
+            tvec = self.recon_images[img_id].tvec
+            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+
+            pid_list = self.image_id2pids[img_id]
+            uv_gt = self.image_id2uvs[img_id] + 0.5
+            xyz_gt = None
+
+            pose_inv = torch.from_numpy(pose_inv)
+
         else:
+            name1 = self.img_names[idx]
+            image_name = f"{self.images_dir}/{name1}"
+            img_id = self.image_name2id[name1]
+            cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
+            camera = pycolmap.Camera(
+                model=cam_type,
+                width=int(width),
+                height=int(height),
+                params=[focal, cx, cy, k],
+            )
+
+            intrinsics = torch.eye(3)
+
+            intrinsics[0, 0] = focal
+            intrinsics[1, 1] = focal
+            intrinsics[0, 2] = cx
+            intrinsics[1, 2] = cy
+            image = None
             pid_list = []
-            xyz_gt = []
-            uv_gt = []
-
-        focal_length = intrinsics[0, 0].item()
-        c1 = intrinsics[0, 2].item()
-        c2 = intrinsics[1, 2].item()
-
-        camera = {
-            "model": "SIMPLE_PINHOLE",
-            "height": image.shape[0],
-            "width": image.shape[1],
-            "params": [focal_length, c1, c2],
-        }
+            qvec = self.recon_images[img_id].qvec
+            tvec = self.recon_images[img_id].tvec
+            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            xyz_gt = None
+            uv_gt = None
 
         return (
             image,
@@ -190,14 +188,14 @@ class CambridgeLandmarksDataset(Dataset):
             img_id,
             pid_list,
             pose_inv,
-            None,
+            intrinsics,
             camera,
             xyz_gt,
             uv_gt,
         )
 
     def __len__(self):
-        return len(self.valid_file_indices)
+        return len(self.img_names)
 
     def __getitem__(self, idx):
         if type(idx) == list:
@@ -1098,36 +1096,10 @@ if __name__ == "__main__":
     # )
     # for t in testset:
     #     continue
-    import sys
-
-    sys.path.append("../CricaVPR")
-    import network
-    from torch.utils.data import DataLoader
 
     train_ds_ = CambridgeLandmarksDataset(
-        train=True,
-        ds_name="Cambridge_GreatCourt",
-        root_dir=f"../ace/datasets/Cambridge_GreatCourt",
+        train=False,
+        ds_name="KingsCollege",
+        root_dir=f"datasets/cambridge",
     )
-    names = [str(du) for du in train_ds_.rgb_files]
-    crica_ds = CricaInferenceDataset(names)
-    database_dataloader = DataLoader(dataset=crica_ds, batch_size=16)
-    model = network.CricaVPRNet()
-
-    checkpoint = torch.load("../CricaVPR/CricaVPR.pth")
-    from collections import OrderedDict
-
-    if "model_state_dict" in checkpoint:
-        state_dict = checkpoint["model_state_dict"]
-    else:
-        state_dict = checkpoint
-    if list(state_dict.keys())[0].startswith("module"):
-        state_dict = OrderedDict(
-            {k.replace("module.", ""): v for (k, v) in state_dict.items()}
-        )
-    model.load_state_dict(state_dict)
-
-    model = model.to("cuda")
-    for t in database_dataloader:
-        pred = model(t.cuda())
-        break
+    train_ds_[0]

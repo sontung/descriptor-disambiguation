@@ -976,7 +976,10 @@ def read_kp_and_desc(name, features_h5):
     pred = {k: np.array(v) for k, v in pred.items()}
     scale = pred["scale"]
     keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
-    descriptors = pred["descriptors"].T
+    if "descriptors" in pred:
+        descriptors = pred["descriptors"].T
+    else:
+        descriptors = None
     return keypoints, descriptors
 
 
@@ -1018,13 +1021,13 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
         conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
         conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
     except KeyError:
-        if local_desc_model == "sdf2":
+        if local_desc_model == "sfd2":
             conf_ns = SimpleNamespace(**{**default_conf, **conf})
             conf_ns.grayscale = False
             conf_ns.resize_max = 1600
-            import sdf2_models
+            import sfd2_models
 
-            encoder = sdf2_models.return_models()
+            encoder = sfd2_models.return_models()
 
     if retrieval_model == "mixvpr":
         from mix_vpr_model import MVModel

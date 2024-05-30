@@ -213,7 +213,7 @@ class BaseTrainer:
 
     def produce_local_descriptors(self, name, fd):
         image, scale = read_and_preprocess(name, self.local_desc_conf)
-        if self.local_desc_model_name == "sdf2":
+        if self.local_desc_model_name == "sfd2":
             model, extractor, conf = self.local_desc_model
             pred = extractor(
                 model,
@@ -236,21 +236,67 @@ class BaseTrainer:
         }
         dd_utils.write_to_h5_file(fd, name, dict_)
 
+    def run_sfd2_on_db_images(self):
+        features_path = f"output/{self.ds_name}/sfd2_keypoints_train.h5"
+        (model, extractor, conf), conf_ns, _, _ = dd_utils.prepare_encoders(
+            "sfd2", "eigenplaces", 2048
+        )
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Detecting SFD2 keypoints"):
+                    name = example[1]
+
+                    image, scale = read_and_preprocess(name, conf_ns)
+                    pred = extractor(
+                        model,
+                        img=torch.from_numpy(image).unsqueeze(0).cuda(),
+                        topK=conf["model"]["max_keypoints"],
+                        mask=None,
+                        conf_th=conf["model"]["conf_th"],
+                        scales=conf["model"]["scales"],
+                    )
+                    dict_ = {
+                        "scale": scale,
+                        "keypoints": pred["keypoints"],
+                    }
+                    dd_utils.write_to_h5_file(features_h5, name, dict_)
+            features_h5.close()
+        features_h5 = h5py.File(features_path, "r")
+        return features_h5
+
     def collect_descriptors_loop(self, features_h5, pid2mean_desc, pid2count):
+        sfd2_keypoints_h5 = self.run_sfd2_on_db_images()
+
         pid2ind = {}
         index_for_array = -1
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
             if example is None:
                 continue
-            try:
-                keypoints, descriptors = dd_utils.read_kp_and_desc(
-                    example[1], features_h5
-                )
-            except KeyError:
-                print(f"Cannot read {example[1]} from {self.local_features_path}")
-                sys.exit()
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+            sfd2_keypoints, descriptors = dd_utils.read_kp_and_desc(
+                example[1], sfd2_keypoints_h5
+            )
+
             pid_list = example[3]
             uv = example[-1]
+
+            tree = KDTree(uv)
+            dis, ind = tree.query(keypoints)
+            mask = dis < 5
+            tree = KDTree(uv)
+            dis, ind = tree.query(sfd2_keypoints.astype(uv.dtype))
+            mask2 = dis < 5
+
+            image = cv2.imread(example[1])
+            # for x, y in sfd2_keypoints[mask2].astype(int):
+            #     cv2.circle(image, (x, y), 5, (255, 0, 0))
+            # for x, y in keypoints[mask].astype(int):
+            #     cv2.circle(image, (x, y), 5, (0, 255, 0))
+            for x, y in uv.astype(int):
+                cv2.circle(image, (x, y), 5, (0, 0, 255))
+            cv2.imwrite(f"debug/test0.png", image)
+
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
@@ -292,7 +338,9 @@ class BaseTrainer:
         )
         pid2count = np.zeros(len(self.dataset.recon_points))
 
-        pid2mean_desc, pid2ind = self.collect_descriptors_loop(features_h5, pid2mean_desc, pid2count)
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
+            features_h5, pid2mean_desc, pid2count
+        )
         features_h5.close()
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
@@ -492,7 +540,9 @@ class RobotCarTrainer(BaseTrainer):
         )
         pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
-        pid2mean_desc, pid2ind = self.collect_descriptors_loop(features_h5, pid2mean_desc, pid2count)
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
+            features_h5, pid2mean_desc, pid2count
+        )
         features_h5.close()
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
@@ -767,7 +817,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         )
         pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
-        pid2mean_desc, pid2ind = self.collect_descriptors_loop(features_h5, pid2mean_desc, pid2count)
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
+            features_h5, pid2mean_desc, pid2count
+        )
         features_h5.close()
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))

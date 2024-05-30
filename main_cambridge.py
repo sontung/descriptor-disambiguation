@@ -23,9 +23,11 @@ def run_function(
         print(f"Using {local_model}")
 
     folders = [
-        item.name
-        for item in Path(root_dir_).iterdir()
-        if item.is_dir() and "Cambridge" in item.name
+        "ShopFacade",
+        "OldHospital",
+        "GreatCourt",
+        "StMarysChurch",
+        "KingsCollege",
     ]
 
     results = {}
@@ -34,16 +36,16 @@ def run_function(
         #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
-            train=True, ds_name=ds_name, root_dir=f"{root_dir_}/{ds_name}"
+            train=True, ds_name=ds_name, root_dir=root_dir_
         )
         test_ds_ = CambridgeLandmarksDataset(
-            train=False, ds_name=ds_name, root_dir=f"{root_dir_}/{ds_name}"
+            train=False, ds_name=ds_name, root_dir=root_dir_
         )
 
-        set1 = set(train_ds_.rgb_files)
-        set2 = set(test_ds_.rgb_files)
-        set3 = set1.intersection(set2)
-        assert len(set3) == 0
+        # set1 = set(train_ds_.rgb_files)
+        # set2 = set(test_ds_.rgb_files)
+        # set3 = set1.intersection(set2)
+        # assert len(set3) == 0
 
         trainer_ = CambridgeLandmarksTrainer(
             train_ds_,
@@ -56,7 +58,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=False
+            convert_to_db_desc=True,
         )
         # continue
         err = trainer_.evaluate()
@@ -72,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="../ace/datasets",
+        default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
     parser.add_argument("--use_global", type=int, default=1)
