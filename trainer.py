@@ -16,6 +16,7 @@ from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess, project_using_pose
+from clustering import cluster_function
 from dataset import RobotCarDataset
 
 
@@ -28,26 +29,31 @@ def retrieve_pid(pid_list, uv_gt, keypoints):
 
 
 def compute_pose_error(pose, pose_gt):
-    est_pose = np.vstack([pose.Rt, [0, 0, 0, 1]])
-    out_pose = torch.from_numpy(est_pose)
+    R_gt, t_gt = pose_gt.qvec2rotmat(), pose_gt.tvec
+    R, t = pose.R, pose.t
+    t_err = np.linalg.norm(-R_gt.T @ t_gt + R.T @ t, axis=0)
+    cos = np.clip((np.trace(np.dot(R_gt.T, R)) - 1) / 2, -1.0, 1.0)
+    r_err = np.rad2deg(np.abs(np.arccos(cos)))
 
-    # Calculate translation error.
-    t_err = float(torch.norm(pose_gt[0:3, 3] - out_pose[0:3, 3]))
-
-    gt_R = pose_gt[0:3, 0:3].numpy()
-    out_R = out_pose[0:3, 0:3].numpy()
-
-    r_err = np.matmul(out_R, np.transpose(gt_R))
-    r_err = cv2.Rodrigues(r_err)[0]
-    r_err = np.linalg.norm(r_err) * 180 / math.pi
+    # est_pose = np.vstack([pose.Rt, [0, 0, 0, 1]])
+    # out_pose = torch.from_numpy(est_pose)
+    #
+    # # Calculate translation error.
+    # t_err = float(torch.norm(pose_gt[0:3, 3] - out_pose[0:3, 3]))
+    #
+    # gt_R = pose_gt[0:3, 0:3].numpy()
+    # out_R = out_pose[0:3, 0:3].numpy()
+    #
+    # r_err = np.matmul(out_R, np.transpose(gt_R))
+    # r_err = cv2.Rodrigues(r_err)[0]
+    # r_err = np.linalg.norm(r_err) * 180 / math.pi
     return t_err, r_err
 
 
-def combine_descriptors(local_desc, global_desc, lambda_value_):
-    res = (
-        lambda_value_ * local_desc
-        + (1 - lambda_value_) * global_desc[: local_desc.shape[1]]
-    )
+def combine_descriptors(local_desc, global_desc, lambda_value_, until=None):
+    if until is None:
+        until = local_desc.shape[1]
+    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[:until]
     return res
 
 
@@ -266,7 +272,7 @@ class BaseTrainer:
         return features_h5
 
     def collect_descriptors_loop(self, features_h5, pid2mean_desc, pid2count):
-        sfd2_keypoints_h5 = self.run_sfd2_on_db_images()
+        # sfd2_keypoints_h5 = self.run_sfd2_on_db_images()
 
         pid2ind = {}
         index_for_array = -1
@@ -274,28 +280,28 @@ class BaseTrainer:
             if example is None:
                 continue
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            sfd2_keypoints, descriptors = dd_utils.read_kp_and_desc(
-                example[1], sfd2_keypoints_h5
-            )
+            # sfd2_keypoints, descriptors = dd_utils.read_kp_and_desc(
+            #     example[1], sfd2_keypoints_h5
+            # )
 
             pid_list = example[3]
             uv = example[-1]
 
-            tree = KDTree(uv)
-            dis, ind = tree.query(keypoints)
-            mask = dis < 5
-            tree = KDTree(uv)
-            dis, ind = tree.query(sfd2_keypoints.astype(uv.dtype))
-            mask2 = dis < 5
-
-            image = cv2.imread(example[1])
-            # for x, y in sfd2_keypoints[mask2].astype(int):
-            #     cv2.circle(image, (x, y), 5, (255, 0, 0))
-            # for x, y in keypoints[mask].astype(int):
-            #     cv2.circle(image, (x, y), 5, (0, 255, 0))
-            for x, y in uv.astype(int):
-                cv2.circle(image, (x, y), 5, (0, 0, 255))
-            cv2.imwrite(f"debug/test0.png", image)
+            # tree = KDTree(uv)
+            # dis, ind = tree.query(keypoints)
+            # mask = dis < 5
+            # tree = KDTree(uv)
+            # dis, ind = tree.query(sfd2_keypoints.astype(uv.dtype))
+            # mask2 = dis < 5
+            #
+            # image = cv2.imread(example[1])
+            # # for x, y in sfd2_keypoints[mask2].astype(int):
+            # #     cv2.circle(image, (x, y), 5, (255, 0, 0))
+            # # for x, y in keypoints[mask].astype(int):
+            # #     cv2.circle(image, (x, y), 5, (0, 255, 0))
+            # for x, y in uv.astype(int):
+            #     cv2.circle(image, (x, y), 5, (0, 0, 255))
+            # cv2.imwrite(f"debug/test0.png", image)
 
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             idx_arr, ind2 = np.unique(ind[mask], return_index=True)
@@ -325,7 +331,6 @@ class BaseTrainer:
         if np.sum(np.isnan(pid2mean_desc)) > 0:
             print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
 
-        print(f"Codebook size: {round(sys.getsizeof(pid2mean_desc)/1e9, 2)} GB")
         print(f"Codebook dtype: {pid2mean_desc.dtype}")
         return pid2mean_desc, pid2ind
 
@@ -341,7 +346,6 @@ class BaseTrainer:
         pid2mean_desc, pid2ind = self.collect_descriptors_loop(
             features_h5, pid2mean_desc, pid2count
         )
-        features_h5.close()
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         for pid in pid2ind:
@@ -351,6 +355,47 @@ class BaseTrainer:
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
             pid2mean_desc,
         )
+        np.save(
+            f"output/{self.ds_name}/xyz-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            self.xyz_arr,
+        )
+        # self.pid2mean_desc = pid2mean_desc
+        # gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        #
+        # keep = np.zeros(self.pid2mean_desc.shape[0], dtype=int)
+        # all_pids = np.arange(self.pid2mean_desc.shape[0])
+        # for example in tqdm(self.dataset, desc="Finding inliers"):
+        #     image_descriptor = self.image2desc[example[1]]
+        #     keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+        #     descriptors = combine_descriptors(
+        #         descriptors, image_descriptor, self.lambda_val
+        #     )
+        #
+        #     uv_arr, xyz_pred, pid_list = self.legal_predict(
+        #         keypoints,
+        #         descriptors,
+        #         gpu_index_flat,
+        #         return_indices=True
+        #     )
+        #
+        #     camera = example[6]
+        #     camera_dict = {
+        #         "model": camera.model,
+        #         "height": camera.height,
+        #         "width": camera.width,
+        #         "params": camera.params,
+        #     }
+        #     pose, info = poselib.estimate_absolute_pose(
+        #         uv_arr,
+        #         xyz_pred,
+        #         camera_dict,
+        #     )
+        #     keep[pid_list[info["inliers"]]] = 1
+        #
+        # pid2mean_desc = pid2mean_desc[all_pids[keep.astype(bool)]]
+        # self.xyz_arr = self.xyz_arr[all_pids[keep.astype(bool)]]
+        features_h5.close()
+
         return pid2mean_desc
 
     def index_db_points(self):
@@ -467,7 +512,12 @@ class BaseTrainer:
         global_features_h5.close()
 
     def legal_predict(
-        self, uv_arr, features_ori, gpu_index_flat, remove_duplicate=False
+        self,
+        uv_arr,
+        features_ori,
+        gpu_index_flat,
+        remove_duplicate=False,
+        return_indices=False,
     ):
         distances, feature_indices = gpu_index_flat.search(
             features_ori.astype(self.codebook_dtype), 1
@@ -490,6 +540,9 @@ class BaseTrainer:
             feature_indices = [pid for pid in pid2uv]
 
         pred_scene_coords_b3 = self.xyz_arr[feature_indices]
+
+        if return_indices:
+            return uv_arr, pred_scene_coords_b3, feature_indices
 
         return uv_arr, pred_scene_coords_b3
 
@@ -809,23 +862,72 @@ class SevenScenesTrainer(BaseTrainer):
 
 
 class CambridgeLandmarksTrainer(BaseTrainer):
-    def collect_descriptors(self, vis=False):
-        features_h5 = self.load_local_features()
+    def collect_descriptors_loop(self, features_h5, pid2mean_desc, pid2count):
+        pid2kps = {}
+        for example in tqdm(self.dataset, desc="Collecting point descriptors"):
+            if example is None:
+                continue
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+
+            pid_list = example[3]
+            uv = example[-1]
+
+            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            idx_arr, ind2 = np.unique(ind[mask], return_index=True)
+
+            for idx, pid in enumerate(selected_pid[ind2]):
+                pid2kps.setdefault(pid, []).append([example[1], idx_arr[idx]])
+
+        index_for_array = 0
+        pid2ind = {}
         pid2mean_desc = np.zeros(
-            (self.dataset.xyz_arr.shape[0], self.feature_dim),
-            np.float64,
+            (len(pid2kps), self.feature_dim), dtype=self.codebook_dtype
         )
-        pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
+        name2count = {}
+        for pid in pid2kps:
+            for name, _ in pid2kps[pid]:
+                name2count.setdefault(name, 0)
+                name2count[name] += 1
+        images = sorted(
+            list(name2count.keys()), key=lambda du: name2count[du], reverse=True
+        )[:1000]
+        name2desc = {}
+        for pid in tqdm(pid2kps):
+            all_desc = []
+            for name, fid in pid2kps[pid]:
+                if name in name2desc:
+                    descriptors = name2desc[name]
+                else:
+                    descriptors = dd_utils.read_desc_only(name, features_h5)
+                    if name in images:
+                        name2desc[name] = descriptors
+                desc = descriptors[fid]
+                if self.using_global_descriptors:
+                    global_desc = self.image2desc[name]
+                    desc = combine_descriptors(
+                        desc, global_desc, self.lambda_val, until=desc.shape[0]
+                    )
+                all_desc.append(desc)
 
-        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
-            features_h5, pid2mean_desc, pid2count
-        )
-        features_h5.close()
+            if len(all_desc) == 1:
+                pid2mean_desc[index_for_array] = all_desc[0]
+            else:
+                all_desc = np.array(all_desc)  # [n, d]
+                dist = all_desc @ all_desc.transpose()  # [n, n]
+                dist = 2 - 2 * dist
+                md_dist = np.median(dist, axis=-1)  # [n]
+                min_id = np.argmin(md_dist)
+                pid2mean_desc[index_for_array] = all_desc[min_id]
+            pid2ind[pid] = index_for_array
+            index_for_array += 1
+        if pid2mean_desc.dtype != self.codebook_dtype:
+            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
 
-        self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
-        for pid in pid2ind:
-            self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
-        return pid2mean_desc
+        if np.sum(np.isnan(pid2mean_desc)) > 0:
+            print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
+
+        print(f"Codebook dtype: {pid2mean_desc.dtype}")
+        return pid2mean_desc, pid2ind
 
     def evaluate(self, return_name2err=False):
         self.detect_local_features_on_test_set()
@@ -868,10 +970,16 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 )
 
                 camera = example[6]
+                camera_dict = {
+                    "model": camera.model.name,
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
                 pose, info = poselib.estimate_absolute_pose(
                     uv_arr,
                     xyz_pred,
-                    camera,
+                    camera_dict,
                 )
 
                 t_err, r_err = compute_pose_error(pose, example[4])
@@ -887,11 +995,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         assert total_frames == len(testset)
 
         # Compute median errors.
-        tErrs.sort()
-        rErrs.sort()
-        median_idx = total_frames // 2
-        median_rErr = rErrs[median_idx]
-        median_tErr = tErrs[median_idx]
+        median_rErr = np.median(rErrs)
+        median_tErr = np.median(tErrs)
         if return_name2err:
             return median_tErr, median_rErr, name2err
         return median_tErr, median_rErr

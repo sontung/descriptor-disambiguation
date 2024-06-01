@@ -964,16 +964,13 @@ def hloc_conf_for_all_models():
 
 
 def read_kp_and_desc(name, features_h5):
-    pred = {}
     img_id = "/".join(name.split("/")[-2:])
     try:
         grp = features_h5[img_id]
     except KeyError:
         grp = features_h5[name]
-    for k, v in grp.items():
-        pred[k] = v
 
-    pred = {k: np.array(v) for k, v in pred.items()}
+    pred = {k: np.array(v) for k, v in grp.items()}
     scale = pred["scale"]
     keypoints = (pred["keypoints"] + 0.5) / scale - 0.5
     if "descriptors" in pred:
@@ -981,6 +978,20 @@ def read_kp_and_desc(name, features_h5):
     else:
         descriptors = None
     return keypoints, descriptors
+
+
+def read_desc_only(name, features_h5):
+    img_id = "/".join(name.split("/")[-2:])
+    try:
+        grp = features_h5[img_id]
+    except KeyError:
+        grp = features_h5[name]
+
+    if "descriptors" in grp:
+        descriptors = np.array(grp["descriptors"]).T
+    else:
+        descriptors = None
+    return descriptors
 
 
 def read_global_desc(name, global_features_h5):

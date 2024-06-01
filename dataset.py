@@ -137,6 +137,7 @@ class CambridgeLandmarksDataset(Dataset):
             img_id = self.img_ids[idx]
 
             image, image_name, scale = self._load_image(img_id)
+            assert image.shape == (576, 1024)
             camera_id = self.recon_images[img_id].camera_id
             camera = self.recon_cameras[camera_id]
             focal, cx, cy, k = camera.params
@@ -151,8 +152,15 @@ class CambridgeLandmarksDataset(Dataset):
             pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
 
             pid_list = self.image_id2pids[img_id]
-            uv_gt = self.image_id2uvs[img_id] + 0.5
+            uv_gt = self.image_id2uvs[img_id] / scale
             xyz_gt = None
+
+            # import cv2
+            # image = cv2.imread(image_name)
+            # uv_gt2 = uv_gt/scale
+            # for x, y in uv_gt2.astype(int):
+            #     cv2.circle(image, (x, y), 5, (255, 0, 0))
+            # cv2.imwrite(f"debug/test.png", image)
 
             pose_inv = torch.from_numpy(pose_inv)
 
@@ -176,9 +184,10 @@ class CambridgeLandmarksDataset(Dataset):
             intrinsics[1, 2] = cy
             image = None
             pid_list = []
-            qvec = self.recon_images[img_id].qvec
-            tvec = self.recon_images[img_id].tvec
-            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            # qvec = self.recon_images[img_id].qvec
+            # tvec = self.recon_images[img_id].tvec
+            # pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            pose_inv = self.recon_images[img_id]
             xyz_gt = None
             uv_gt = None
 
@@ -1097,8 +1106,10 @@ if __name__ == "__main__":
     # for t in testset:
     #     continue
 
+    # g = AachenDataset(train=False)
+    # g[0]
     train_ds_ = CambridgeLandmarksDataset(
-        train=False,
+        train=True,
         ds_name="KingsCollege",
         root_dir=f"datasets/cambridge",
     )

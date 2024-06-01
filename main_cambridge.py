@@ -23,16 +23,16 @@ def run_function(
         print(f"Using {local_model}")
 
     folders = [
-        "ShopFacade",
-        "OldHospital",
         "GreatCourt",
-        "StMarysChurch",
         "KingsCollege",
+        "OldHospital",
+        "ShopFacade",
+        "StMarysChurch",
     ]
 
     results = {}
     for ds_name in folders:
-        # if ds_name != "Cambridge_GreatCourt":
+        # if ds_name != "GreatCourt":
         #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
@@ -58,7 +58,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=True,
+            convert_to_db_desc=False,
         )
         # continue
         err = trainer_.evaluate()
