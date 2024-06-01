@@ -272,57 +272,63 @@ class BaseTrainer:
         return features_h5
 
     def collect_descriptors_loop(self, features_h5, pid2mean_desc, pid2count):
-        pid2ind = {}
-        index_for_array = -1
+        pid2kps = {}
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
             if example is None:
                 continue
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            # sfd2_keypoints, descriptors = dd_utils.read_kp_and_desc(
-            #     example[1], sfd2_keypoints_h5
-            # )
 
             pid_list = example[3]
             uv = example[-1]
 
-            # tree = KDTree(uv)
-            # dis, ind = tree.query(keypoints)
-            # mask = dis < 5
-            # tree = KDTree(uv)
-            # dis, ind = tree.query(sfd2_keypoints.astype(uv.dtype))
-            # mask2 = dis < 5
-            #
-            # image = cv2.imread(example[1])
-            # # for x, y in sfd2_keypoints[mask2].astype(int):
-            # #     cv2.circle(image, (x, y), 5, (255, 0, 0))
-            # # for x, y in keypoints[mask].astype(int):
-            # #     cv2.circle(image, (x, y), 5, (0, 255, 0))
-            # for x, y in uv.astype(int):
-            #     cv2.circle(image, (x, y), 5, (0, 0, 255))
-            # cv2.imwrite(f"debug/test0.png", image)
-
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             idx_arr, ind2 = np.unique(ind[mask], return_index=True)
 
-            selected_descriptors = descriptors[idx_arr]
-            if self.using_global_descriptors:
-                image_descriptor = self.image2desc[example[1]]
-                selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val
-                )
-
             for idx, pid in enumerate(selected_pid[ind2]):
-                if pid not in pid2ind:
-                    index_for_array += 1
-                    pid2ind[pid] = index_for_array
+                pid2kps.setdefault(pid, []).append((example[1], idx_arr[idx]))
 
-            idx2 = [pid2ind[pid] for pid in selected_pid[ind2]]
-            pid2mean_desc[idx2] += selected_descriptors
-            pid2count[idx2] += 1
-        index_for_array += 1
-        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
-            :index_for_array
-        ].reshape(-1, 1)
+        index_for_array = 0
+        pid2ind = {}
+        pid2mean_desc = np.zeros(
+            (len(pid2kps), self.feature_dim), dtype=self.codebook_dtype
+        )
+        name2count = {}
+        for pid in pid2kps:
+            for name, _ in pid2kps[pid]:
+                name2count.setdefault(name, 0)
+                name2count[name] += 1
+        images = sorted(
+            list(name2count.keys()), key=lambda du: name2count[du], reverse=True
+        )[:2000]
+        name2desc = {}
+        for pid in tqdm(pid2kps):
+            all_desc = []
+            for name, fid in pid2kps[pid]:
+                if name in name2desc:
+                    descriptors = name2desc[name]
+                else:
+                    descriptors = dd_utils.read_desc_only(name, features_h5)
+                    if name in images:
+                        name2desc[name] = descriptors
+                desc = descriptors[fid]
+                if self.using_global_descriptors:
+                    global_desc = self.image2desc[name]
+                    desc = combine_descriptors(
+                        desc, global_desc, self.lambda_val, until=desc.shape[0]
+                    )
+                all_desc.append(desc)
+
+            if len(all_desc) == 1:
+                pid2mean_desc[index_for_array] = all_desc[0]
+            else:
+                all_desc = np.array(all_desc)  # [n, d]
+                dist = all_desc @ all_desc.transpose()  # [n, n]
+                dist = 2 - 2 * dist
+                md_dist = np.median(dist, axis=-1)  # [n]
+                min_id = np.argmin(md_dist)
+                pid2mean_desc[index_for_array] = all_desc[min_id]
+            pid2ind[pid] = index_for_array
+            index_for_array += 1
         if pid2mean_desc.dtype != self.codebook_dtype:
             pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
 
