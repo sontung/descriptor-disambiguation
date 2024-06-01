@@ -16,8 +16,6 @@ from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess, project_using_pose
-from clustering import cluster_function
-from dataset import RobotCarDataset
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -274,8 +272,6 @@ class BaseTrainer:
         return features_h5
 
     def collect_descriptors_loop(self, features_h5, pid2mean_desc, pid2count):
-        # sfd2_keypoints_h5 = self.run_sfd2_on_db_images()
-
         pid2ind = {}
         index_for_array = -1
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
