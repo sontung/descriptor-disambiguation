@@ -78,7 +78,6 @@ class CambridgeLandmarksDataset(Dataset):
             self.names = read_train_poses(
                 f"{root_dir}/{sift_model_name}/{ds_name}/list_db.txt"
             )
-            self.image_id2points = {}
             self.pid2images = {}
 
             Path(f"output/{self.ds_type}").mkdir(parents=True, exist_ok=True)

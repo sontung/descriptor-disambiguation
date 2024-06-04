@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import dd_utils
+from clustering import reduce_map_using_min_cover
 from dataset import CambridgeLandmarksDataset
 from trainer import CambridgeLandmarksTrainer
 
@@ -41,6 +42,7 @@ def run_function(
         test_ds_ = CambridgeLandmarksDataset(
             train=False, ds_name=ds_name, root_dir=root_dir_
         )
+        reduce_map_using_min_cover(train_ds_)
 
         # set1 = set(train_ds_.rgb_files)
         # set2 = set(test_ds_.rgb_files)

@@ -1,10 +1,15 @@
+import random
+
 import numpy as np
 import faiss
 import open3d as o3d
+from numba.core.serialize import pickle
 from pykdtree.kdtree import KDTree
 from sklearn.neighbors import BallTree
 from sklearn.cluster import DBSCAN
 from tqdm import tqdm
+
+from dataset import CambridgeLandmarksDataset
 
 
 def cluster(x, nb_clusters):
@@ -121,5 +126,190 @@ def main():
     np.save("output/GreatCourt/codebook_mask.npy", point_indices[keep.astype(bool)])
 
 
+def main2():
+    file_name1 = f"output/GreatCourt/image_desc_eigenplaces_ResNet101_2048_2048.npy"
+    file_name2 = (
+        f"output/GreatCourt/image_desc_name_eigenplaces_ResNet101_2048_2048.npy"
+    )
+    all_desc = np.load(file_name1)
+    afile = open(file_name2, "rb")
+    all_names = pickle.load(afile)
+    afile.close()
+    image2desc = {}
+    for idx, name in enumerate(all_names):
+        image2desc[name] = all_desc[idx]
+    niter = 20
+    verbose = True
+    n_centroids = 100
+    d = all_desc.shape[1]
+    kmeans = faiss.Kmeans(d, n_centroids, niter=niter, verbose=verbose)
+    kmeans.train(all_desc)
+    _, indices = kmeans.index.search(all_desc, 1)
+    indices = indices.flatten()
+
+    train_ds_ = CambridgeLandmarksDataset(
+        train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
+    )
+
+    cluster_ind = 0
+    mask = indices == cluster_ind
+    names_curr = np.array(all_names)[mask]
+    image_ids_curr = [
+        train_ds_.image_name2id[name.split(train_ds_.images_dir)[-1][1:]]
+        for name in names_curr
+    ]
+    pid_curr = [train_ds_.image_id2pids[img_id] for img_id in image_ids_curr]
+    pid_curr, counts = np.unique(np.concatenate(pid_curr), return_counts=True)
+    # pid_curr = pid_curr[counts>10]
+
+    xyz_arr = np.array([train_ds_.recon_points[pid].xyz for pid in pid_curr])
+
+    clustering = DBSCAN(eps=1, min_samples=10).fit(xyz_arr)
+    colors = np.random.random((np.max(clustering.labels_) + 1, 3))
+    colors[-1] = [0, 0, 0]
+    mask2 = clustering.labels_ != -1
+    pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr[mask2]))
+    pc1.colors = o3d.utility.Vector3dVector(colors[clustering.labels_][mask2])
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    vis.add_geometry(pc1)
+    vis.run()
+    vis.destroy_window()
+
+    centroids = xyz_arr[mask2]
+    votes = np.zeros(centroids.shape[0], int)
+    for img_id in image_ids_curr:
+        xyz_img = np.array(
+            [train_ds_.recon_points[pid].xyz for pid in train_ds_.image_id2pids[img_id]]
+        )
+        tree = KDTree(centroids)
+        dis, ind = tree.query(xyz_img)
+        mask3 = dis < 1
+        votes[ind[mask3]] += 1
+
+    mask3 = votes >= len(image_ids_curr) // 2
+    print(np.sum(mask3), np.max(votes), len(image_ids_curr))
+    colors = np.zeros_like(centroids)
+    colors[mask3] = [1, 0, 0]
+    pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(centroids))
+    pc1.colors = o3d.utility.Vector3dVector(colors)
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    vis.add_geometry(pc1)
+    vis.run()
+    vis.destroy_window()
+
+    print()
+
+
+# @profile
+def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
+    # train_ds_ = CambridgeLandmarksDataset(
+    #     train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
+    # )
+    pid2images = {
+        pid: list(train_ds_.recon_points[pid].image_ids)
+        for pid in train_ds_.recon_points
+    }
+    pid2ind = {}
+    ind2pid = {}
+    score_mat = np.zeros(len(train_ds_.recon_points), int)
+    available_mat = np.ones(len(train_ds_.recon_points), bool)
+    index_arr = np.arange(len(train_ds_.recon_points))
+    for ind, pid in enumerate(train_ds_.recon_points.keys()):
+        pid2ind[pid] = ind
+        ind2pid[ind] = pid
+        score_mat[ind] = len(pid2images[pid])
+
+    image2covers = {img_id: 0 for img_id in train_ds_.recon_images}
+    image2indices = {
+        img_id: [pid2ind[pid] for pid in train_ds_.image_id2pids[img_id]]
+        for img_id in train_ds_.recon_images
+    }
+
+    pid_list = set(list(pid2images.keys()))
+    chosen_pid = set([])
+    ori_size = len(pid_list)
+    done_images = set([])
+
+    for image in train_ds_.image_id2pids:
+        pid_list_curr = train_ds_.image_id2pids[image]
+        indices = image2indices[image]
+        if len(pid_list_curr) < min_cover:
+            chosen_pid.update(pid_list_curr)
+            done_images.add(image)
+            available_mat[indices] = False
+
+    pbar = tqdm(total=len(image2covers) - len(done_images), desc="Covering images")
+
+    while True:
+        best_score = np.max(score_mat[available_mat])
+        mask = np.bitwise_and(available_mat, score_mat == best_score)
+        best_indices = index_arr[mask]
+
+        if best_score == 0:
+            for image in image2covers:
+                if image not in done_images:
+                    pid_list_curr = train_ds_.image_id2pids[image]
+                    for pid in pid_list_curr:
+                        if pid not in chosen_pid:
+                            chosen_pid.add(pid)
+                            available_mat[pid2ind[pid]] = False
+                            image2covers[image] += 1
+                            if image2covers[image] >= min_cover:
+                                break
+            break
+        best_index = random.choice(best_indices)
+        best_pid = ind2pid[best_index]
+        images_covered_list = []
+        for image in pid2images[best_pid]:
+            image2covers[image] += 1
+            if image2covers[image] >= min_cover and image not in done_images:
+                done_images.add(image)
+                images_covered_list.append(image)
+                pbar.update(1)
+
+        for image in images_covered_list:
+            indices = image2indices[image]
+            score_mat[indices] -= 1
+
+        assert best_pid not in chosen_pid
+        chosen_pid.add(best_pid)
+        pid_list.remove(best_pid)
+        available_mat[pid2ind[best_pid]] = False
+
+        if len(done_images) == len(image2covers):
+            break
+
+    pbar.close()
+    for image in train_ds_.image_id2pids:
+        pid_list = train_ds_.image_id2pids[image]
+        if len(pid_list) >= min_cover:
+            res = len([pid for pid in pid_list if pid in chosen_pid])
+            assert res >= min_cover, image
+    print(len(chosen_pid) / ori_size)
+
+    if vis:
+        xyz_arr = np.array([train_ds_.recon_points[pid].xyz for pid in chosen_pid])
+
+        pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
+        pc1, inlier_ind = pc1.remove_radius_outlier(nb_points=16, radius=5)
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+        vis.add_geometry(pc1)
+        vis.run()
+        vis.destroy_window()
+
+    train_ds_.image_id2pids = {}
+    train_ds_.image_id2uvs = {}
+    for img_id in tqdm(train_ds_.recon_images, desc="Gathering points per image"):
+        pid_arr = train_ds_.recon_images[img_id].point3D_ids
+        mask = [True if pid in chosen_pid else False for pid in pid_arr]
+        train_ds_.image_id2pids[img_id] = pid_arr[mask]
+        train_ds_.image_id2uvs[img_id] = train_ds_.recon_images[img_id].xys[mask]
+
+
 if __name__ == "__main__":
-    main()
+    reduce_map_using_min_cover()
