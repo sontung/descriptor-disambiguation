@@ -310,6 +310,11 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
         train_ds_.image_id2pids[img_id] = pid_arr[mask]
         train_ds_.image_id2uvs[img_id] = train_ds_.recon_images[img_id].xys[mask]
 
+    pid_list = list(train_ds_.recon_points.keys())
+    for pid in pid_list:
+        if pid not in chosen_pid:
+            del train_ds_.recon_points[pid]
+
 
 if __name__ == "__main__":
     reduce_map_using_min_cover()
