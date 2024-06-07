@@ -282,8 +282,8 @@ class AachenDataset(Dataset):
             self.image_id2uvs = {}
             for img_id in tqdm(self.recon_images, desc="Gathering points per image"):
                 pid_arr = self.recon_images[img_id].point3D_ids
-                mask = [True if pid in self.good_pids else False for pid in pid_arr]
-                # mask = pid_arr >= 0
+                # mask = [True if pid in self.good_pids else False for pid in pid_arr]
+                mask = pid_arr >= 0
                 self.image_id2pids[img_id] = pid_arr[mask]
                 self.image_id2uvs[img_id] = self.recon_images[img_id].xys[mask]
             self.img_ids = list(self.image_name2id.values())

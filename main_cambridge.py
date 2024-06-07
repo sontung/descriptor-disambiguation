@@ -33,8 +33,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        # if ds_name != "GreatCourt":
-        #     continue
+        if ds_name != "GreatCourt":
+            continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_
@@ -42,7 +42,6 @@ def run_function(
         test_ds_ = CambridgeLandmarksDataset(
             train=False, ds_name=ds_name, root_dir=root_dir_
         )
-        # reduce_map_using_min_cover(train_ds_)
 
         # set1 = set(train_ds_.rgb_files)
         # set2 = set(test_ds_.rgb_files)
@@ -62,7 +61,10 @@ def run_function(
             lambda_val=0.5,
             convert_to_db_desc=False,
         )
-        # continue
+        # chosen_list = reduce_map_using_min_cover(train_ds_, trainer_.image2pid_via_new_features)
+        # trainer_.special_pid_list = chosen_list
+        # trainer_.collect_descriptors()
+
         err = trainer_.evaluate()
         print(f"    median translation error = {err[0]}")
         print(f"    median rotation error = {err[1]}")
@@ -79,16 +81,16 @@ if __name__ == "__main__":
         default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--use_global", type=int, default=0)
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="r2d2",
+        default="dedode",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=128,
+        default=256,
     )
     parser.add_argument(
         "--global_desc",
@@ -98,7 +100,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=128,
+        default=256,
     )
     args = parser.parse_args()
     results = run_function(

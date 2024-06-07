@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 import rerun as rr
 import dd_utils
+from clustering import reduce_map_using_min_cover
 from dataset import CambridgeLandmarksDataset
 from trainer import CambridgeLandmarksTrainer
 import open3d as o3d
@@ -54,6 +55,10 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
         mask2,
         pid_list2,
     ) = bad_result
+
+    gt_pose1 = dd_utils.return_pose_mat_no_inv(gt_pose1.qvec, gt_pose1.tvec)
+    gt_pose2 = dd_utils.return_pose_mat_no_inv(gt_pose2.qvec, gt_pose2.tvec)
+
     intrinsics = np.eye(3)
 
     intrinsics[0, 0] = 738
@@ -68,43 +73,17 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
         427 * 2, 240 * 2, intrinsics, np.vstack([pose2.Rt, [0, 0, 0, 1]]), scale=7
     )
     cam3 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, gt_pose2.numpy(), scale=7
+        427 * 2, 240 * 2, intrinsics, gt_pose2, scale=7
     )
 
     cam1.paint_uniform_color((0, 0, 0))
     cam2.paint_uniform_color((0, 0, 0))
     cam3.paint_uniform_color((0, 1, 0))
 
-    # corr1.paint_uniform_color((0.5, 0.5, 0))
-    # corr2.paint_uniform_color((1, 0, 0))
-    # pred1.paint_uniform_color((0, 0, 1))
-    # pred2.paint_uniform_color((1, 0, 0))
-
     xyz1 = xyz_pred1
     xyz2 = xyz_pred2
     pred1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1))
     pred2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2))
-
-    # ori1 = o3d.geometry.PointCloud(
-    #     o3d.utility.Vector3dVector(
-    #         np.repeat(cam1.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
-    #     )
-    # )
-    # ori2 = o3d.geometry.PointCloud(
-    #     o3d.utility.Vector3dVector(
-    #         np.repeat(cam2.get_center().reshape(1, -1), 3, axis=0).reshape(-1, 3)
-    #     )
-    # )
-    #
-    # corr1 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
-    #     ori1, pred1, [[0, du] for du in range(0, xyz1.shape[0], 10)]
-    # )
-    # corr2 = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
-    #     ori2, pred2, [[0, du] for du in range(0, xyz2.shape[0], 10)]
-    # )
-
-    pred1.colors = o3d.utility.Vector3dVector(rgb_arr[pid_list1] / 255)
-    pred2.colors = o3d.utility.Vector3dVector(rgb_arr[pid_list2] / 255)
 
     not_inlier1 = np.bitwise_not(np.array(mask1))
     not_inlier2 = np.bitwise_not(np.array(mask2))
@@ -124,16 +103,23 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
     vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
     vis.remove_geometry(cam2, reset_bounding_box=False)
     vis.remove_geometry(pred2, reset_bounding_box=False)
-    vis.capture_screen_image(f"debug/good-{res_name}.png", do_render=True)
+    vis.capture_screen_image(f"debug/good.png", do_render=True)
     vis.remove_geometry(cam1, reset_bounding_box=False)
     vis.remove_geometry(pred1, reset_bounding_box=False)
 
     vis.add_geometry(cam2, reset_bounding_box=False)
     vis.add_geometry(pred2, reset_bounding_box=False)
-    vis.capture_screen_image(f"debug/bad-{res_name}.png", do_render=True)
+    vis.capture_screen_image(f"debug/bad.png", do_render=True)
 
     # vis.run()
     vis.destroy_window()
+    if t_err1 - t_err2 > 0:
+        im1 = cv2.imread(f"debug/good.png")
+        im2 = cv2.imread(f"debug/bad.png")
+        im3 = cv2.hconcat([im1[200:], im2[200:]])
+        t_err1, t_err2 = map(lambda du: round(du, 2), [t_err1, t_err2])
+        cv2.imwrite(f"debug/both-{res_name}-{t_err1}-{t_err2}.png", im3)
+
     return
 
 
@@ -167,23 +153,23 @@ def run_function(
         print(f"Using {local_model}")
 
     # ds_name = "Cambridge_KingsCollege"
-    ds_name = "Cambridge_GreatCourt"
+    ds_name = "GreatCourt"
     print(f"Processing {ds_name}")
     train_ds_ = CambridgeLandmarksDataset(
-        train=True, ds_name=ds_name, root_dir=f"{root_dir_}/{ds_name}"
+        train=True, ds_name=ds_name, root_dir=root_dir_
     )
     test_ds_ = CambridgeLandmarksDataset(
-        train=False, ds_name=ds_name, root_dir=f"{root_dir_}/{ds_name}"
+        train=False, ds_name=ds_name, root_dir=f"{root_dir_}"
     )
     # visualize(train_ds_)
 
-    set1 = set(train_ds_.rgb_files)
-    set2 = set(test_ds_.rgb_files)
-    set3 = set1.intersection(set2)
-    assert len(set3) == 0
+    train_ds_2 = CambridgeLandmarksDataset(
+        train=True, ds_name=ds_name, root_dir=root_dir_
+    )
+    # chosen_list = reduce_map_using_min_cover(train_ds_, trainer_.image2pid_via_new_features)
 
     trainer_ = CambridgeLandmarksTrainer(
-        train_ds_,
+        train_ds_2,
         test_ds_,
         local_desc_dim,
         global_desc_dim,
@@ -202,19 +188,13 @@ def run_function(
         encoder_global,
         conf_ns,
         conf_ns_retrieval,
-        False,
+        True,
     )
 
-    good_name_list = [
-        "rgb/seq4_frame00097.png",
-        "rgb/seq4_frame00004.png",
-        "rgb/seq1_frame00420.png",
-        "rgb/seq1_frame00422.png",
-        "rgb/seq4_frame00070.png",
-    ]
 
-    res = trainer_.process(good_name_list)
-    res2 = trainer_2.process(good_name_list)
+
+    res = trainer_.process()
+    res2 = trainer_2.process()
     visualize_matches(res, res2, trainer_.rgb_arr)
 
     bad_name_list = [
@@ -251,19 +231,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="../ace/datasets",
+        default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
     parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="r2d2",
+        default="d2net",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=128,
+        default=512,
     )
     parser.add_argument(
         "--global_desc",
@@ -273,7 +253,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=128,
+        default=512,
     )
     args = parser.parse_args()
     run_function(

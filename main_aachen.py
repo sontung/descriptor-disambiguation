@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 
 import dd_utils
+from clustering import reduce_map_using_min_cover
 from dataset import AachenDataset
 from trainer import BaseTrainer
 
@@ -26,6 +27,7 @@ def run_function(
     )
     train_ds_ = AachenDataset(ds_dir=ds_dir)
     test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
+
     for lambda_val in [0.5]:
         trainer_ = BaseTrainer(
             train_ds_,
@@ -40,6 +42,8 @@ def run_function(
             lambda_val=lambda_val,
             convert_to_db_desc=convert,
         )
+        # chosen_list = reduce_map_using_min_cover(train_ds_, trainer_.image2pid_via_new_features)
+        # trainer_.special_pid_list = chosen_list
         trainer_.evaluate()
 
 

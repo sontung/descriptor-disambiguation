@@ -205,10 +205,22 @@ def main2():
 
 
 # @profile
-def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
+def reduce_map_using_min_cover(train_ds_, image2pid, vis=False, min_cover=100):
     # train_ds_ = CambridgeLandmarksDataset(
     #     train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
     # )
+
+    # xyz_arr = np.zeros((len(train_ds_.recon_points), 3))
+    # pid_arr = np.zeros(len(train_ds_.recon_points), int)
+    # for idx, pid in enumerate(train_ds_.recon_points.keys()):
+    #     xyz_arr[idx] = train_ds_.recon_points[pid].xyz
+    #     pid_arr[idx] = pid
+    # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
+    # cl, inlier_ind = point_cloud.remove_radius_outlier(
+    #     nb_points=16, radius=5, print_progress=True
+    # )
+    # chosen = set(list(pid_arr[inlier_ind]))
+    # return chosen
     pid2images = {
         pid: list(train_ds_.recon_points[pid].image_ids)
         for pid in train_ds_.recon_points
@@ -225,7 +237,7 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
 
     image2covers = {img_id: 0 for img_id in train_ds_.recon_images}
     image2indices = {
-        img_id: [pid2ind[pid] for pid in train_ds_.image_id2pids[img_id]]
+        img_id: [pid2ind[pid] for pid in image2pid[img_id]]
         for img_id in train_ds_.recon_images
     }
 
@@ -234,8 +246,8 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
     ori_size = len(pid_list)
     done_images = set([])
 
-    for image in train_ds_.image_id2pids:
-        pid_list_curr = train_ds_.image_id2pids[image]
+    for image in image2pid:
+        pid_list_curr = image2pid[image]
         indices = image2indices[image]
         if len(pid_list_curr) < min_cover:
             chosen_pid.update(pid_list_curr)
@@ -252,7 +264,7 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
         if best_score == 0:
             for image in image2covers:
                 if image not in done_images:
-                    pid_list_curr = train_ds_.image_id2pids[image]
+                    pid_list_curr = image2pid[image]
                     for pid in pid_list_curr:
                         if pid not in chosen_pid:
                             chosen_pid.add(pid)
@@ -284,11 +296,11 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
             break
 
     pbar.close()
-    for image in train_ds_.image_id2pids:
-        pid_list = train_ds_.image_id2pids[image]
-        if len(pid_list) >= min_cover:
-            res = len([pid for pid in pid_list if pid in chosen_pid])
-            assert res >= min_cover, image
+    # for image in image2pid:
+    #     pid_list = image2pid[image]
+    #     if len(pid_list) >= min_cover:
+    #         res = len([pid for pid in pid_list if pid in chosen_pid])
+    #         assert res >= min_cover, image
     print(len(chosen_pid) / ori_size)
 
     if vis:
@@ -314,6 +326,7 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
     for pid in pid_list:
         if pid not in chosen_pid:
             del train_ds_.recon_points[pid]
+    return chosen_pid
 
 
 if __name__ == "__main__":
