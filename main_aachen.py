@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 
 import dd_utils
+
 # from clustering import reduce_map_using_min_cover
 from dataset import AachenDataset
 from trainer import BaseTrainer

@@ -238,9 +238,10 @@ class BaseTrainer:
                 torch.from_numpy(image).float().unsqueeze(0).cuda()
             )
             assert scale == 1
-            pred = {"keypoints": keypoints.squeeze().cpu().numpy(),
-                    "descriptors": descriptors.squeeze().cpu().numpy().T
-                    }
+            pred = {
+                "keypoints": keypoints.squeeze().cpu().numpy(),
+                "descriptors": descriptors.squeeze().cpu().numpy().T,
+            }
             # dense = self.local_desc_model.describe(
             #     torch.from_numpy(image).float().unsqueeze(0).cuda()
             # )
@@ -299,18 +300,11 @@ class BaseTrainer:
         for example in tqdm(self.dataset, desc="Collecting point descriptors"):
             if example is None:
                 continue
+
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            if len(keypoints.shape) == 3:
-                keypoints = keypoints[0]
-                descriptors = descriptors.squeeze().T
 
             pid_list = example[3]
             uv = example[-1]
-
-            # tree = KDTree(uv)
-            # dis, ind = tree.query(keypoints.astype(uv.dtype))
-            # mask = dis < 5
-            # selected_pid = np.array(pid_list)[ind[mask]]
 
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             self.image2pid_via_new_features[example[2]] = np.unique(selected_pid)
@@ -400,7 +394,7 @@ class BaseTrainer:
         res = faiss.StandardGpuResources()
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
-        if self.convert_to_db_desc:
+        if self.convert_to_db_desc and self.using_global_descriptors:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
@@ -494,7 +488,7 @@ class BaseTrainer:
         gpu_index_flat,
         remove_duplicate=False,
         return_indices=False,
-        ratio_test=False
+        ratio_test=False,
     ):
         if ratio_test:
             distances, feature_indices = gpu_index_flat.search(
@@ -509,7 +503,10 @@ class BaseTrainer:
 
         feature_indices = feature_indices.ravel()
         if self.special_pid_list is not None:
-            mask = [True if self.ind2pid[ind] in self.special_pid_list else False for ind in feature_indices]
+            mask = [
+                True if self.ind2pid[ind] in self.special_pid_list else False
+                for ind in feature_indices
+            ]
             feature_indices = feature_indices[mask]
             uv_arr = uv_arr[mask]
 
@@ -868,10 +865,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 )
 
                 uv_arr, xyz_pred, pid_list = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
-                    return_indices=True
+                    keypoints, descriptors, gpu_index_flat, return_indices=True
                 )
 
                 camera = example[6]

@@ -191,8 +191,6 @@ def run_function(
         True,
     )
 
-
-
     res = trainer_.process()
     res2 = trainer_2.process()
     visualize_matches(res, res2, trainer_.rgb_arr)

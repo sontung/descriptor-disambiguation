@@ -1,5 +1,7 @@
 import random
+import sys
 
+import h5py
 import numpy as np
 import faiss
 import open3d as o3d
@@ -9,7 +11,9 @@ from sklearn.neighbors import BallTree
 from sklearn.cluster import DBSCAN
 from tqdm import tqdm
 
+import dd_utils
 from dataset import CambridgeLandmarksDataset
+from trainer import retrieve_pid
 
 
 def cluster(x, nb_clusters):
@@ -204,23 +208,113 @@ def main2():
     print()
 
 
-# @profile
-def reduce_map_using_min_cover(train_ds_, image2pid, vis=False, min_cover=100):
-    # train_ds_ = CambridgeLandmarksDataset(
-    #     train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
-    # )
+def collect_codebook(dataset):
+    features_h5 = h5py.File("output/GreatCourt/d2net_features_train.h5", "r")
 
-    # xyz_arr = np.zeros((len(train_ds_.recon_points), 3))
-    # pid_arr = np.zeros(len(train_ds_.recon_points), int)
-    # for idx, pid in enumerate(train_ds_.recon_points.keys()):
-    #     xyz_arr[idx] = train_ds_.recon_points[pid].xyz
-    #     pid_arr[idx] = pid
-    # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
-    # cl, inlier_ind = point_cloud.remove_radius_outlier(
-    #     nb_points=16, radius=5, print_progress=True
-    # )
-    # chosen = set(list(pid_arr[inlier_ind]))
-    # return chosen
+    pid2mean_desc = np.zeros(
+        (len(dataset.recon_points), 512),
+    )
+    pid2count = np.zeros(len(dataset.recon_points))
+    index_for_array = -1
+    pid2ind = {}
+    for example in tqdm(dataset, desc="Collecting point descriptors"):
+        if example is None:
+            continue
+
+        keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+
+        pid_list = example[3]
+        uv = example[-1]
+
+        selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+        selected_descriptors = descriptors[ind[mask]]
+        for idx, pid in enumerate(selected_pid):
+            if pid not in pid2ind:
+                index_for_array += 1
+                pid2ind[pid] = index_for_array
+        dataset.image_id2pids[example[2]] = np.unique(selected_pid)
+        idx2 = [pid2ind[pid] for pid in selected_pid]
+        pid2mean_desc[idx2] += selected_descriptors
+        pid2count[idx2] += 1
+    index_for_array += 1
+    pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
+        :index_for_array
+    ].reshape(-1, 1)
+    features_h5.close()
+
+    niter = 20
+    verbose = True
+    n_centroids = 1000
+    d = pid2mean_desc.shape[1]
+    kmeans = faiss.Kmeans(d, n_centroids, niter=niter, verbose=verbose)
+    kmeans.train(pid2mean_desc)
+    _, indices = kmeans.index.search(pid2mean_desc, 1)
+    indices = indices.flatten()
+    pid2cid = {pid: indices[pid2ind[pid]] for pid in pid2ind}
+
+    return pid2cid
+
+
+def cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xyz_arr, pid_arr,
+                             vis=False):
+    index_arr = np.arange(len(train_ds_.recon_points))
+    ind2cluster = np.zeros(len(train_ds_.recon_points), int) - 1
+    available_mat = np.ones(len(train_ds_.recon_points), bool)
+    invalid = [pid2ind[pid] for pid in pid_arr if pid not in pid2cid]
+    available_mat[invalid] = False
+    cluster_ind_0 = 0
+    tree = BallTree(xyz_arr)
+    while True:
+        if np.sum(available_mat) <= 1:
+            break
+        best_score = np.max(score_mat[available_mat])
+        print(best_score, np.sum(available_mat))
+        mask = np.bitwise_and(available_mat, score_mat == best_score)
+        best_indices = index_arr[mask]
+        for best_index in best_indices:
+            best_pid = ind2pid[best_index]
+            cid0 = pid2cid[best_pid]
+            # dis_3d = np.mean(np.abs(xyz_arr[best_index] - xyz_arr), 1)
+            # mask = np.bitwise_and(dis_3d < 1, available_mat)
+            res = tree.query_radius(xyz_arr[best_index].reshape(-1, 3), r=1)[0]
+            res = res[available_mat[res]]
+            pid_list = [ind2pid[ind] for ind in res]
+            list_0 = [best_pid]
+            for pid in pid_list:
+                if pid not in list_0 and pid in pid2cid and pid2cid[pid] == cid0:
+                    list_0.append(pid)
+            indices = [pid2ind[pid] for pid in list_0]
+            available_mat[indices] = False
+            if len(list_0) == 1:
+                continue
+            ind2cluster[indices] = cluster_ind_0
+            cluster_ind_0 += 1
+    if vis:
+        colors = np.random.random((np.max(ind2cluster) + 1, 3))
+        colors[-1] = [0, 0, 0]
+        clusters, counts = np.unique(ind2cluster, return_counts=True)
+        mask2 = np.bitwise_and(np.isin(ind2cluster, clusters[counts>2]), ind2cluster != -1)
+        pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr[mask2]))
+        pc1.colors = o3d.utility.Vector3dVector(colors[ind2cluster][mask2])
+        cl, inlier_ind = pc1.remove_radius_outlier(nb_points=16, radius=5)
+
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+        vis.add_geometry(pc1)
+        vis.run()
+        vis.destroy_window()
+    return ind2cluster
+
+
+# @profile
+def reduce_map_using_min_cover(vis=False, min_cover=100):
+    train_ds_ = CambridgeLandmarksDataset(
+        train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
+    )
+
+    xyz_arr = np.zeros((len(train_ds_.recon_points), 3))
+    pid_arr = np.zeros(len(train_ds_.recon_points), int)
+
     pid2images = {
         pid: list(train_ds_.recon_points[pid].image_ids)
         for pid in train_ds_.recon_points
@@ -228,13 +322,30 @@ def reduce_map_using_min_cover(train_ds_, image2pid, vis=False, min_cover=100):
     pid2ind = {}
     ind2pid = {}
     score_mat = np.zeros(len(train_ds_.recon_points), int)
-    available_mat = np.ones(len(train_ds_.recon_points), bool)
     index_arr = np.arange(len(train_ds_.recon_points))
     for ind, pid in enumerate(train_ds_.recon_points.keys()):
+        xyz_arr[ind] = train_ds_.recon_points[pid].xyz
+        pid_arr[ind] = pid
         pid2ind[pid] = ind
         ind2pid[ind] = pid
         score_mat[ind] = len(pid2images[pid])
 
+    pid2cid = collect_codebook(train_ds_)
+    ind2cluster = cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xyz_arr, pid_arr, vis)
+    cluster2images = {}
+    cluster2pids = {}
+    for cluster_id in range(np.max(ind2cluster)+1):
+        mask = ind2cluster == cluster_id
+        indices = index_arr[mask]
+        pid_list = [ind2pid[ind] for ind in indices]
+        images = []
+        for pid in pid_list:
+            images.extend(pid2images[pid])
+        cluster2images[cluster_id] = set(images)
+        cluster2pids[cluster_id] = pid_list
+
+
+    sys.exit()
     image2covers = {img_id: 0 for img_id in train_ds_.recon_images}
     image2indices = {
         img_id: [pid2ind[pid] for pid in image2pid[img_id]]

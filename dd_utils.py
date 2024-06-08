@@ -1040,7 +1040,9 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
 
             encoder = sfd2_models.return_models()
         elif local_desc_model == "dedode":
-            encoder = DeDoDe.from_pretrained(detector_weights="L-upright", descriptor_weights="B-upright")
+            encoder = DeDoDe.from_pretrained(
+                detector_weights="L-upright", descriptor_weights="B-upright"
+            )
             conf_ns = SimpleNamespace(**{**default_conf, **conf})
             encoder.cuda()
 
