@@ -131,12 +131,27 @@ class BaseTrainer:
             self.pid2descriptors = {}
             self.pid2count = {}
             self.pid2mean_desc = self.collect_descriptors()
+            self.bad_codebook = self.collect_bad_codebook()
         else:
             self.pid2mean_desc = None
             self.all_pid_in_train_set = None
             self.pid2ind = None
             self.all_ind_in_train_set = None
             self.ind2pid = None
+
+    def load_local_features(self):
+        features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
+        )
+
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                for example in tqdm(self.dataset, desc="Detecting features"):
+                    self.produce_local_descriptors(example[1], features_h5)
+            features_h5.close()
+        features_h5 = h5py.File(features_path, "r")
+        return features_h5
 
     def detect_local_features_on_test_set(self):
         self.test_features_path = (
@@ -152,20 +167,6 @@ class BaseTrainer:
                         continue
                     self.produce_local_descriptors(example[1], features_h5)
             features_h5.close()
-
-    def load_local_features(self):
-        features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
-        )
-
-        if not os.path.isfile(features_path):
-            features_h5 = h5py.File(str(features_path), "a", libver="latest")
-            with torch.no_grad():
-                for example in tqdm(self.dataset, desc="Detecting features"):
-                    self.produce_local_descriptors(example[1], features_h5)
-            features_h5.close()
-        features_h5 = h5py.File(features_path, "r")
-        return features_h5
 
     def collect_image_descriptors(self):
         file_name1 = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_{self.global_feature_dim}.npy"
@@ -531,6 +532,60 @@ class BaseTrainer:
 
         return uv_arr, pred_scene_coords_b3
 
+    def collect_bad_codebook(self):
+        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        features_h5 = self.load_local_features()
+
+        pid2ind = {}
+        index_for_array = -1
+        pid2mean_desc = np.zeros(
+            (len(self.dataset.recon_points), self.feature_dim),
+            self.codebook_dtype,
+        )
+        pid2count = np.zeros(len(self.dataset.recon_points))
+        with torch.no_grad():
+            for example in tqdm(self.dataset, desc="Computing pose for test set"):
+                keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+
+                uv_arr, xyz_pred, pid_list = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
+                    return_indices=True
+                )
+
+                camera = example[6]
+                camera_dict = {
+                    "model": camera.model,
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera_dict,
+                )
+                mask = np.bitwise_not(np.array(info["inliers"]))
+                selected_pid = pid_list[mask]
+                selected_descriptors = descriptors[mask]
+                for idx, pid in enumerate(selected_pid):
+                    if pid not in pid2ind:
+                        index_for_array += 1
+                        pid2ind[pid] = index_for_array
+
+                idx2 = [pid2ind[pid] for pid in selected_pid]
+                pid2mean_desc[idx2] += selected_descriptors
+                pid2count[idx2] += 1
+
+        index_for_array += 1
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
+                                                             :index_for_array
+                                                             ].reshape(-1, 1)
+        if pid2mean_desc.dtype != self.codebook_dtype:
+            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
+        return pid2mean_desc
+
 
 class RobotCarTrainer(BaseTrainer):
     def reduce_map_size(self):
@@ -787,6 +842,12 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         tErrs = []
         testset = self.test_dataset
         name2err = {}
+
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat_for_bad_points = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat_for_bad_points.add(self.bad_codebook)
+
         with torch.no_grad():
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
@@ -794,11 +855,24 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
-                uv_arr, xyz_pred = self.legal_predict(
+                uv_arr, xyz_pred, pid_list = self.legal_predict(
                     keypoints,
                     descriptors,
                     gpu_index_flat,
+                    return_indices=True
                 )
+
+                unique_pids, counts = np.unique(pid_list, return_counts=True)
+                colors = np.random.random((len(unique_pids), 3))*255
+                colors = colors.astype(np.uint8)
+                pid2ind = {pid: ind for ind, pid in enumerate(unique_pids)}
+                mask = np.isin(pid_list, unique_pids[counts==np.max(counts)])
+
+                image = cv2.imread(example[1])
+
+                for idx, (u, v) in enumerate(uv_arr[mask].astype(int)):
+                    cv2.circle(image, (u, v), 5, tuple([int(du) for du in colors[pid2ind[pid_list[idx]]]]), -1)
+                cv2.imwrite(f"debug/im2.png", image)
 
                 camera = example[6]
                 camera_dict = {

@@ -276,7 +276,10 @@ def cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xy
             cid0 = pid2cid[best_pid]
             # dis_3d = np.mean(np.abs(xyz_arr[best_index] - xyz_arr), 1)
             # mask = np.bitwise_and(dis_3d < 1, available_mat)
-            res = tree.query_radius(xyz_arr[best_index].reshape(-1, 3), r=1)[0]
+            res = tree.query_radius(xyz_arr[best_index].reshape(-1, 3),
+                                    r=1,
+                                    return_distance=True)
+            res = res[0][0][res[1][0] > 0]
             res = res[available_mat[res]]
             pid_list = [ind2pid[ind] for ind in res]
             list_0 = [best_pid]
@@ -307,10 +310,10 @@ def cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xy
 
 
 # @profile
-def reduce_map_using_min_cover(vis=False, min_cover=100):
-    train_ds_ = CambridgeLandmarksDataset(
-        train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
-    )
+def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
+    # train_ds_ = CambridgeLandmarksDataset(
+    #     train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
+    # )
 
     xyz_arr = np.zeros((len(train_ds_.recon_points), 3))
     pid_arr = np.zeros(len(train_ds_.recon_points), int)
@@ -344,24 +347,24 @@ def reduce_map_using_min_cover(vis=False, min_cover=100):
         cluster2images[cluster_id] = set(images)
         cluster2pids[cluster_id] = pid_list
 
+    image2pid = {}
+    for cluster_id in cluster2images:
+        for image in cluster2images[cluster_id]:
+            image2pid.setdefault(image, []).append(cluster_id)
+    image2covers = {img_id: 0 for img_id in image2pid}
 
-    sys.exit()
-    image2covers = {img_id: 0 for img_id in train_ds_.recon_images}
-    image2indices = {
-        img_id: [pid2ind[pid] for pid in image2pid[img_id]]
-        for img_id in train_ds_.recon_images
-    }
-
-    pid_list = set(list(pid2images.keys()))
-    chosen_pid = set([])
-    ori_size = len(pid_list)
+    chosen_cluster = set([])
     done_images = set([])
+    available_mat = np.ones(np.max(ind2cluster)+1, bool)
+    score_mat = np.zeros(np.max(ind2cluster)+1, int)
+    index_arr = np.arange(np.max(ind2cluster)+1)
+    for cluster_id in cluster2images:
+        score_mat[cluster_id] = len(cluster2images[cluster_id])
 
     for image in image2pid:
-        pid_list_curr = image2pid[image]
-        indices = image2indices[image]
-        if len(pid_list_curr) < min_cover:
-            chosen_pid.update(pid_list_curr)
+        indices = image2pid[image]
+        if len(indices) < min_cover:
+            chosen_cluster.update(indices)
             done_images.add(image)
             available_mat[indices] = False
 
@@ -375,19 +378,18 @@ def reduce_map_using_min_cover(vis=False, min_cover=100):
         if best_score == 0:
             for image in image2covers:
                 if image not in done_images:
-                    pid_list_curr = image2pid[image]
-                    for pid in pid_list_curr:
-                        if pid not in chosen_pid:
-                            chosen_pid.add(pid)
-                            available_mat[pid2ind[pid]] = False
+                    cluster_list = image2pid[image]
+                    for cluster_id in cluster_list:
+                        if cluster_id not in chosen_cluster:
+                            chosen_cluster.add(cluster_id)
+                            available_mat[cluster_id] = False
                             image2covers[image] += 1
                             if image2covers[image] >= min_cover:
                                 break
             break
-        best_index = random.choice(best_indices)
-        best_pid = ind2pid[best_index]
+        best_cluster_id = random.choice(best_indices)
         images_covered_list = []
-        for image in pid2images[best_pid]:
+        for image in cluster2images[best_cluster_id]:
             image2covers[image] += 1
             if image2covers[image] >= min_cover and image not in done_images:
                 done_images.add(image)
@@ -395,13 +397,12 @@ def reduce_map_using_min_cover(vis=False, min_cover=100):
                 pbar.update(1)
 
         for image in images_covered_list:
-            indices = image2indices[image]
+            indices = image2pid[image]
             score_mat[indices] -= 1
 
-        assert best_pid not in chosen_pid
-        chosen_pid.add(best_pid)
-        pid_list.remove(best_pid)
-        available_mat[pid2ind[best_pid]] = False
+        assert best_cluster_id not in chosen_cluster
+        chosen_cluster.add(best_cluster_id)
+        available_mat[best_cluster_id] = False
 
         if len(done_images) == len(image2covers):
             break
@@ -410,33 +411,38 @@ def reduce_map_using_min_cover(vis=False, min_cover=100):
     # for image in image2pid:
     #     pid_list = image2pid[image]
     #     if len(pid_list) >= min_cover:
-    #         res = len([pid for pid in pid_list if pid in chosen_pid])
+    #         res = len([pid for pid in pid_list if pid in chosen_cluster])
     #         assert res >= min_cover, image
-    print(len(chosen_pid) / ori_size)
 
+    print(len(chosen_cluster)/len(cluster2images))
+    mask = np.isin(ind2cluster, list(chosen_cluster))
+    colors = np.zeros((np.max(ind2cluster)+2, 3))
+    colors[list(chosen_cluster)] = np.random.random((len(chosen_cluster), 3))
+    print(np.sum(mask)/xyz_arr.shape[0])
+    chosen_pid = set(list(pid_arr[mask]))
     if vis:
-        xyz_arr = np.array([train_ds_.recon_points[pid].xyz for pid in chosen_pid])
+        pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr[mask]))
+        # pc1, inlier_ind = pc1.remove_radius_outlier(nb_points=16, radius=5)
+        pc1.colors = o3d.utility.Vector3dVector(colors[ind2cluster[mask]])
 
-        pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
-        pc1, inlier_ind = pc1.remove_radius_outlier(nb_points=16, radius=5)
         vis = o3d.visualization.Visualizer()
         vis.create_window()
         vis.add_geometry(pc1)
         vis.run()
         vis.destroy_window()
 
-    train_ds_.image_id2pids = {}
-    train_ds_.image_id2uvs = {}
-    for img_id in tqdm(train_ds_.recon_images, desc="Gathering points per image"):
-        pid_arr = train_ds_.recon_images[img_id].point3D_ids
-        mask = [True if pid in chosen_pid else False for pid in pid_arr]
-        train_ds_.image_id2pids[img_id] = pid_arr[mask]
-        train_ds_.image_id2uvs[img_id] = train_ds_.recon_images[img_id].xys[mask]
-
-    pid_list = list(train_ds_.recon_points.keys())
-    for pid in pid_list:
-        if pid not in chosen_pid:
-            del train_ds_.recon_points[pid]
+    # train_ds_.image_id2pids = {}
+    # train_ds_.image_id2uvs = {}
+    # for img_id in tqdm(train_ds_.recon_images, desc="Gathering points per image"):
+    #     curr_pid_arr = train_ds_.recon_images[img_id].point3D_ids
+    #     mask = [True if pid in chosen_pid else False for pid in curr_pid_arr]
+    #     train_ds_.image_id2pids[img_id] = curr_pid_arr[mask]
+    #     train_ds_.image_id2uvs[img_id] = train_ds_.recon_images[img_id].xys[mask]
+    #
+    # pid_list = list(train_ds_.recon_points.keys())
+    # for pid in pid_list:
+    #     if pid not in chosen_pid:
+    #         del train_ds_.recon_points[pid]
     return chosen_pid
 
 

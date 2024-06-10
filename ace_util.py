@@ -284,7 +284,6 @@ def read_and_preprocess(name, conf):
     image = image.astype(np.float32)
     size = image.shape[:2][::-1]
     scale = 1
-
     if conf.resize_max and (conf.resize_force or max(size) > conf.resize_max):
         scale = conf.resize_max / max(size)
         size_new = tuple(int(round(x * scale)) for x in size)

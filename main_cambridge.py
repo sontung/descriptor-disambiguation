@@ -61,7 +61,7 @@ def run_function(
             lambda_val=0.5,
             convert_to_db_desc=False,
         )
-        # chosen_list = reduce_map_using_min_cover(train_ds_, trainer_.image2pid_via_new_features)
+        # chosen_list = reduce_map_using_min_cover(train_ds_)
         # trainer_.special_pid_list = chosen_list
         # trainer_.collect_descriptors()
 
@@ -81,16 +81,16 @@ if __name__ == "__main__":
         default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=0)
+    parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="dedode",
+        default="d2net",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=256,
+        default=512,
     )
     parser.add_argument(
         "--global_desc",
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=256,
+        default=512,
     )
     args = parser.parse_args()
     results = run_function(
