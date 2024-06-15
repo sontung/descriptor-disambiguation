@@ -48,6 +48,21 @@ def run_function(
         # set3 = set1.intersection(set2)
         # assert len(set3) == 0
 
+        # trainer_ = CambridgeLandmarksTrainer(
+        #     train_ds_,
+        #     test_ds_,
+        #     local_desc_dim,
+        #     global_desc_dim,
+        #     encoder,
+        #     encoder_global,
+        #     conf_ns,
+        #     conf_ns_retrieval,
+        #     using_global_descriptors,
+        #     lambda_val=0.5,
+        #     convert_to_db_desc=False,
+        # )
+        # trainer_.find_outlier_descriptors()
+
         trainer_ = CambridgeLandmarksTrainer(
             train_ds_,
             test_ds_,
@@ -61,9 +76,6 @@ def run_function(
             lambda_val=0.5,
             convert_to_db_desc=False,
         )
-        # chosen_list = reduce_map_using_min_cover(train_ds_)
-        # trainer_.special_pid_list = chosen_list
-        # trainer_.collect_descriptors()
 
         err = trainer_.evaluate()
         print(f"    median translation error = {err[0]}")

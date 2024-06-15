@@ -255,8 +255,9 @@ def collect_codebook(dataset):
     return pid2cid
 
 
-def cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xyz_arr, pid_arr,
-                             vis=False):
+def cluster_into_hyperpoints(
+    train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xyz_arr, pid_arr, vis=False
+):
     index_arr = np.arange(len(train_ds_.recon_points))
     ind2cluster = np.zeros(len(train_ds_.recon_points), int) - 1
     available_mat = np.ones(len(train_ds_.recon_points), bool)
@@ -276,9 +277,9 @@ def cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xy
             cid0 = pid2cid[best_pid]
             # dis_3d = np.mean(np.abs(xyz_arr[best_index] - xyz_arr), 1)
             # mask = np.bitwise_and(dis_3d < 1, available_mat)
-            res = tree.query_radius(xyz_arr[best_index].reshape(-1, 3),
-                                    r=1,
-                                    return_distance=True)
+            res = tree.query_radius(
+                xyz_arr[best_index].reshape(-1, 3), r=1, return_distance=True
+            )
             res = res[0][0][res[1][0] > 0]
             res = res[available_mat[res]]
             pid_list = [ind2pid[ind] for ind in res]
@@ -296,7 +297,9 @@ def cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xy
         colors = np.random.random((np.max(ind2cluster) + 1, 3))
         colors[-1] = [0, 0, 0]
         clusters, counts = np.unique(ind2cluster, return_counts=True)
-        mask2 = np.bitwise_and(np.isin(ind2cluster, clusters[counts>2]), ind2cluster != -1)
+        mask2 = np.bitwise_and(
+            np.isin(ind2cluster, clusters[counts > 2]), ind2cluster != -1
+        )
         pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr[mask2]))
         pc1.colors = o3d.utility.Vector3dVector(colors[ind2cluster][mask2])
         cl, inlier_ind = pc1.remove_radius_outlier(nb_points=16, radius=5)
@@ -334,10 +337,12 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
         score_mat[ind] = len(pid2images[pid])
 
     pid2cid = collect_codebook(train_ds_)
-    ind2cluster = cluster_into_hyperpoints(train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xyz_arr, pid_arr, vis)
+    ind2cluster = cluster_into_hyperpoints(
+        train_ds_, pid2ind, ind2pid, score_mat, pid2cid, xyz_arr, pid_arr, vis
+    )
     cluster2images = {}
     cluster2pids = {}
-    for cluster_id in range(np.max(ind2cluster)+1):
+    for cluster_id in range(np.max(ind2cluster) + 1):
         mask = ind2cluster == cluster_id
         indices = index_arr[mask]
         pid_list = [ind2pid[ind] for ind in indices]
@@ -355,9 +360,9 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
 
     chosen_cluster = set([])
     done_images = set([])
-    available_mat = np.ones(np.max(ind2cluster)+1, bool)
-    score_mat = np.zeros(np.max(ind2cluster)+1, int)
-    index_arr = np.arange(np.max(ind2cluster)+1)
+    available_mat = np.ones(np.max(ind2cluster) + 1, bool)
+    score_mat = np.zeros(np.max(ind2cluster) + 1, int)
+    index_arr = np.arange(np.max(ind2cluster) + 1)
     for cluster_id in cluster2images:
         score_mat[cluster_id] = len(cluster2images[cluster_id])
 
@@ -414,11 +419,11 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
     #         res = len([pid for pid in pid_list if pid in chosen_cluster])
     #         assert res >= min_cover, image
 
-    print(len(chosen_cluster)/len(cluster2images))
+    print(len(chosen_cluster) / len(cluster2images))
     mask = np.isin(ind2cluster, list(chosen_cluster))
-    colors = np.zeros((np.max(ind2cluster)+2, 3))
+    colors = np.zeros((np.max(ind2cluster) + 2, 3))
     colors[list(chosen_cluster)] = np.random.random((len(chosen_cluster), 3))
-    print(np.sum(mask)/xyz_arr.shape[0])
+    print(np.sum(mask) / xyz_arr.shape[0])
     chosen_pid = set(list(pid_arr[mask]))
     if vis:
         pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr[mask]))

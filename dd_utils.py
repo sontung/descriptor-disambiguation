@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import cv2
+import faiss
 import numpy as np
 import poselib
 import pycolmap
@@ -20,6 +21,42 @@ import torch
 from hloc import extractors
 from hloc.utils.base_model import dynamic_load
 from pathlib import Path
+
+
+class RootSIFT:
+    def __init__(self):
+        # initialize the SIFT feature extractor
+        self.extractor = cv2.SIFT.create()
+
+    def compute(self, image, kps, eps=1e-7):
+        # compute SIFT descriptors
+        (kps, descs) = self.extractor.detectAndCompute(image, kps)
+
+        # if there are no keypoints or descriptors, return an empty tuple
+        if len(kps) == 0:
+            return ([], None)
+
+        # apply the Hellinger kernel by first L1-normalizing, taking the
+        # square-root, and then L2-normalizing
+        descs /= np.linalg.norm(descs, axis=0, ord=2) + eps
+        descs /= descs.sum(axis=0) + eps
+        descs = np.sqrt(descs)
+
+        # return a tuple of the keypoints and descriptors
+        return kps, descs
+
+
+def cluster_by_faiss_kmeans(x, nb_clusters):
+    niter = 20
+    d = x.shape[1]
+
+    kmeans = faiss.Kmeans(d, int(nb_clusters), niter=niter, verbose=False)
+    kmeans.train(x)
+
+    _, indices = kmeans.index.search(x, 1)
+
+    indices = indices.flatten()
+    return indices, kmeans.index
 
 
 def create_sampling_matrix(out_w, out_h):

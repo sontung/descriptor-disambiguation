@@ -146,9 +146,10 @@ class CambridgeLandmarksDataset(Dataset):
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
             intrinsics[1, 2] = cy
-            qvec = self.recon_images[img_id].qvec
-            tvec = self.recon_images[img_id].tvec
-            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            # qvec = self.recon_images[img_id].qvec
+            # tvec = self.recon_images[img_id].tvec
+            # pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            pose_inv = self.recon_images[img_id]
 
             pid_list = self.image_id2pids[img_id]
             uv_gt = self.image_id2uvs[img_id] / scale
@@ -161,7 +162,7 @@ class CambridgeLandmarksDataset(Dataset):
             #     cv2.circle(image, (x, y), 5, (255, 0, 0))
             # cv2.imwrite(f"debug/test.png", image)
 
-            pose_inv = torch.from_numpy(pose_inv)
+            # pose_inv = torch.from_numpy(pose_inv)
 
         else:
             name1 = self.img_names[idx]
