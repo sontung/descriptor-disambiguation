@@ -146,13 +146,18 @@ class CambridgeLandmarksDataset(Dataset):
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
             intrinsics[1, 2] = cy
-            # qvec = self.recon_images[img_id].qvec
-            # tvec = self.recon_images[img_id].tvec
-            # pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            qvec = self.recon_images[img_id].qvec
+            tvec = self.recon_images[img_id].tvec
+            pose_mat = dd_utils.return_pose_mat_no_inv(qvec, tvec)
             pose_inv = self.recon_images[img_id]
 
             pid_list = self.image_id2pids[img_id]
-            uv_gt = self.image_id2uvs[img_id] / scale
+            # uv_gt = self.image_id2uvs[img_id] / scale
+
+            uv_gt=project_using_pose(torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+                               intrinsics.unsqueeze(0).cuda().float(),
+                               np.array([self.recon_points[pid].xyz for pid in pid_list]))
+
             xyz_gt = None
 
             # import cv2

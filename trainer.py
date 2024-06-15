@@ -396,7 +396,7 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}.txt",
+                f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}_{self.convert_to_db_desc}.txt",
                 "w",
             )
         else:
@@ -591,7 +591,12 @@ class RobotCarTrainer(BaseTrainer):
 
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}.txt",
+                f"output/{self.ds_name}/RobotCar_eval_"
+                f"{self.local_desc_model_name}_"
+                f"{self.global_desc_model_name}_"
+                f"{self.global_feature_dim}_"
+                f"{self.lambda_val}_"
+                f"{self.convert_to_db_desc}.txt",
                 "w",
             )
         else:
@@ -673,7 +678,11 @@ class CMUTrainer(BaseTrainer):
         print(f"Reading local descriptors from {self.test_features_path}")
 
         if self.using_global_descriptors:
-            result_file_name = f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{int(self.convert_to_db_desc)}.txt"
+            result_file_name = f"output/{self.ds_name}/CMU_eval" \
+                               f"_{self.local_desc_model_name}_" \
+                               f"{self.global_desc_model_name}_" \
+                               f"{self.lambda_val}_" \
+                               f"{self.convert_to_db_desc}.txt"
         else:
             result_file_name = (
                 f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
@@ -790,7 +799,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     camera_dict,
                 )
                 t_err0, r_err = compute_pose_error(pose0, example[4])
-                tErrs.append(t_err0)
+                tErrs.append(t_err0*100)
                 rErrs.append(r_err)
 
         features_h5.close()

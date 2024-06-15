@@ -43,8 +43,6 @@ def run_function(
             lambda_val=lambda_val,
             convert_to_db_desc=convert,
         )
-        # chosen_list = reduce_map_using_min_cover(train_ds_, trainer_.image2pid_via_new_features)
-        # trainer_.special_pid_list = chosen_list
         trainer_.evaluate()
 
 

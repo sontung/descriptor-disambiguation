@@ -302,9 +302,9 @@ def project_using_pose(gt_pose_inv_B44, intrinsics_B33, xyz):
     xyzt = np.hstack([xyz, np.ones((xyz.shape[0], 1))])
     xyzt = torch.from_numpy(xyzt).permute([1, 0]).float().cuda()
 
-    gt_inv_pose_34 = gt_pose_inv_B44[0, :3]
-    cam_coords = torch.mm(gt_inv_pose_34, xyzt)
-    uv = torch.mm(intrinsics_B33[0], cam_coords)
+    gt_inv_pose_34 = gt_pose_inv_B44[0, :3].float()
+    cam_coords = torch.mm(gt_inv_pose_34.float(), xyzt)
+    uv = torch.mm(intrinsics_B33[0].float(), cam_coords)
     uv[2].clamp_(min=0.1)  # avoid division by zero
     uv = uv[0:2] / uv[2]
     uv = uv.permute([1, 0]).cpu().numpy()
