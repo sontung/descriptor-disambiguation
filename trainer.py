@@ -275,17 +275,6 @@ class BaseTrainer:
     def collect_descriptors_loop(
         self, features_h5, pid2mean_desc, pid2count, using_global_desc, id_list=None
     ):
-        if self.all_outlier_descs is not None:
-            print("Filtering bad descriptors")
-            filtering = True
-            index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-            res = faiss.StandardGpuResources()
-            gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
-            gpu_index_flat.add(self.all_outlier_descs)
-        else:
-            print("Dont filter bad descriptors")
-            filtering = False
-            gpu_index_flat = None
 
         pid2ind = {}
         index_for_array = -1
@@ -294,22 +283,6 @@ class BaseTrainer:
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-
-            if filtering:
-                dis, _ = gpu_index_flat.search(descriptors, 1)
-                dis = dis.flatten()
-                # mask = np.array(kmeans1d.cluster(dis, 2).clusters)==1
-                mask = dis > np.percentile(dis, 80)
-
-                # img = cv2.imread(example[1])
-                # for u, v in keypoints.astype(int):
-                #     cv2.circle(img, (u, v), 5, (255, 0, 0), -1)
-                # for u, v in keypoints[mask].astype(int):
-                #     cv2.circle(img, (u, v), 5, (0, 255, 0), -1)
-                # cv2.imwrite(f"debug/im{example[2]}.png", img)
-
-                keypoints = keypoints[mask]
-                descriptors = descriptors[mask]
 
             pid_list = example[3]
             uv = example[-1]
@@ -826,7 +799,6 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         # Compute median errors.
         median_rErr = np.median(rErrs)
         median_tErr = np.median(tErrs)
-        print(median_tErr)
         if return_name2err:
             return median_tErr, median_rErr, name2err
         return median_tErr, median_rErr

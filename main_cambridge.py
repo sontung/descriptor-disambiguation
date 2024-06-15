@@ -33,8 +33,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        if ds_name != "GreatCourt":
-            continue
+        # if ds_name != "GreatCourt":
+        #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_
@@ -47,21 +47,6 @@ def run_function(
         # set2 = set(test_ds_.rgb_files)
         # set3 = set1.intersection(set2)
         # assert len(set3) == 0
-
-        # trainer_ = CambridgeLandmarksTrainer(
-        #     train_ds_,
-        #     test_ds_,
-        #     local_desc_dim,
-        #     global_desc_dim,
-        #     encoder,
-        #     encoder_global,
-        #     conf_ns,
-        #     conf_ns_retrieval,
-        #     using_global_descriptors,
-        #     lambda_val=0.5,
-        #     convert_to_db_desc=False,
-        # )
-        # trainer_.find_outlier_descriptors()
 
         trainer_ = CambridgeLandmarksTrainer(
             train_ds_,
