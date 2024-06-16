@@ -146,23 +146,24 @@ class CambridgeLandmarksDataset(Dataset):
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
             intrinsics[1, 2] = cy
-            qvec = self.recon_images[img_id].qvec
-            tvec = self.recon_images[img_id].tvec
-            pose_mat = dd_utils.return_pose_mat_no_inv(qvec, tvec)
             pose_inv = self.recon_images[img_id]
 
             pid_list = self.image_id2pids[img_id]
             uv_gt = self.image_id2uvs[img_id] / scale
 
-            if len(pid_list) > 0:
-                uv_gt2 = project_using_pose(
-                    pose_mat.unsqueeze(0).cuda().float(),
-                    intrinsics.unsqueeze(0).cuda().float(),
-                    np.array([self.recon_points[pid].xyz for pid in pid_list]),
-                )
-                mask = np.mean(np.abs(uv_gt-uv_gt2), 1) < 5
-                pid_list = pid_list[mask]
-                uv_gt = uv_gt[mask]
+            # if len(pid_list) > 0:
+            #     qvec = self.recon_images[img_id].qvec
+            #     tvec = self.recon_images[img_id].tvec
+            #     pose_mat = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            #     pose_mat = torch.from_numpy(pose_mat)
+            #     uv_gt2 = project_using_pose(
+            #         pose_mat.unsqueeze(0).cuda().float(),
+            #         intrinsics.unsqueeze(0).cuda().float(),
+            #         np.array([self.recon_points[pid].xyz for pid in pid_list]),
+            #     )
+            #     mask = np.mean(np.abs(uv_gt-uv_gt2), 1) < 5
+            #     pid_list = pid_list[mask]
+            #     uv_gt = uv_gt[mask]
 
             xyz_gt = None
 
@@ -342,15 +343,15 @@ class AachenDataset(Dataset):
             pid_list = self.image_id2pids[img_id]
             uv_gt = self.image_id2uvs[img_id]
 
-            if len(pid_list) > 0:
-                uv_gt2 = project_using_pose(
-                    pose_inv.unsqueeze(0).cuda().float(),
-                    intrinsics.unsqueeze(0).cuda().float(),
-                    np.array([self.recon_points[pid].xyz for pid in pid_list]),
-                )
-                mask = np.mean(np.abs(uv_gt-uv_gt2), 1) < 5
-                pid_list = pid_list[mask]
-                uv_gt = uv_gt[mask]
+            # if len(pid_list) > 0:
+            #     uv_gt2 = project_using_pose(
+            #         pose_inv.unsqueeze(0).cuda().float(),
+            #         intrinsics.unsqueeze(0).cuda().float(),
+            #         np.array([self.recon_points[pid].xyz for pid in pid_list]),
+            #     )
+            #     mask = np.mean(np.abs(uv_gt-uv_gt2), 1) < 5
+            #     pid_list = pid_list[mask]
+            #     uv_gt = uv_gt[mask]
 
             xyz_gt = None
 

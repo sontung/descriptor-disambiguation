@@ -116,10 +116,14 @@ if __name__ == "__main__":
     else:
         print(f"Results: (translation/rotation) {args.local_desc}")
 
+    strs = []
     t0, r0 = 0, 0
     for ds in results:
         t_err, r_err = results[ds]
         t0 += t_err
         r0 += r_err
         print(f"    {ds} {t_err:.1f}/{r_err:.1f}")
+        strs.append(f"{t_err:.1f}/{r_err:.1f}")
     print(f"    Avg. {t0/len(results):.1f}/{r0/len(results):.1f}")
+    strs.append(f"{t0/len(results):.1f}/{r0/len(results):.1f}")
+    print("&".join(strs))
