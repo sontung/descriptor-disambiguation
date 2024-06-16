@@ -152,11 +152,14 @@ class CambridgeLandmarksDataset(Dataset):
             pose_inv = self.recon_images[img_id]
 
             pid_list = self.image_id2pids[img_id]
-            # uv_gt = self.image_id2uvs[img_id] / scale
-
-            uv_gt=project_using_pose(torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
-                               intrinsics.unsqueeze(0).cuda().float(),
-                               np.array([self.recon_points[pid].xyz for pid in pid_list]))
+            if len(pid_list) == 0:
+                uv_gt = self.image_id2uvs[img_id] / scale
+            else:
+                uv_gt = project_using_pose(
+                    torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+                    intrinsics.unsqueeze(0).cuda().float(),
+                    np.array([self.recon_points[pid].xyz for pid in pid_list]),
+                )
 
             xyz_gt = None
 
@@ -331,12 +334,21 @@ class AachenDataset(Dataset):
             qvec = self.recon_images[img_id].qvec
             tvec = self.recon_images[img_id].tvec
             pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
+            pose_inv = torch.from_numpy(pose_inv)
 
             pid_list = self.image_id2pids[img_id]
-            uv_gt = self.image_id2uvs[img_id] + 0.5
-            xyz_gt = None
+            # uv_gt = self.image_id2uvs[img_id]
 
-            pose_inv = torch.from_numpy(pose_inv)
+            if len(pid_list) == 0:
+                uv_gt = self.image_id2uvs[img_id]
+            else:
+                uv_gt = project_using_pose(
+                    pose_inv.unsqueeze(0).cuda().float(),
+                    intrinsics.unsqueeze(0).cuda().float(),
+                    np.array([self.recon_points[pid].xyz for pid in pid_list]),
+                )
+
+            xyz_gt = None
 
         else:
             name1 = self.img_ids[idx]
@@ -1115,7 +1127,8 @@ if __name__ == "__main__":
     # g[0]
     train_ds_ = CambridgeLandmarksDataset(
         train=True,
-        ds_name="KingsCollege",
+        ds_name="ShopFacade",
         root_dir=f"datasets/cambridge",
     )
-    train_ds_[0]
+    for _ in train_ds_:
+        continue
