@@ -152,14 +152,17 @@ class CambridgeLandmarksDataset(Dataset):
             pose_inv = self.recon_images[img_id]
 
             pid_list = self.image_id2pids[img_id]
-            if len(pid_list) == 0:
-                uv_gt = self.image_id2uvs[img_id] / scale
-            else:
-                uv_gt = project_using_pose(
-                    torch.from_numpy(pose_mat).unsqueeze(0).cuda().float(),
+            uv_gt = self.image_id2uvs[img_id] / scale
+
+            if len(pid_list) > 0:
+                uv_gt2 = project_using_pose(
+                    pose_mat.unsqueeze(0).cuda().float(),
                     intrinsics.unsqueeze(0).cuda().float(),
                     np.array([self.recon_points[pid].xyz for pid in pid_list]),
                 )
+                mask = np.mean(np.abs(uv_gt-uv_gt2), 1) < 5
+                pid_list = pid_list[mask]
+                uv_gt = uv_gt[mask]
 
             xyz_gt = None
 
@@ -337,16 +340,17 @@ class AachenDataset(Dataset):
             pose_inv = torch.from_numpy(pose_inv)
 
             pid_list = self.image_id2pids[img_id]
-            # uv_gt = self.image_id2uvs[img_id]
+            uv_gt = self.image_id2uvs[img_id]
 
-            if len(pid_list) == 0:
-                uv_gt = self.image_id2uvs[img_id]
-            else:
-                uv_gt = project_using_pose(
+            if len(pid_list) > 0:
+                uv_gt2 = project_using_pose(
                     pose_inv.unsqueeze(0).cuda().float(),
                     intrinsics.unsqueeze(0).cuda().float(),
                     np.array([self.recon_points[pid].xyz for pid in pid_list]),
                 )
+                mask = np.mean(np.abs(uv_gt-uv_gt2), 1) < 5
+                pid_list = pid_list[mask]
+                uv_gt = uv_gt[mask]
 
             xyz_gt = None
 
