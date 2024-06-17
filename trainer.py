@@ -548,7 +548,6 @@ class RobotCarTrainer(BaseTrainer):
         return inlier_ind
 
     def collect_descriptors(self, vis=False):
-        inlier_ind = self.reduce_map_size()
         features_h5 = self.load_local_features()
         pid2mean_desc = np.zeros(
             (self.dataset.xyz_arr.shape[0], self.feature_dim),
@@ -557,7 +556,7 @@ class RobotCarTrainer(BaseTrainer):
         pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
         pid2mean_desc, pid2ind = self.collect_descriptors_loop(
-            features_h5, pid2mean_desc, pid2count
+            features_h5, pid2mean_desc, pid2count, self.using_global_descriptors
         )
         features_h5.close()
 
