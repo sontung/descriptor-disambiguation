@@ -126,7 +126,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="datasets/datasets/cmu_extended",
+        default="datasets/cmu_extended",
         help="Path to the dataset, default: %(default)s",
     )
     parser.add_argument(
@@ -137,5 +137,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # run_d2_detector_on_all_images(args.dataset, args.out)
-    run_d2_detector_on_all_images_robot_car(args.dataset, args.out)
+    run_d2_detector_on_all_images(args.dataset, args.out)
+    # run_d2_detector_on_all_images_robot_car(args.dataset, args.out)

@@ -1,8 +1,16 @@
+import os.path
 import pickle
+import random
+
 import open3d as o3d
 import numpy as np
+
+import dd_utils
 from dataset import CambridgeLandmarksDataset
 from sklearn.decomposition import PCA
+
+from trainer import CambridgeLandmarksTrainer
+from matplotlib.colors import hsv_to_rgb
 
 
 def load_desc(file_name1, file_name2, dataset):
@@ -31,46 +39,87 @@ def process_colors(desc):
     return colors
 
 
-def main():
-    train_ds_ = CambridgeLandmarksDataset(
-        train=True,
-        ds_name="Cambridge_GreatCourt",
-        root_dir="../ace/datasets/Cambridge_GreatCourt",
-    )
-
-    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2.npy"
-    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2.npy"
-
-    point_cloud1 = load_desc(file_name1, file_name2, train_ds_)
-
-    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2_mixvpr_128.npy"
-    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2_mixvpr_128.npy"
-
-    point_cloud2 = load_desc(file_name1, file_name2, train_ds_)
-    # point_cloud2.translate([250, 0, 0])
-
-    file_name1 = f"output/Cambridge_GreatCourt/codebook_r2d2_mixvpr_128_0.npy"
-    file_name2 = f"output/Cambridge_GreatCourt/all_pids_r2d2_mixvpr_128_0.npy"
-
-    point_cloud3 = load_desc(file_name1, file_name2, train_ds_)
-    # point_cloud3.translate([0, 250, 0])
-
+def render_images(cl, trainer_):
     vis = o3d.visualization.Visualizer()
     vis.create_window()
-    # ctr = vis.get_view_control()
-    parameters = o3d.io.read_pinhole_camera_parameters("viewpoint.json")
+    vis.add_geometry(cl)
 
-    # vis.add_geometry(point_cloud1)
-    # vis.add_geometry(point_cloud2)
-    vis.add_geometry(point_cloud3)
-    vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
-
-    vis.capture_screen_image("debug/test3.png", do_render=True)
-
+    for idx0 in range(3):
+        parameters = o3d.io.read_pinhole_camera_parameters(f"viewpoint{idx0}.json")
+        vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
+        vis.capture_screen_image(f"debug/test-{idx0}-{trainer_.lambda_val}.png", do_render=True)
     vis.run()
-    # param = vis.get_view_control().convert_to_pinhole_camera_parameters()
-    # o3d.io.write_pinhole_camera_parameters("viewpoint.json", param)
     vis.destroy_window()
+
+
+def main():
+    train_ds_ = CambridgeLandmarksDataset(
+        train=True, ds_name="GreatCourt", root_dir="datasets/cambridge"
+    )
+    test_ds_ = CambridgeLandmarksDataset(
+        train=False, ds_name="GreatCourt", root_dir="datasets/cambridge"
+    )
+    encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
+        "d2net", "mixvpr", 512
+    )
+
+    trainer_ = CambridgeLandmarksTrainer(
+        train_ds_,
+        test_ds_,
+        512,
+        512,
+        encoder,
+        encoder_global,
+        conf_ns,
+        conf_ns_retrieval,
+        True,
+        lambda_val=0.5,
+        convert_to_db_desc=False,
+    )
+
+    nb_regions = 4
+
+    point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(trainer_.xyz_arr))
+    cl, inlier_ind = point_cloud.remove_radius_outlier(
+        nb_points=512, radius=5, print_progress=True
+    )
+
+    if os.path.isfile("colors.npy"):
+        colors = np.load("colors.npy")
+    else:
+        hues = np.linspace(0, 1, nb_regions, endpoint=False)  # Equally spaced hues
+        random.shuffle(hues)
+        hsv_colors = np.array([[hue,
+                                random.randint(70, 100)/100,
+                                random.randint(70, 100)/100] for hue in hues])
+        colors = hsv_to_rgb(hsv_colors)
+        np.save("colors.npy", colors)
+
+    indices, _ = dd_utils.cluster_by_faiss_kmeans(trainer_.pid2mean_desc, nb_regions)
+    cl.colors = o3d.utility.Vector3dVector(colors[indices[inlier_ind]])
+    render_images(cl, trainer_)
+
+    # trainer_.lambda_val = 0
+    # trainer_.pid2mean_desc = trainer_.collect_descriptors()
+    # indices, _ = dd_utils.cluster_by_faiss_kmeans(trainer_.pid2mean_desc, nb_regions)
+    # cl.colors = o3d.utility.Vector3dVector(colors[indices[inlier_ind]])
+    # render_images(cl, trainer_)
+
+    trainer_.lambda_val = 1
+    trainer_.pid2mean_desc = trainer_.collect_descriptors()
+    indices, _ = dd_utils.cluster_by_faiss_kmeans(trainer_.pid2mean_desc, nb_regions)
+    cl.colors = o3d.utility.Vector3dVector(colors[indices[inlier_ind]])
+    render_images(cl, trainer_)
+
+    # vis = o3d.visualization.Visualizer()
+    # cl.colors = o3d.utility.Vector3dVector(colors[indices[inlier_ind]])
+    # vis.create_window()
+    # vis.add_geometry(cl)
+    #
+    # vis.run()
+    # param = vis.get_view_control().convert_to_pinhole_camera_parameters()
+    # o3d.io.write_pinhole_camera_parameters("viewpoint2.json", param)
+    # vis.destroy_window()
     return
 
 
@@ -140,5 +189,6 @@ def main_robot_car():
 
 
 if __name__ == "__main__":
-    save_all_colors()
+    main()
+    # save_all_colors()
     # main_robot_car()

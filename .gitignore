@@ -21,6 +21,7 @@ labels_train/*
 roma/*
 *.mp4
 *.sh
+*.npy
 
 # Outputs.
 output/

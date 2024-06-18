@@ -648,6 +648,7 @@ class CMUTrainer(BaseTrainer):
         write to pose file as name.jpg qw qx qy qz tx ty tz
         :return:
         """
+        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
