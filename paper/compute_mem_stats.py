@@ -95,23 +95,34 @@ def cmu():
 
 
 def cambridge():
-    global_model = "mixvpr_128_128"
-    local_model = "r2d2"
+    global_model = "mixvpr_512"
+    local_model = "d2net"
+    sequences = [
+        "GreatCourt",
+        "KingsCollege",
+        "OldHospital",
+        "ShopFacade",
+        "StMarysChurch",
+    ]
     files_ = {
-        "uv2xyz": [f"../../ace/datasets/Cambridge_*/reconstruction.nvm"],
-        "db_global_desc": [f"../output/Cambridge_*/image_desc_{global_model}.npy",
-                           f"../output/Cambridge_*/image_desc_name_{global_model}.npy"],
-        "db_images": ["../../ace/datasets/Cambridge_*/train/rgb/*.png"],
-        "codebook": [f"../output/Cambridge_*/codebook_{local_model}_{global_model}.npy"]
+        "uv2xyz": [f"../datasets/cambridge/{{ds_name}}/reconstruction.nvm"],
+        "db_global_desc": [f"../output/{{ds_name}}/image_desc_{global_model}.npy",
+                           f"../output/{{ds_name}}/image_desc_name_{global_model}.npy"],
+        "db_images": ["../datasets/cambridge/{ds_name}/seq*/*.png"],
+        "codebook": [f"../output/{{ds_name}}/codebook-{local_model}-{global_model}.npy"]
     }
 
     mem_dict = {}
     for file_ in files_:
         values_ = files_[file_]
         mem = 0
-        for v in values_:
-            assert len(glob.glob(v)) >= 5, glob.glob(v)
-            mem += sum([os.path.getsize(du) for du in glob.glob(v)])
+        for seq in sequences:
+            for v in values_:
+                v = v.format(ds_name=seq)
+                if "*" in v:
+                    mem += sum([os.path.getsize(du) for du in glob.glob(v)])
+                else:
+                    mem += os.path.getsize(v)
         mem_dict[file_] = mem
     for info in mem_dict:
         print(info, get_size(mem_dict[info]))
@@ -146,7 +157,7 @@ def robotcar():
 
 
 if __name__ == '__main__':
-    robotcar()
+    # robotcar()
     # aachen()
     # cmu()
-    # cambridge()
+    cambridge()

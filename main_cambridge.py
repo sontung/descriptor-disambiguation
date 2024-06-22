@@ -4,7 +4,7 @@ import numpy as np
 import dd_utils
 from clustering import reduce_map_using_min_cover
 from dataset import CambridgeLandmarksDataset
-from trainer import CambridgeLandmarksTrainer
+from trainer2 import CambridgeLandmarksTrainer
 
 
 def run_function(

@@ -1,5 +1,7 @@
 import argparse
 
+import numpy as np
+
 import dd_utils
 from dataset import RobotCarDataset
 from trainer import RobotCarTrainer
@@ -24,19 +26,22 @@ def run_function(
     train_ds_ = RobotCarDataset(ds_dir=ds_dir)
     test_ds_ = RobotCarDataset(ds_dir=ds_dir, train=False, evaluate=True)
 
-    trainer_ = RobotCarTrainer(
-        train_ds_,
-        test_ds_,
-        local_desc_dim,
-        global_desc_dim,
-        encoder,
-        encoder_global,
-        conf_ns,
-        conf_ns_retrieval,
-        using_global_descriptors,
-        convert_to_db_desc=convert,
-    )
-    trainer_.evaluate()
+    for lambda_val in np.linspace(0, 1, 11):
+
+        trainer_ = RobotCarTrainer(
+            train_ds_,
+            test_ds_,
+            local_desc_dim,
+            global_desc_dim,
+            encoder,
+            encoder_global,
+            conf_ns,
+            conf_ns_retrieval,
+            using_global_descriptors,
+            lambda_val=lambda_val,
+            convert_to_db_desc=convert,
+        )
+        trainer_.evaluate()
 
 
 if __name__ == "__main__":
