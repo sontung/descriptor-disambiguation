@@ -124,7 +124,6 @@ class BaseTrainer:
         else:
             self.image2desc = {}
 
-        self.pid2cid, self.index_for_image_clusters = self.analyze_image_descriptors()
         self.xyz_arr = None
         self.map_reduction = False
         self.codebook_dtype = codebook_dtype
@@ -146,72 +145,11 @@ class BaseTrainer:
             self.all_ind_in_train_set = None
             self.ind2pid = None
 
-    def analyze_image_descriptors(self):
-        nb_clusters = 10
-        indices, index_for_image_clusters = dd_utils.cluster_by_faiss_kmeans(
-            self.all_image_desc, nb_clusters
-        )
-        cid2pid_list = {}
-        for cid in range(10):
-            mask = indices == cid
-            names = np.array(self.all_names)[mask]
-            img_ids = [
-                self.dataset.image_name2id[name.split(self.dataset.images_dir)[-1][1:]]
-                for name in names
-            ]
-            pid_list = np.concatenate(
-                [self.dataset.image_id2pids[img_id] for img_id in img_ids]
-            )
-            cid2pid_list[cid] = set(list(pid_list))
-
-        # for cid in cid2pid_list:
-        #     for other_cid in cid2pid_list:
-        #         if cid != other_cid:
-        #             cid2pid_list[cid] -= cid2pid_list[other_cid]
-
-        pid2cid = {}
-        for cid in cid2pid_list:
-            for pid in cid2pid_list[cid]:
-                # assert pid not in pid2cid
-                # pid2cid[pid] = cid
-                pid2cid.setdefault(pid, []).append(cid)
-        for pid in pid2cid:
-            pid2cid[pid] = np.mean(pid2cid[pid])
-        # good_pid = [pid for pid in pid2cid if len(pid2cid[pid]) == 1]
-        # good_pid = set(good_pid)
-        # import open3d as o3d
-        # colors=np.random.random((nb_clusters, 3))
-        #
-        # xyz_arr = np.zeros((len(good_pid), 3))
-        # rgb_arr = np.zeros((len(good_pid), 3))
-        # for idx, pid in enumerate(good_pid):
-        #     xyz_arr[idx] = self.dataset.recon_points[pid].xyz
-        #     rgb_arr[idx] = colors[pid2cid[pid]]
-        #
-        # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
-        # cl, inlier_ind = point_cloud.remove_radius_outlier(
-        #     nb_points=512, radius=5, print_progress=True
-        # )
-        # vis = o3d.visualization.Visualizer()
-        # cl.colors = o3d.utility.Vector3dVector(rgb_arr[inlier_ind])
-        # vis.create_window()
-        # vis.add_geometry(cl)
-        #
-        # vis.run()
-        # vis.destroy_window()
-        return pid2cid, index_for_image_clusters
-
     def load_local_features(self):
         features_path = (
-            f"output/{self.ds_name}/{self.local_desc_model_name}_features_train.h5"
+            f"output/robotcar/d2net_features_train.h5"
         )
 
-        if not os.path.isfile(features_path):
-            features_h5 = h5py.File(str(features_path), "a", libver="latest")
-            with torch.no_grad():
-                for example in tqdm(self.dataset, desc="Detecting features"):
-                    self.produce_local_descriptors(example[1], features_h5)
-            features_h5.close()
         features_h5 = h5py.File(features_path, "r")
         return features_h5
 
@@ -232,10 +170,10 @@ class BaseTrainer:
 
     def collect_image_descriptors(self):
         file_name1 = (
-            f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}.npy"
+            "output/robotcar/image_desc_salad_8448.npy"
         )
         file_name2 = (
-            f"output/{self.ds_name}/image_desc_name_{self.global_desc_model_name}.npy"
+            "output/robotcar/image_desc_name_salad_8448.npy"
         )
         if os.path.isfile(file_name1):
             all_desc = np.load(file_name1)
@@ -335,13 +273,15 @@ class BaseTrainer:
     def collect_descriptors_loop(
         self, features_h5, pid2mean_desc, pid2count, using_global_desc, id_list=None
     ):
+
         pid2ind = {}
         index_for_array = -1
-        self.image2pid_via_new_features = {}
         for example_id, example in enumerate(
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
-            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+            name = example[1]
+            # name = example[1].replace("datasets/robotcar", "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons")
+            keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
 
             pid_list = example[3]
             uv = example[-1]
@@ -349,15 +289,10 @@ class BaseTrainer:
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
-                # image_descriptor = self.image2desc[example[1]]
-                # selected_descriptors = combine_descriptors(
-                #     selected_descriptors, image_descriptor, self.lambda_val
-                # )
-
-                cid_list = np.array(
-                    [self.pid2cid[pid] for pid in selected_pid]
-                ).reshape(-1, 1)
-                selected_descriptors += cid_list
+                image_descriptor = self.image2desc[name]
+                selected_descriptors = combine_descriptors(
+                    selected_descriptors, image_descriptor, self.lambda_val
+                )
 
             for idx, pid in enumerate(selected_pid):
                 if pid not in pid2ind:
@@ -400,14 +335,6 @@ class BaseTrainer:
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.recon_points[pid].xyz
 
-        np.save(
-            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
-            pid2mean_desc,
-        )
-        np.save(
-            f"output/{self.ds_name}/xyz-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
-            self.xyz_arr,
-        )
         features_h5.close()
 
         return pid2mean_desc
@@ -575,87 +502,60 @@ class BaseTrainer:
         return uv_arr, pred_scene_coords_b3
 
 
-class CambridgeLandmarksTrainer(BaseTrainer):
-    def evaluate(self, return_name2err=False):
-        self.ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
-        self.detect_local_features_on_test_set()
-        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
-
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
+class RobotCarTrainer(BaseTrainer):
+    def collect_descriptors(self, vis=False):
+        features_h5 = self.load_local_features()
+        pid2mean_desc_local = np.zeros(
+            (self.dataset.xyz_arr.shape[0], self.feature_dim),
+            np.float64,
         )
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
+        pid2count1 = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
+        self.lambda_val = 1
+        pid2mean_desc_local, pid2ind1 = self.collect_descriptors_loop(
+            features_h5, pid2mean_desc_local, pid2count1, self.using_global_descriptors
+        )
 
-        features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
-        testset = self.test_dataset
-        name2err = {}
-        rErrs = []
-        tErrs = []
-        with torch.no_grad():
-            for example in tqdm(testset, desc="Computing pose for test set"):
-                name = "/".join(example[1].split("/")[-2:])
-                image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
-                _, cid = self.index_for_image_clusters.search(
-                    image_descriptor.reshape(1, -1), 1
-                )
-                cid = int(cid)
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
-                descriptors += cid
-
-                # keypoints, descriptors = self.process_descriptor(
-                #     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
-                # )
-
-                uv_arr, xyz_pred, xyz_indices, desc_distances = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat, return_indices=True
-                )
-
-                camera = example[6]
-                camera_dict = {
-                    "model": camera.model.name,
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose0, info = poselib.estimate_absolute_pose(
-                    uv_arr,
-                    xyz_pred,
-                    camera_dict,
-                )
-                t_err0, r_err = compute_pose_error(pose0, example[4])
-                tErrs.append(t_err0 * 100)
-                rErrs.append(r_err)
-
+        pid2mean_desc_global = np.zeros(
+            (self.dataset.xyz_arr.shape[0], self.feature_dim),
+            np.float64,
+        )
+        pid2count2 = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
+        self.lambda_val = 0
+        pid2mean_desc_global, pid2ind2 = self.collect_descriptors_loop(
+            features_h5, pid2mean_desc_global, pid2count2, self.using_global_descriptors
+        )
         features_h5.close()
-        global_features_h5.close()
+        xyz_arr_local = np.zeros((pid2mean_desc_local.shape[0], 3))
+        for pid in pid2ind1:
+            xyz_arr_local[pid2ind1[pid]] = self.dataset.recon_points[pid].xyz
+            
+        xyz_arr_global = np.zeros((pid2mean_desc_global.shape[0], 3))
+        for pid in pid2ind1:
+            xyz_arr_global[pid2ind2[pid]] = self.dataset.recon_points[pid].xyz
 
-        # Compute median errors.
-        median_rErr = np.median(rErrs)
-        median_tErr = np.median(tErrs)
-        if return_name2err:
-            return median_tErr, median_rErr, name2err
-        return median_tErr, median_rErr
+        np.save(
+            f"output/{self.ds_name}/codebook-local.npy",
+            pid2mean_desc_local,
+        )
+        np.save(
+            f"output/{self.ds_name}/xyz-local.npy",
+            xyz_arr_local,
+        )
+        
+        np.save(
+            f"output/{self.ds_name}/codebook-global.npy",
+            pid2mean_desc_global,
+        )
+        np.save(
+            f"output/{self.ds_name}/xyz-global.npy",
+            xyz_arr_global,
+        )
 
-    def process(self):
+    def evaluate(self):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
-        )
+        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
         if not os.path.isfile(global_descriptors_path):
             global_features_h5 = h5py.File(
                 str(global_descriptors_path), "a", libver="latest"
@@ -672,17 +572,34 @@ class CambridgeLandmarksTrainer(BaseTrainer):
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
-        testset = self.test_dataset
-        res = []
+
+        if self.using_global_descriptors:
+            result_file = open(
+                f"output/{self.ds_name}/RobotCar_eval_"
+                f"{self.local_desc_model_name}_"
+                f"{self.global_desc_model_name}_"
+                f"{self.global_feature_dim}_"
+                f"{self.lambda_val}_"
+                f"{self.convert_to_db_desc}.txt",
+                "w",
+            )
+        else:
+            result_file = open(
+                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}.txt",
+                "w",
+            )
+
         with torch.no_grad():
-            for example in tqdm(testset, desc="Computing pose for test set"):
-                name = "/".join(example[1].split("/")[-2:])
+            for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
+                name = example[1]
                 keypoints, descriptors = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
-                uv_arr, xyz_pred, pid_list = self.legal_predict(
-                    keypoints, descriptors, gpu_index_flat, return_indices=True
+                uv_arr, xyz_pred = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
                 )
 
                 camera = example[6]
@@ -698,24 +615,11 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     camera_dict,
                 )
 
-                t_err, r_err = compute_pose_error(pose, example[4])
+                qvec = " ".join(map(str, pose.q))
+                tvec = " ".join(map(str, pose.t))
 
-                res.append(
-                    [
-                        name,
-                        t_err,
-                        r_err,
-                        uv_arr,
-                        xyz_pred,
-                        pose,
-                        example[4],
-                        info["inliers"],
-                        pid_list,
-                    ]
-                )
-                # break
-
+                image_id = "/".join(example[2].split("/")[1:])
+                print(f"{image_id} {qvec} {tvec}", file=result_file)
+            result_file.close()
         features_h5.close()
         global_features_h5.close()
-
-        return res

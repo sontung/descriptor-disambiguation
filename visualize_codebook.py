@@ -12,7 +12,8 @@ from sklearn.decomposition import PCA
 from trainer import CambridgeLandmarksTrainer
 from matplotlib.colors import hsv_to_rgb
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
@@ -64,7 +65,9 @@ def render_images(cl, trainer_, indices, colors):
         vis.destroy_window()
 
 
-def plot_2d_coordinates(coordinates, title="2D Coordinates", x_label="X-axis", y_label="Y-axis"):
+def plot_2d_coordinates(
+    coordinates, title="2D Coordinates", x_label="X-axis", y_label="Y-axis"
+):
     """
     Plots a set of 2D coordinates.
 
@@ -79,11 +82,11 @@ def plot_2d_coordinates(coordinates, title="2D Coordinates", x_label="X-axis", y
     import pandas
     from datashader.utils import export_image
 
-    df = pandas.DataFrame(coordinates, columns=['x', 'y'])
+    df = pandas.DataFrame(coordinates, columns=["x", "y"])
 
     cvs = datashader.Canvas(plot_width=800, plot_height=600)
-    agg = cvs.points(df, 'x', 'y')
-    img = datashader.transfer_functions .shade(agg, cmap="blue", how="log")
+    agg = cvs.points(df, "x", "y")
+    img = datashader.transfer_functions.shade(agg, cmap="blue", how="log")
     export_image(img, "fig_test.png", background=None)
     return img
     # img.plot()
@@ -150,14 +153,14 @@ def main():
     import pandas
     from datashader.utils import export_image
 
-    df = pandas.DataFrame(desc_2d, columns=['x', 'y'])
+    df = pandas.DataFrame(desc_2d, columns=["x", "y"])
 
     cvs = datashader.Canvas(plot_width=800, plot_height=600)
-    agg = cvs.points(df, 'x', 'y')
+    agg = cvs.points(df, "x", "y")
     img = datashader.transfer_functions.shade(agg, cmap="blue", how="log")
     # export_image(img, "fig_test", background=None)
     pil_img = datashader.transfer_functions.spread(img, px=1).to_pil()
-    rgb_img = pil_img.convert('RGB')
+    rgb_img = pil_img.convert("RGB")
 
     # Save the image without alpha channel
     rgb_img.save("fig_test.png")
@@ -197,13 +200,16 @@ def main():
         cl2 = o3d.geometry.PointCloud(
             o3d.utility.Vector3dVector(np.asarray(cl.points)[mask])
         )
-        cl2.colors = o3d.utility.Vector3dVector(rgb_array[inlier_ind][mask]/255)
+        cl2.colors = o3d.utility.Vector3dVector(rgb_array[inlier_ind][mask] / 255)
         vis = o3d.visualization.Visualizer()
         vis.create_window(width=1848, height=1016)
         vis.add_geometry(cl2)
         parameters = o3d.io.read_pinhole_camera_parameters(f"viewpoint_KC.json")
         vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
-        vis.capture_screen_image(f"/home/n11373598/Documents/cvpr25_submission/figures/kc_codebooks/test-{cid}-bad.png", do_render=True)
+        vis.capture_screen_image(
+            f"/home/n11373598/Documents/cvpr25_submission/figures/kc_codebooks/test-{cid}-bad.png",
+            do_render=True,
+        )
         vis.destroy_window()
 
     for cid in range(nb_regions):
@@ -211,14 +217,17 @@ def main():
         cl2 = o3d.geometry.PointCloud(
             o3d.utility.Vector3dVector(np.asarray(cl.points)[mask])
         )
-        cl2.colors = o3d.utility.Vector3dVector(rgb_array[inlier_ind][mask]/255)
+        cl2.colors = o3d.utility.Vector3dVector(rgb_array[inlier_ind][mask] / 255)
 
         vis = o3d.visualization.Visualizer()
         vis.create_window(width=1848, height=1016)
         vis.add_geometry(cl2)
         parameters = o3d.io.read_pinhole_camera_parameters(f"viewpoint_KC.json")
         vis.get_view_control().convert_from_pinhole_camera_parameters(parameters)
-        vis.capture_screen_image(f"/home/n11373598/Documents/cvpr25_submission/figures/kc_codebooks/test-{cid}-good.png", do_render=True)
+        vis.capture_screen_image(
+            f"/home/n11373598/Documents/cvpr25_submission/figures/kc_codebooks/test-{cid}-good.png",
+            do_render=True,
+        )
         vis.destroy_window()
 
     # vis = o3d.visualization.Visualizer()

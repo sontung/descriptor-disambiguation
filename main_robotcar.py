@@ -4,7 +4,7 @@ import numpy as np
 
 import dd_utils
 from dataset import RobotCarDataset
-from trainer import RobotCarTrainer
+from trainer3 import RobotCarTrainer
 
 
 def run_function(
@@ -26,8 +26,7 @@ def run_function(
     train_ds_ = RobotCarDataset(ds_dir=ds_dir)
     test_ds_ = RobotCarDataset(ds_dir=ds_dir, train=False, evaluate=True)
 
-    for lambda_val in np.linspace(0, 1, 11):
-
+    for lambda_val in [0.5]:
         trainer_ = RobotCarTrainer(
             train_ds_,
             test_ds_,
@@ -58,22 +57,22 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="r2d2",
+        default="d2net",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=128,
+        default=512,
     )
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="eigenplaces",
+        default="salad",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=2048,
+        default=8448,
     )
 
     args = parser.parse_args()

@@ -10,6 +10,7 @@ import pycolmap
 import torch
 from hloc.pipelines.RobotCar.pipeline import CONDITIONS
 from pykdtree.kdtree import KDTree
+from scipy.spatial.transform import Rotation
 from skimage import color
 from skimage import io
 from torch.utils.data import Dataset
@@ -731,12 +732,15 @@ class RobotCarDataset(Dataset):
             image, image_name = self._load_image(img_id)
             if type(self.image2pose[img_id]) == list:
                 qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
+                tx, ty, tz = -(
+                        Rotation.from_quat([qx, qy, qz, qw]).as_matrix()
+                        @ np.array([tx, ty, tz])
+                )
                 pose_mat = dd_utils.return_pose_mat_no_inv(
                     [qw, qx, qy, qz], [tx, ty, tz]
                 )
             else:
                 pose_mat = self.image2pose[img_id]
-                # pose_mat = np.linalg.inv(pose_mat)
 
             intrinsics = torch.eye(3)
             if img_id in self.image2info:
