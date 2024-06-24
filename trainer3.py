@@ -527,11 +527,11 @@ class RobotCarTrainer(BaseTrainer):
         features_h5.close()
         xyz_arr_local = np.zeros((pid2mean_desc_local.shape[0], 3))
         for pid in pid2ind1:
-            xyz_arr_local[pid2ind1[pid]] = self.dataset.recon_points[pid].xyz
+            xyz_arr_local[pid2ind1[pid]] = self.dataset.xyz_arr[pid]
             
         xyz_arr_global = np.zeros((pid2mean_desc_global.shape[0], 3))
         for pid in pid2ind1:
-            xyz_arr_global[pid2ind2[pid]] = self.dataset.recon_points[pid].xyz
+            xyz_arr_global[pid2ind2[pid]] = self.dataset.xyz_arr[pid]
 
         np.save(
             f"output/{self.ds_name}/codebook-local.npy",
