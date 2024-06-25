@@ -135,6 +135,7 @@ def main():
     }
     plt.title("Aachen Day/Night v1.1")
     plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
+    plt.axhline(y=80.3, color="b", linestyle="--", label="vanilla")
 
     for method_ in ds:
         all_numbers = []
@@ -163,6 +164,7 @@ def main():
     }
     plt.title("RobotCar Seasons v2")
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
+    plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
 
     for method_ in ds:
         all_numbers = []

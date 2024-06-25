@@ -46,11 +46,11 @@ class RootSIFT:
         return kps, descs
 
 
-def cluster_by_faiss_kmeans(x, nb_clusters):
+def cluster_by_faiss_kmeans(x, nb_clusters, verbose=False):
     niter = 20
     d = x.shape[1]
 
-    kmeans = faiss.Kmeans(d, int(nb_clusters), niter=niter, verbose=False)
+    kmeans = faiss.Kmeans(d, int(nb_clusters), niter=niter, verbose=verbose)
     kmeans.train(x)
 
     _, indices = kmeans.index.search(x, 1)
