@@ -83,7 +83,7 @@ class GCLModel:
         image = torchvision.transforms.functional.resize(image, (480, 640))
         with torch.no_grad():
             image_descriptor = self.model(image.unsqueeze(0).cuda())
-        image_descriptor = image_descriptor.squeeze().cpu().numpy()  # 10752
+        image_descriptor = image_descriptor.squeeze().cpu().numpy()  # 2048
         return image_descriptor
 
 
