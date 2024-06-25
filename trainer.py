@@ -569,7 +569,7 @@ class RobotCarTrainer(BaseTrainer):
         mask[indices] = False
         print(np.sum(mask)/self.xyz_arr.shape[0])
         self.xyz_arr = self.xyz_arr[mask]
-        pid2mean_desc = pid2mean_desc[mask]
+        pid2mean_desc = pid2mean_desc[mask, :]
 
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
