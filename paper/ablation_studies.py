@@ -10,8 +10,8 @@ aachen = {
     "mixvpr": {
         "0.1": "19.4 / 31.7 / 62.9	4.7 / 11.0 / 39.3",
         "0.2": "39.9 / 51.1 / 71.6	14.7 / 23.6 / 47.6",
-        "0.3": "85.0 / 91.0 / 96.5	70.7 / 84.8 / 91.6",
-        "0.4": "79.7 / 86.8 / 94.2	58.6 / 78.5 / 88.0",
+        "0.3": "79.7 / 86.8 / 94.2	58.6 / 78.5 / 88.0",
+        "0.4": "85.0 / 91.0 / 96.5	70.7 / 84.8 / 91.6",
         "0.5": "85.3 / 91.0 / 96.0	68.1 / 81.2 / 88.5",
         "0.6": "84.3 / 90.2 / 95.3	64.4 / 77.0 / 85.9",
         "0.7": "84.2 / 89.6 / 94.5	62.3 / 74.3 / 81.7",
@@ -125,13 +125,15 @@ def main():
     ds = aachen
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
+    plt.xlabel("lambda")
+    plt.ylabel("% successfully localized images")
     markers = {
         "mixvpr": "o",
         "eigen": "d",
         "crica": "v",
         "salad": "s",
     }
-    plt.title("Aachen v1.1")
+    plt.title("Aachen Day/Night v1.1")
     plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
 
     for method_ in ds:
@@ -151,6 +153,8 @@ def main():
     ds = robotcar
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
+    plt.xlabel("lambda")
+    plt.ylabel("% successfully localized images")
     markers = {
         "mixvpr": "o",
         "eigen": "d",

@@ -185,7 +185,7 @@ def robotcar():
 
 
 if __name__ == "__main__":
-    # robotcar()
+    robotcar()
     # aachen()
     # cmu()
-    cambridge()
+    # cambridge()
