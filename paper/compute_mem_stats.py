@@ -162,8 +162,7 @@ def robotcar():
             "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons/images/*/*/*.jpg"
         ],
         "codebook": [
-            "../output/robotcar/pid2mean_descd2net-eigenplaces_ResNet101_2048-0.5.npy",
-            "../output/robotcar/pid2ind-d2net-eigenplaces_ResNet101_2048.pkl",
+            "../output/robotcar/codebook-d2net-salad_8448.npy",
         ],
     }
 
@@ -175,6 +174,7 @@ def robotcar():
             # assert len(glob.glob(v)) >= 5, glob.glob(v)
             mem += sum([os.path.getsize(du) for du in glob.glob(v)])
         mem_dict[file_] = mem
+        print(file_, mem)
     for info in mem_dict:
         print(info, get_size(mem_dict[info]))
     get_method_mem(mem_dict, 1)
@@ -183,7 +183,7 @@ def robotcar():
 
 
 if __name__ == "__main__":
-    # robotcar()
+    robotcar()
     # aachen()
-    cmu()
+    # cmu()
     # cambridge()
