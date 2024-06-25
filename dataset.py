@@ -733,8 +733,8 @@ class RobotCarDataset(Dataset):
             if type(self.image2pose[img_id]) == list:
                 qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
                 tx, ty, tz = -(
-                        Rotation.from_quat([qx, qy, qz, qw]).as_matrix()
-                        @ np.array([tx, ty, tz])
+                    Rotation.from_quat([qx, qy, qz, qw]).as_matrix()
+                    @ np.array([tx, ty, tz])
                 )
                 pose_mat = dd_utils.return_pose_mat_no_inv(
                     [qw, qx, qy, qz], [tx, ty, tz]

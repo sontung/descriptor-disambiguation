@@ -22,7 +22,10 @@ def main():
     cluster_indices, _ = dd_utils.cluster_by_faiss_kmeans(all_desc, nb_clusters)
     colors = np.random.random((nb_clusters, 3))
     color_arr = colors[cluster_indices]
-    name2color = {name.split("images/")[-1]: cluster_indices[idx] for idx, name in enumerate(all_names)}
+    name2color = {
+        name.split("images/")[-1]: cluster_indices[idx]
+        for idx, name in enumerate(all_names)
+    }
 
     intrinsics = np.eye(3)
 
@@ -56,7 +59,7 @@ def main():
     for cluster_id in range(nb_clusters):
         vis = o3d.visualization.Visualizer()
         vis.create_window(width=1848, height=1016)
-        mask = np.array(all_cluster_ids)==cluster_id
+        mask = np.array(all_cluster_ids) == cluster_id
         poses = all_poses[mask]
         for pose in poses:
             cam = o3d.geometry.LineSet.create_camera_visualization(
@@ -73,5 +76,5 @@ def main():
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

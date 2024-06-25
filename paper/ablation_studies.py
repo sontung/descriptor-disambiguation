@@ -1,3 +1,11 @@
+import re
+import matplotlib
+import numpy as np
+
+matplotlib.use("Agg")
+from matplotlib.pylab import plt
+
+
 aachen = {
     "mixvpr": {
         "0.1": "19.4 / 31.7 / 62.9	4.7 / 11.0 / 39.3",
@@ -21,7 +29,7 @@ aachen = {
         "0.7": "83.7 / 89.7 / 94.5	63.9 / 74.3 / 83.8",
         "0.8": "84.3 / 89.8 / 94.8	61.8 / 72.8 / 81.7",
         "0.9": "84.2 / 89.4 / 94.7	60.7 / 71.2 / 80.6",
-        "1":   "84.0 / 89.2 / 94.8	61.3 / 71.7 / 80.6",
+        "1": "84.0 / 89.2 / 94.8	61.3 / 71.7 / 80.6",
     },
     "eigen": {
         "0.1": "19.5 / 31.9 / 61.3	5.2 / 13.6 / 41.4",
@@ -99,3 +107,76 @@ robotcar = {
         "1": "60.8 / 93.8 / 99.9	11.9 / 33.6 / 49.7",
     },
 }
+
+
+def find_numbers(string_):
+    pattern = r"[-+]?(?:\d*\.*\d+)"
+    # res = "53.2 / 85.8 / 95.3	3.5 / 11.7 / 25.2"
+    matches = re.findall(pattern, string_)
+    numbers = list(map(float, matches))
+    avg = sum(numbers) / len(matches)
+    return avg
+
+
+def main():
+    plt.figure(figsize=(6, 10))
+
+    plt.subplot(211)
+    ds = aachen
+    plt.ylim(0, 100)
+    plt.xticks(np.arange(1, 11) / 10)
+    markers = {
+        "mixvpr": "o",
+        "eigen": "d",
+        "crica": "v",
+        "salad": "s",
+    }
+    plt.title("Aachen v1.1")
+    plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
+
+    for method_ in ds:
+        all_numbers = []
+        for param_ in ds[method_]:
+            res = ds[method_][param_]
+            avg_res = find_numbers(res)
+            all_numbers.append(avg_res)
+        print(method_, all_numbers)
+        plt.plot(
+            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], label=method_
+        )
+    plt.legend(loc=4)
+
+    plt.subplot(212)
+
+    ds = robotcar
+    plt.ylim(0, 100)
+    plt.xticks(np.arange(1, 11) / 10)
+    markers = {
+        "mixvpr": "o",
+        "eigen": "d",
+        "crica": "v",
+        "salad": "s",
+    }
+    plt.title("RobotCar Seasons v2")
+    plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
+
+    for method_ in ds:
+        all_numbers = []
+        for param_ in ds[method_]:
+            res = ds[method_][param_]
+            avg_res = find_numbers(res)
+            all_numbers.append(avg_res)
+        print(method_, all_numbers)
+        plt.plot(
+            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], label=method_
+        )
+    plt.legend(loc=4)
+    plt.tight_layout()
+
+    plt.savefig(
+        "ablation.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1
+    )
+
+
+if __name__ == "__main__":
+    main()

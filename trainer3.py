@@ -146,9 +146,7 @@ class BaseTrainer:
             self.ind2pid = None
 
     def load_local_features(self):
-        features_path = (
-            f"output/robotcar/d2net_features_train.h5"
-        )
+        features_path = f"output/robotcar/d2net_features_train.h5"
 
         features_h5 = h5py.File(features_path, "r")
         return features_h5
@@ -169,12 +167,8 @@ class BaseTrainer:
             features_h5.close()
 
     def collect_image_descriptors(self):
-        file_name1 = (
-            "output/robotcar/image_desc_salad_8448.npy"
-        )
-        file_name2 = (
-            "output/robotcar/image_desc_name_salad_8448.npy"
-        )
+        file_name1 = "output/robotcar/image_desc_salad_8448.npy"
+        file_name2 = "output/robotcar/image_desc_name_salad_8448.npy"
         if os.path.isfile(file_name1):
             all_desc = np.load(file_name1)
             afile = open(file_name2, "rb")
@@ -273,7 +267,6 @@ class BaseTrainer:
     def collect_descriptors_loop(
         self, features_h5, pid2mean_desc, pid2count, using_global_desc, id_list=None
     ):
-
         pid2ind = {}
         index_for_array = -1
         for example_id, example in enumerate(
@@ -528,7 +521,7 @@ class RobotCarTrainer(BaseTrainer):
         xyz_arr_local = np.zeros((pid2mean_desc_local.shape[0], 3))
         for pid in pid2ind1:
             xyz_arr_local[pid2ind1[pid]] = self.dataset.xyz_arr[pid]
-            
+
         xyz_arr_global = np.zeros((pid2mean_desc_global.shape[0], 3))
         for pid in pid2ind1:
             xyz_arr_global[pid2ind2[pid]] = self.dataset.xyz_arr[pid]
@@ -541,7 +534,7 @@ class RobotCarTrainer(BaseTrainer):
             f"output/{self.ds_name}/xyz-local.npy",
             xyz_arr_local,
         )
-        
+
         np.save(
             f"output/{self.ds_name}/codebook-global.npy",
             pid2mean_desc_global,

@@ -3,9 +3,13 @@ import dd_utils
 
 
 def main():
-    xyz_global = "/home/n11373598/work/descriptor-disambiguation/output/robotcar/xyz-global.npy"
+    xyz_global = (
+        "/home/n11373598/work/descriptor-disambiguation/output/robotcar/xyz-global.npy"
+    )
     desc_global = "/home/n11373598/work/descriptor-disambiguation/output/robotcar/codebook-global.npy"
-    xyz_local = "/home/n11373598/work/descriptor-disambiguation/output/robotcar/xyz-local.npy"
+    xyz_local = (
+        "/home/n11373598/work/descriptor-disambiguation/output/robotcar/xyz-local.npy"
+    )
     desc_local = "/home/n11373598/work/descriptor-disambiguation/output/robotcar/codebook-local.npy"
     xyz_global = np.load(xyz_global)
     xyz_local = np.load(xyz_local)
@@ -14,5 +18,5 @@ def main():
     return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
