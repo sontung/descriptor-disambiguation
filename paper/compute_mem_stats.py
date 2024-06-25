@@ -24,20 +24,17 @@ def get_method_mem(mem_dict, divide=1):
 def aachen():
     out_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/aachen"
     files_ = {
-        "uv2xyz": [
-            f"/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/aachen_v1.1/d2net_nn.h5"
-        ],
+        "uv2xyz": 4.8e8,
         "db_global_desc": [
-            f"{out_dir}/image_desc_eigenplaces2048_2048.npy",
-            f"{out_dir}/image_desc_name_eigenplaces2048_2048.npy",
+            f"{out_dir}/image_desc_name_salad_8448.npy",
+            f"{out_dir}/image_desc_salad_8448.npy",
         ],
         "db_images": [
             "/home/n11373598/work/descriptor-disambiguation/datasets/aachen_v1.1/images_upright/db",
             "/home/n11373598/hpc-home/work/descriptor-disambiguation/datasets/aachen_v1.1/images_upright/sequences",
         ],
         "codebook": [
-            f"{out_dir}/codebook-d2net-eigenplaces_ResNet101_2048.npy",
-            f"{out_dir}/pid2ind-d2net-eigenplaces_ResNet101_2048.pkl",
+            f"{out_dir}/codebook-d2net-salad_8448.npy",
         ],
     }
 
@@ -56,6 +53,8 @@ def aachen():
                 mem0 = os.path.getsize(v)
                 mem += mem0
             mem_dict[file_] = mem
+        elif type(values_) is float:
+            mem_dict[file_] = values_
 
     for info in mem_dict:
         print(info, get_size(mem_dict[info]))
@@ -79,7 +78,6 @@ def cmu():
         ],
         "codebook": [
             f"../output/cmu/slice*/codebook-d2net-salad_8448.npy",
-            f"../output/cmu/slice*/pid2ind-d2net-salad_8448.pkl",
         ],
     }
 
@@ -157,8 +155,8 @@ def robotcar():
             f"/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons/3D-models/all-merged/all.nvm"
         ],
         "db_global_desc": [
-            f"../output/robotcar/image_desc_eigenplaces_ResNet101_2048_2048.npy",
-            f"../output/robotcar/image_desc_name_eigenplaces_ResNet101_2048_2048.npy",
+            f"../output/robotcar/image_desc_salad_8448.npy",
+            f"../output/robotcar/image_desc_name_salad_8448.npy",
         ],
         "db_images": [
             "/work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons/images/*/*/*.jpg"
@@ -185,7 +183,7 @@ def robotcar():
 
 
 if __name__ == "__main__":
-    robotcar()
+    # robotcar()
     # aachen()
-    # cmu()
+    cmu()
     # cambridge()
