@@ -565,12 +565,11 @@ class RobotCarTrainer(BaseTrainer):
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
 
         indices = np.load("output/robotcar/bad_pids.npy")
-        mask = np.ones(self.xyz_arr.shape, dtype=bool)
+        mask = np.ones(self.xyz_arr.shape[0], dtype=bool)
         mask[indices] = False
         print(np.sum(mask)/self.xyz_arr.shape[0])
         self.xyz_arr = self.xyz_arr[mask]
-        print(pid2mean_desc.shape, mask.shape)
-        pid2mean_desc = pid2mean_desc[mask, :]
+        pid2mean_desc = pid2mean_desc[mask]
 
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
