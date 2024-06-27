@@ -215,7 +215,7 @@ def run(args):
     sift_sfm = outputs / "sfm_sift"
 
     # pick one of the configurations for extraction and matching
-    feature_conf = extract_features.confs["d2net"]
+    feature_conf = extract_features.confs["d2net-ss"]
     matcher_conf = match_features.confs["NN-mutual"]
 
     feature_conf["output"] = feature_conf["model"]["name"]
