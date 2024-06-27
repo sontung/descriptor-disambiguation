@@ -4,7 +4,7 @@ import numpy as np
 import dd_utils
 from clustering import reduce_map_using_min_cover
 from dataset import CambridgeLandmarksDataset
-from trainer2 import CambridgeLandmarksTrainer
+from trainer import CambridgeLandmarksTrainer
 
 
 def run_function(
@@ -59,7 +59,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=False,
+            convert_to_db_desc=True,
         )
 
         err = trainer_.evaluate()

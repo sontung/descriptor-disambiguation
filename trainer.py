@@ -282,11 +282,12 @@ class BaseTrainer:
         pid2ind = {}
         index_for_array = -1
         self.image2pid_via_new_features = {}
+        pid2images = {}
+        id2name = {}
         for example_id, example in enumerate(
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-
             pid_list = example[3]
             uv = example[-1]
 
@@ -297,8 +298,9 @@ class BaseTrainer:
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, image_descriptor, self.lambda_val
                 )
-
+            id2name[example_id] = example[1]
             for idx, pid in enumerate(selected_pid):
+                pid2images.setdefault(pid, []).append(example_id)
                 if pid not in pid2ind:
                     index_for_array += 1
                     pid2ind[pid] = index_for_array
@@ -306,6 +308,20 @@ class BaseTrainer:
             idx2 = [pid2ind[pid] for pid in selected_pid]
             pid2mean_desc[idx2] += selected_descriptors
             pid2count[idx2] += 1
+
+        image_keys = []
+        for key_ in pid2images.values():
+            k = "-".join(map(str, sorted(set(key_))))
+            image_keys.append(k)
+        image_keys = list(set(image_keys))
+
+        self.all_image_desc = np.zeros((len(image_keys), self.feature_dim))
+        for idx, key_ in enumerate(image_keys):
+            image_ids = map(int, key_.split("-"))
+            image_descs = [self.image2desc[id2name[example_id]]
+                           for example_id in image_ids]
+            self.all_image_desc[idx] = np.mean(image_descs, 0)
+
         index_for_array += 1
         pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
             :index_for_array
@@ -563,13 +579,6 @@ class RobotCarTrainer(BaseTrainer):
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
-
-        indices = np.load("output/robotcar/bad_pids.npy")
-        mask = np.ones(self.xyz_arr.shape[0], dtype=bool)
-        mask[indices] = False
-        print(np.sum(mask)/self.xyz_arr.shape[0])
-        self.xyz_arr = self.xyz_arr[mask]
-        pid2mean_desc = pid2mean_desc[mask]
 
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",

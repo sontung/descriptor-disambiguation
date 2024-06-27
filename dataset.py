@@ -425,25 +425,6 @@ class RobotCarDataset(Dataset):
 
             self.name2mat = read_train_poses(self.test_file1)
 
-            # start_id = max(self.img_ids)+1
-            # self.name2id = {}
-            # for name in self.name2mat:
-            #     pose = self.name2mat[name]
-            #     self.name2id[name] = start_id
-            #     self.image2name[start_id] = f"./{name}"
-            #     self.image2pose[start_id] = pose
-            #     self.img_ids.append(start_id)
-            #     start_id += 1
-            # self.complete_image2points()
-
-            # self.img_ids = self.img_ids[-len(self.name2mat):]
-            # import open3d as o3d
-            # point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(self.xyz_arr))
-            # vis = o3d.visualization.Visualizer()
-            # vis.create_window(width=1920, height=1025)
-            # vis.add_geometry(point_cloud)
-            # vis.run()
-            # vis.destroy_window()
         else:
             self.ts2cond = {}
             for condition in CONDITIONS:
