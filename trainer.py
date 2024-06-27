@@ -23,10 +23,6 @@ def retrieve_pid(pid_list, uv_gt, keypoints):
     dis, ind = tree.query(uv_gt)
     mask = dis < 5
     selected_pid = np.array(pid_list)[mask]
-    # tree = KDTree(uv_gt)
-    # dis, ind = tree.query(keypoints.astype(uv_gt.dtype))
-    # mask = dis < 5
-    # selected_pid = np.array(pid_list)[ind[mask]]
     return selected_pid, mask, ind
 
 
@@ -36,19 +32,6 @@ def compute_pose_error(pose, pose_gt):
     t_err = np.linalg.norm(-R_gt.T @ t_gt + R.T @ t, axis=0)
     cos = np.clip((np.trace(np.dot(R_gt.T, R)) - 1) / 2, -1.0, 1.0)
     r_err = np.rad2deg(np.abs(np.arccos(cos)))
-
-    # est_pose = np.vstack([pose.Rt, [0, 0, 0, 1]])
-    # out_pose = torch.from_numpy(est_pose)
-    #
-    # # Calculate translation error.
-    # t_err = float(torch.norm(pose_gt[0:3, 3] - out_pose[0:3, 3]))
-    #
-    # gt_R = pose_gt[0:3, 0:3].numpy()
-    # out_R = out_pose[0:3, 0:3].numpy()
-    #
-    # r_err = np.matmul(out_R, np.transpose(gt_R))
-    # r_err = cv2.Rodrigues(r_err)[0]
-    # r_err = np.linalg.norm(r_err) * 180 / math.pi
     return t_err, r_err
 
 
@@ -282,12 +265,11 @@ class BaseTrainer:
         pid2ind = {}
         index_for_array = -1
         self.image2pid_via_new_features = {}
-        pid2images = {}
-        id2name = {}
         for example_id, example in enumerate(
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+
             pid_list = example[3]
             uv = example[-1]
 
@@ -298,9 +280,8 @@ class BaseTrainer:
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, image_descriptor, self.lambda_val
                 )
-            id2name[example_id] = example[1]
+
             for idx, pid in enumerate(selected_pid):
-                pid2images.setdefault(pid, []).append(example_id)
                 if pid not in pid2ind:
                     index_for_array += 1
                     pid2ind[pid] = index_for_array
@@ -308,20 +289,6 @@ class BaseTrainer:
             idx2 = [pid2ind[pid] for pid in selected_pid]
             pid2mean_desc[idx2] += selected_descriptors
             pid2count[idx2] += 1
-
-        image_keys = []
-        for key_ in pid2images.values():
-            k = "-".join(map(str, sorted(set(key_))))
-            image_keys.append(k)
-        image_keys = list(set(image_keys))
-
-        self.all_image_desc = np.zeros((len(image_keys), self.feature_dim))
-        for idx, key_ in enumerate(image_keys):
-            image_ids = map(int, key_.split("-"))
-            image_descs = [self.image2desc[id2name[example_id]]
-                           for example_id in image_ids]
-            self.all_image_desc[idx] = np.mean(image_descs, 0)
-
         index_for_array += 1
         pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
             :index_for_array
@@ -373,7 +340,7 @@ class BaseTrainer:
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
-                    image_descriptor[:self.all_image_desc.shape[1]].reshape(1, -1), 1
+                    image_descriptor.reshape(1, -1), 1
                 )
                 image_descriptor = self.all_image_desc[int(ind)]
 
@@ -388,7 +355,7 @@ class BaseTrainer:
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
         if self.convert_to_db_desc and self.using_global_descriptors:
-            index2 = faiss.IndexFlatL2(self.all_image_desc.shape[1])  # build the index
+            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
@@ -579,6 +546,13 @@ class RobotCarTrainer(BaseTrainer):
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
+
+        indices = np.load("output/robotcar/bad_pids.npy")
+        mask = np.ones(self.xyz_arr.shape[0], dtype=bool)
+        mask[indices] = False
+        print(np.sum(mask)/self.xyz_arr.shape[0])
+        self.xyz_arr = self.xyz_arr[mask]
+        pid2mean_desc = pid2mean_desc[mask]
 
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
