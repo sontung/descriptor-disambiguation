@@ -373,7 +373,7 @@ class BaseTrainer:
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
-                    image_descriptor.reshape(1, -1), 1
+                    image_descriptor[:self.all_image_desc.shape[1]].reshape(1, -1), 1
                 )
                 image_descriptor = self.all_image_desc[int(ind)]
 
@@ -388,7 +388,7 @@ class BaseTrainer:
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
         if self.convert_to_db_desc and self.using_global_descriptors:
-            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
+            index2 = faiss.IndexFlatL2(self.all_image_desc.shape[1])  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
