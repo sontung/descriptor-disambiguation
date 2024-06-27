@@ -49,7 +49,6 @@ def run_retrieval(img_dir, out_dir, num_loc, db_images):
     return Path(loc_pairs)
 
 
-@profile
 def process_db_global_desc(img_dir, out_dir):
     images = glob.glob(f"{img_dir}/*/*/*", recursive=True)
 
@@ -72,7 +71,6 @@ def process_db_global_desc(img_dir, out_dir):
     return feature_path
 
 
-@profile
 def perform_retrieval(feature_path, out_dir, num_loc, db_images):
     loc_pairs = f"{out_dir}/pairs-query-salad-{num_loc}.txt"
     pairs_from_retrieval.main(
@@ -84,19 +82,16 @@ def perform_retrieval(feature_path, out_dir, num_loc, db_images):
     return Path(loc_pairs)
 
 
-@profile
 def perform_feature_matching(matcher_conf, loc_pairs, feature_conf, outputs):
     loc_matches = match_features.main(matcher_conf, loc_pairs, feature_conf, outputs)
     return loc_matches
 
 
-@profile
 def db_feature_detection(feature_conf, images, outputs):
     features = extract_features.main(feature_conf, images, outputs)
     return features
 
 
-@profile
 def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
     failed = 0
     for example in tqdm(test_ds_, desc="Computing pose"):
@@ -167,7 +162,6 @@ def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
     print(f"Failed to localize {failed} images.")
 
 
-@profile
 def main_sub(
     train_ds_,
     test_ds_,
@@ -221,16 +215,16 @@ def run(args):
     sift_sfm = outputs / "sfm_sift"
 
     # pick one of the configurations for extraction and matching
-    feature_conf = extract_features.confs["r2d2"]
+    feature_conf = extract_features.confs["d2net"]
     matcher_conf = match_features.confs["NN-mutual"]
 
     feature_conf["output"] = feature_conf["model"]["name"]
 
-    # colmap_from_nvm.main(
-    #     dataset / "3D-models/all-merged/all.nvm",
-    #     dataset / "3D-models/overcast-reference.db",
-    #     sift_sfm,
-    # )
+    colmap_from_nvm.main(
+        dataset / "3D-models/all-merged/all.nvm",
+        dataset / "3D-models/overcast-reference.db",
+        sift_sfm,
+    )
 
     train_ds_ = RobotCarDataset(ds_dir=str(dataset))
     test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
