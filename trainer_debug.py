@@ -531,6 +531,8 @@ class RobotCarTrainer(BaseTrainer):
         return inlier_ind
 
     def collect_descriptors(self, vis=False):
+        file_name2 = f"output/{self.ds_name}/pid2ind_debug.pkl"
+        file_name1 = f"output/{self.ds_name}/pid2mean_desc_debug.pkl"
         features_h5 = self.load_local_features()
         pid2mean_desc = np.zeros(
             (self.dataset.xyz_arr.shape[0], self.feature_dim),
@@ -548,9 +550,12 @@ class RobotCarTrainer(BaseTrainer):
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
         self.pid2ind = pid2ind
         np.save(
-            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            file_name1,
             pid2mean_desc,
         )
+        with open(file_name2, "wb") as handle:
+            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         return pid2mean_desc
 
     def evaluate(self):
@@ -613,6 +618,7 @@ class RobotCarTrainer(BaseTrainer):
                 tree = KDTree(uv_arr_pgt)
                 dis, ind_sub1 = tree.query(uv_arr, 1)
                 mask = dis == 0
+                print(np.mean(dis))
                 pid_list_pred = np.array([ind2pid[ind] for ind in indices[mask]])
                 diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
                 print(np.sum(diff==0)/diff.shape[0])
