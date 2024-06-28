@@ -625,12 +625,10 @@ class RobotCarTrainer(BaseTrainer):
                 pid_list_pgt = np.array(data["pid"])
                 tree = KDTree(uv_arr_pgt)
                 dis, ind_sub1 = tree.query(uv_arr, 1)
-                mask = dis == 0
-                print(np.min(dis))
-                print(np.histogram(dis))
+                mask = dis < 1
                 pid_list_pred = np.array([ind2pid[ind] for ind in indices[mask]])
                 diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
-                print(np.sum(diff<=0.1)/diff.shape[0])
+                print(np.sum(diff==0)/diff.shape[0])
 
                 camera = example[6]
                 camera_dict = {
