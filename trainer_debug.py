@@ -606,6 +606,7 @@ class RobotCarTrainer(BaseTrainer):
 
         pgt_matches = h5py.File(f"outputs/{self.ds_name}/matches2d_3d.h5", "r")
         ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
+        mean_acc = []
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
@@ -628,7 +629,8 @@ class RobotCarTrainer(BaseTrainer):
                 mask = dis < 1
                 pid_list_pred = np.array([ind2pid[ind] for ind in indices[mask]])
                 diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
-                print(np.sum(diff==0)/diff.shape[0])
+                acc = np.sum(diff==0)/diff.shape[0]
+                mean_acc.append(acc)
 
                 camera = example[6]
                 camera_dict = {
@@ -651,6 +653,7 @@ class RobotCarTrainer(BaseTrainer):
             result_file.close()
         features_h5.close()
         global_features_h5.close()
+        print(np.mean(mean_acc))
 
 
 class CMUTrainer(BaseTrainer):
