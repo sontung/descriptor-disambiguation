@@ -539,6 +539,7 @@ class RobotCarTrainer(BaseTrainer):
             pid2ind = pickle.load(afile)
             afile.close()
         else:
+            print(f"Cant find {file_name1} {file_name2}")
             features_h5 = self.load_local_features()
             pid2mean_desc = np.zeros(
                 (self.dataset.xyz_arr.shape[0], self.feature_dim),
