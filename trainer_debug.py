@@ -631,25 +631,6 @@ class RobotCarTrainer(BaseTrainer):
                 diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
                 acc = np.sum(diff==0)/diff.shape[0]
                 mean_acc.append(acc)
-
-                camera = example[6]
-                camera_dict = {
-                    "model": camera.model.name,
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose, info = poselib.estimate_absolute_pose(
-                    uv_arr,
-                    xyz_pred,
-                    camera_dict,
-                )
-
-                qvec = " ".join(map(str, pose.q))
-                tvec = " ".join(map(str, pose.t))
-
-                image_id = "/".join(example[2].split("/")[1:])
-                print(f"{image_id} {qvec} {tvec}", file=result_file)
             result_file.close()
         features_h5.close()
         global_features_h5.close()
