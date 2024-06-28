@@ -92,7 +92,9 @@ def db_feature_detection(feature_conf, images, outputs):
     return features
 
 
-def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
+def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file, matches_2d_3d_path):
+    file_dump = h5py.File(matches_2d_3d_path, "a", libver="latest")
+
     failed = 0
     for example in tqdm(test_ds_, desc="Computing pose"):
         image_name = example[1]
@@ -156,9 +158,18 @@ def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file):
             qvec = " ".join(map(str, pose.q))
             tvec = " ".join(map(str, pose.t))
 
+            mask = info["inliers"]
+            pid_inlier = np.array(all_matches[1])[mask]
+            uv_inlier = uv_arr[mask]
+            name = image_name_wo_dir
+            if name in file_dump:
+                del file_dump[name]
+            grp = file_dump.create_group(name)
+            grp.create_dataset("uv", data=uv_inlier)
+            grp.create_dataset("pid", data=pid_inlier)
         image_id = "/".join(example[2].split("/")[1:])
         print(f"{image_id} {qvec} {tvec}", file=result_file)
-
+    file_dump.close()
     print(f"Failed to localize {failed} images.")
 
 
@@ -172,33 +183,36 @@ def main_sub(
     global_features,
     num_loc,
     sift_sfm,
+    matches_2d_3d_path
 ):
-    features = db_feature_detection(feature_conf, images, outputs)
+    # features = db_feature_detection(feature_conf, images, outputs)
 
     # perform retrieval
-    loc_pairs = perform_retrieval(global_features, outputs, num_loc, sift_sfm)
-
-    # match query images with retrieved db images
-    loc_matches = perform_feature_matching(
-        matcher_conf, loc_pairs, feature_conf["output"], outputs
-    )
+    # loc_pairs = perform_retrieval(global_features, outputs, num_loc, sift_sfm)
+    #
+    # # match query images with retrieved db images
+    # loc_matches = perform_feature_matching(
+    #     matcher_conf, loc_pairs, feature_conf["output"], outputs
+    # )
 
     matches_h5 = h5py.File(
-        loc_matches,
+        # loc_matches,
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net_matches-NN-mutual_pairs-query-salad-10.h5",
         "a",
         libver="latest",
     )
     features_h5 = h5py.File(
-        features,
+        # features,
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/d2net.h5",
         "a",
         libver="latest",
     )
     result_file = open(
-        f"{str(outputs)}/Aachen_v1_1_eval_{str(loc_matches).split('/')[-1].split('.')[0]}.txt",
+        f"{str(outputs)}/Aachen_v1_1_eval.txt",
         "w",
     )
 
-    compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file)
+    compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file, matches_2d_3d_path)
 
     matches_h5.close()
     features_h5.close()
@@ -220,16 +234,16 @@ def run(args):
 
     feature_conf["output"] = feature_conf["model"]["name"]
 
-    colmap_from_nvm.main(
-        dataset / "3D-models/all-merged/all.nvm",
-        dataset / "3D-models/overcast-reference.db",
-        sift_sfm,
-    )
+    # colmap_from_nvm.main(
+    #     dataset / "3D-models/all-merged/all.nvm",
+    #     dataset / "3D-models/overcast-reference.db",
+    #     sift_sfm,
+    # )
 
     train_ds_ = RobotCarDataset(ds_dir=str(dataset))
     test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
     global_features = process_db_global_desc(images, outputs)
-
+    matches_2d_3d_path = outputs/"matches2d_3d.h5"
     main_sub(
         train_ds_,
         test_ds_,
@@ -240,6 +254,7 @@ def run(args):
         global_features,
         args.num_loc,
         sift_sfm,
+        matches_2d_3d_path
     )
 
 
@@ -254,7 +269,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--outputs",
         type=Path,
-        default="outputs/robotcar",
+        # default="outputs/robotcar",
+        default="/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar",
         help="Path to the output directory, default: %(default)s",
     )
     parser.add_argument(

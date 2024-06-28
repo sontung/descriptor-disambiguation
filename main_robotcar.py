@@ -4,7 +4,7 @@ import numpy as np
 
 import dd_utils
 from dataset import RobotCarDataset
-from trainer import RobotCarTrainer
+from trainer_debug import RobotCarTrainer
 
 
 def run_function(
@@ -58,12 +58,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="r2d2",
+        default="d2net",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=128,
+        default=512,
     )
     parser.add_argument(
         "--global_desc",
