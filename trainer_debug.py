@@ -531,30 +531,37 @@ class RobotCarTrainer(BaseTrainer):
         return inlier_ind
 
     def collect_descriptors(self, vis=False):
-        file_name2 = f"output/{self.ds_name}/pid2ind_debug.pkl"
         file_name1 = f"output/{self.ds_name}/pid2mean_desc_debug.pkl"
-        features_h5 = self.load_local_features()
-        pid2mean_desc = np.zeros(
-            (self.dataset.xyz_arr.shape[0], self.feature_dim),
-            np.float64,
-        )
-        pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
+        file_name2 = f"output/{self.ds_name}/pid2ind_debug.pkl"
+        if os.path.isfile(file_name1) and os.path.isfile(file_name2):
+            pid2mean_desc = np.load(file_name1)
+            afile = open(file_name2, "rb")
+            pid2ind = pickle.load(afile)
+            afile.close()
+        else:
+            features_h5 = self.load_local_features()
+            pid2mean_desc = np.zeros(
+                (self.dataset.xyz_arr.shape[0], self.feature_dim),
+                np.float64,
+            )
+            pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
-        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
-            features_h5, pid2mean_desc, pid2count, self.using_global_descriptors
-        )
-        features_h5.close()
+            pid2mean_desc, pid2ind = self.collect_descriptors_loop(
+                features_h5, pid2mean_desc, pid2count, self.using_global_descriptors
+            )
+            features_h5.close()
+
+            np.save(
+                file_name1,
+                pid2mean_desc,
+            )
+            with open(file_name2, "wb") as handle:
+                pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
         self.pid2ind = pid2ind
-        np.save(
-            file_name1,
-            pid2mean_desc,
-        )
-        with open(file_name2, "wb") as handle:
-            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         return pid2mean_desc
 
@@ -621,7 +628,7 @@ class RobotCarTrainer(BaseTrainer):
                 print(np.mean(dis))
                 pid_list_pred = np.array([ind2pid[ind] for ind in indices[mask]])
                 diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
-                print(np.sum(diff==0)/diff.shape[0])
+                print(np.sum(diff<=0.1)/diff.shape[0])
 
                 camera = example[6]
                 camera_dict = {
