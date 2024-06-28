@@ -531,7 +531,7 @@ class RobotCarTrainer(BaseTrainer):
         return inlier_ind
 
     def collect_descriptors(self, vis=False):
-        file_name1 = f"output/{self.ds_name}/pid2mean_desc_debug.pkl"
+        file_name1 = f"output/{self.ds_name}/pid2mean_desc_debug.npy"
         file_name2 = f"output/{self.ds_name}/pid2ind_debug.pkl"
         if os.path.isfile(file_name1) and os.path.isfile(file_name2):
             pid2mean_desc = np.load(file_name1)
