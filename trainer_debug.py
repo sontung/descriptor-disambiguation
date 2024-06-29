@@ -588,25 +588,11 @@ class RobotCarTrainer(BaseTrainer):
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
 
-        if self.using_global_descriptors:
-            result_file = open(
-                f"output/{self.ds_name}/RobotCar_eval_"
-                f"{self.local_desc_model_name}_"
-                f"{self.global_desc_model_name}_"
-                f"{self.global_feature_dim}_"
-                f"{self.lambda_val}_"
-                f"{self.convert_to_db_desc}.txt",
-                "w",
-            )
-        else:
-            result_file = open(
-                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}.txt",
-                "w",
-            )
-
         pgt_matches = h5py.File(f"outputs/{self.ds_name}/matches2d_3d.h5", "r")
         ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
         mean_acc = []
+        file_dump = h5py.File(f"output/{self.ds_name}/matches2d3d{self.using_global_descriptors}_{self.convert_to_db_desc}.npy", "a", libver="latest")
+
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
@@ -631,7 +617,16 @@ class RobotCarTrainer(BaseTrainer):
                 diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
                 acc = np.sum(diff==0)/diff.shape[0]
                 mean_acc.append(acc)
-            result_file.close()
+
+                pid_inlier = np.array(indices)
+                uv_inlier = uv_arr
+                name = image_name_wo_dir
+                if name in file_dump:
+                    del file_dump[name]
+                grp = file_dump.create_group(name)
+                grp.create_dataset("uv", data=uv_inlier)
+                grp.create_dataset("pid", data=pid_inlier)
+
         features_h5.close()
         global_features_h5.close()
         print(np.mean(mean_acc))
