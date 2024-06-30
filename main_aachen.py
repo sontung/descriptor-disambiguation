@@ -30,7 +30,7 @@ def run_function(
     test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
 
     # for lambda_val in np.linspace(0, 1, 11):
-    for lambda_val in [0.3]:
+    for lambda_val in [0.5]:
         trainer_ = BaseTrainer(
             train_ds_,
             test_ds_,
