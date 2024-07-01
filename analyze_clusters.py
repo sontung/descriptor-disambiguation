@@ -24,6 +24,7 @@ def perform_clustering(name, nb_clusters=10000):
     indices = indices.flatten()
     return indices, kmeans.index
 
+
 def compute_acc(pred, gt):
     diff = pred - gt
     acc = np.sum(diff == 0) / diff.shape[0]
@@ -52,8 +53,7 @@ def main():
     desc_global = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_desc_debug.npy"
     desc_local = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_desc_debug_False_True.npy"
 
-    desc_local = get_index(np.load(desc_local))
-    desc_global = get_index(np.load(desc_global))
+    local_indices, local_cluster_machine = perform_clustering(desc_local)
 
     features_h5 = h5py.File("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_test.h5", "r")
     global_features_h5 = h5py.File("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/salad_8448_8448_desc_test.h5", "r")
@@ -93,13 +93,10 @@ def main():
 
         mask2 = diff != 0
 
-        ind_list_pgt = [pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask][mask2]]]
-        match(final_desc_curr[mask][mask2], desc_global)
-
-        dis, ind1 = desc_global.search(final_desc_curr[mask][mask2], 1)
-        dis, ind2 = desc_local.search(local_desc_curr[mask][mask2], 1)
-        print(ind1)
-        print(ind1)
+        ind_pred1 = local_cluster_machine.search(local_desc_curr[mask][mask2], 1)
+        ind_gt_1 = local_indices[ind_sub1[mask][mask2]]
+        print(ind_gt_1)
+        print(ind_pred1)
         break
 
     features_h5.close()
