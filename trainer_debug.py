@@ -619,7 +619,6 @@ class RobotCarTrainer(BaseTrainer):
             f"output/{self.ds_name}/RobotCar_eval.txt",
             "w",
         )
-
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
@@ -638,7 +637,7 @@ class RobotCarTrainer(BaseTrainer):
                 tree = KDTree(uv_arr_pgt)
                 dis, ind_sub1 = tree.query(keypoints, 1)
                 mask = dis < 1
-                indices_pgt = np.array([ind2pid[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
+                indices_pgt = np.array([self.pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
                 keypoints = keypoints[mask]
                 descriptors = descriptors[mask]
                 descriptors += indices_pgt.reshape(-1, 1)
