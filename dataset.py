@@ -861,7 +861,7 @@ if __name__ == "__main__":
     # g = AachenDataset(train=False)
     # g[0]
     train_ds_ = CambridgeLandmarksDataset(
-        train=True,
+        train=False,
         ds_name="ShopFacade",
         root_dir=f"datasets/cambridge",
     )

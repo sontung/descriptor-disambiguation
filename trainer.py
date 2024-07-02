@@ -42,6 +42,27 @@ def combine_descriptors(local_desc, global_desc, lambda_value_, until=None):
     return res
 
 
+def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
+    camera = example[6]
+    camera_dict = {
+        "model": camera.model.name,
+        "height": camera.height,
+        "width": camera.width,
+        "params": camera.params,
+    }
+    pose, info = poselib.estimate_absolute_pose(
+        uv_arr,
+        xyz_pred,
+        camera_dict,
+    )
+
+    qvec = " ".join(map(str, pose.q))
+    tvec = " ".join(map(str, pose.t))
+
+    image_id = "/".join(example[2].split("/")[1:])
+    print(f"{image_id} {qvec} {tvec}", file=result_file)
+
+
 class BaseTrainer:
     def __init__(
         self,
@@ -418,25 +439,8 @@ class BaseTrainer:
                     gpu_index_flat,
                 )
 
-                camera = example[6]
+                write_pose_to_file(example, uv_arr, xyz_pred, result_file)
 
-                camera_dict = {
-                    "model": camera.model.name,
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose, info = poselib.estimate_absolute_pose(
-                    uv_arr,
-                    xyz_pred,
-                    camera_dict,
-                )
-
-                qvec = " ".join(map(str, pose.q))
-                tvec = " ".join(map(str, pose.t))
-
-                image_id = example[2].split("/")[-1]
-                print(f"{image_id} {qvec} {tvec}", file=result_file)
         features_h5.close()
         result_file.close()
         global_features_h5.close()
@@ -610,26 +614,9 @@ class RobotCarTrainer(BaseTrainer):
                     descriptors,
                     gpu_index_flat,
                 )
+                write_pose_to_file(example, uv_arr, xyz_pred, result_file)
 
-                camera = example[6]
-                camera_dict = {
-                    "model": camera.model.name,
-                    "height": camera.height,
-                    "width": camera.width,
-                    "params": camera.params,
-                }
-                pose, info = poselib.estimate_absolute_pose(
-                    uv_arr,
-                    xyz_pred,
-                    camera_dict,
-                )
-
-                qvec = " ".join(map(str, pose.q))
-                tvec = " ".join(map(str, pose.t))
-
-                image_id = "/".join(example[2].split("/")[1:])
-                print(f"{image_id} {qvec} {tvec}", file=result_file)
-            result_file.close()
+        result_file.close()
         features_h5.close()
         global_features_h5.close()
 

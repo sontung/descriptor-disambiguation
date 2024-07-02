@@ -564,7 +564,29 @@ class RobotCarTrainer(BaseTrainer):
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
         self.pid2ind = pid2ind
 
+        self.cluster_ids, _ = dd_utils.cluster_by_faiss_kmeans(self.xyz_arr, 100)
+        pid2mean_desc += self.cluster_ids.reshape(-1, 1)
         return pid2mean_desc
+
+    def write_pose(self, example, uv_arr, xyz_pred, result_file):
+        camera = example[6]
+        camera_dict = {
+            "model": camera.model.name,
+            "height": camera.height,
+            "width": camera.width,
+            "params": camera.params,
+        }
+        pose, info = poselib.estimate_absolute_pose(
+            uv_arr,
+            xyz_pred,
+            camera_dict,
+        )
+
+        qvec = " ".join(map(str, pose.q))
+        tvec = " ".join(map(str, pose.t))
+
+        image_id = "/".join(example[2].split("/")[1:])
+        print(f"{image_id} {qvec} {tvec}", file=result_file)
 
     def evaluate(self):
         self.detect_local_features_on_test_set()
@@ -593,19 +615,17 @@ class RobotCarTrainer(BaseTrainer):
         mean_acc = []
         file_dump = h5py.File(f"output/{self.ds_name}/matches2d3d{self.using_global_descriptors}_{self.convert_to_db_desc}.npy", "a", libver="latest")
 
+        result_file = open(
+            f"output/{self.ds_name}/RobotCar_eval.txt",
+            "w",
+        )
+
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
                 image_name_wo_dir = name.split(self.dataset.images_dir_str)[-1][1:]
-                keypoints, descriptors = self.process_descriptor(
-                    name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
-                )
 
-                uv_arr, xyz_pred, indices = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
-                )
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
 
                 data = pgt_matches[image_name_wo_dir]
                 uv_arr_pgt = np.array(data["uv"])
@@ -613,22 +633,37 @@ class RobotCarTrainer(BaseTrainer):
                 tree = KDTree(uv_arr_pgt)
                 dis, ind_sub1 = tree.query(uv_arr, 1)
                 mask = dis < 1
-                pid_list_pred = np.array([ind2pid[ind] for ind in indices[mask]])
-                diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
-                acc = np.sum(diff==0)/diff.shape[0]
-                mean_acc.append(acc)
+                indices_pgt = np.array([ind2pid[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
+                descriptors += indices_pgt.reshape(-1, 1)
 
-                pid_inlier = np.array(indices)
-                uv_inlier = uv_arr
-                name = image_name_wo_dir
-                if name in file_dump:
-                    del file_dump[name]
-                grp = file_dump.create_group(name)
-                grp.create_dataset("uv", data=uv_inlier)
-                grp.create_dataset("pid", data=pid_inlier)
+                # keypoints, descriptors = self.process_descriptor(
+                #     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
+                # )
+
+                uv_arr, xyz_pred, indices = self.legal_predict(
+                    keypoints,
+                    descriptors,
+                    gpu_index_flat,
+                )
+                self.write_pose(example, uv_arr, xyz_pred, result_file)
+
+                # pid_list_pred = np.array([ind2pid[ind] for ind in indices[mask]])
+                # diff = pid_list_pred-pid_list_pgt[ind_sub1[mask]]
+                # acc = np.sum(diff==0)/diff.shape[0]
+                # mean_acc.append(acc)
+                #
+                # pid_inlier = np.array(indices)
+                # uv_inlier = uv_arr
+                # name = image_name_wo_dir
+                # if name in file_dump:
+                #     del file_dump[name]
+                # grp = file_dump.create_group(name)
+                # grp.create_dataset("uv", data=uv_inlier)
+                # grp.create_dataset("pid", data=pid_inlier)
 
         features_h5.close()
         global_features_h5.close()
+        result_file.close()
         print(np.mean(mean_acc))
 
 
