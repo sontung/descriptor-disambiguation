@@ -631,7 +631,7 @@ class RobotCarTrainer(BaseTrainer):
                 uv_arr_pgt = np.array(data["uv"])
                 pid_list_pgt = np.array(data["pid"])
                 tree = KDTree(uv_arr_pgt)
-                dis, ind_sub1 = tree.query(uv_arr, 1)
+                dis, ind_sub1 = tree.query(keypoints, 1)
                 mask = dis < 1
                 indices_pgt = np.array([ind2pid[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
                 descriptors += indices_pgt.reshape(-1, 1)
