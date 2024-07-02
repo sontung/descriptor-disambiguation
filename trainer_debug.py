@@ -564,7 +564,7 @@ class RobotCarTrainer(BaseTrainer):
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
         self.pid2ind = pid2ind
 
-        self.cluster_ids, _ = dd_utils.cluster_by_faiss_kmeans(self.xyz_arr, 10000)
+        self.cluster_ids, _ = dd_utils.cluster_by_faiss_kmeans(self.xyz_arr, 5000)
         pid2mean_desc += self.cluster_ids.reshape(-1, 1)
         return pid2mean_desc
 
