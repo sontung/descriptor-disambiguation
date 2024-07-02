@@ -4,7 +4,7 @@ import numpy as np
 
 import dd_utils
 from dataset import RobotCarDataset
-from trainer_debug import RobotCarTrainer
+from trainer import RobotCarTrainer
 
 
 def run_function(
