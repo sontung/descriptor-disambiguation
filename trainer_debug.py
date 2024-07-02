@@ -634,6 +634,8 @@ class RobotCarTrainer(BaseTrainer):
                 dis, ind_sub1 = tree.query(keypoints, 1)
                 mask = dis < 1
                 indices_pgt = np.array([ind2pid[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
+                keypoints = keypoints[mask]
+                descriptors = descriptors[mask]
                 descriptors += indices_pgt.reshape(-1, 1)
 
                 # keypoints, descriptors = self.process_descriptor(
