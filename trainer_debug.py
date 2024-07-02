@@ -564,8 +564,8 @@ class RobotCarTrainer(BaseTrainer):
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
         self.pid2ind = pid2ind
 
-        self.cluster_ids, _ = dd_utils.cluster_by_faiss_kmeans(self.xyz_arr, 1000)
-        pid2mean_desc += self.cluster_ids.reshape(-1, 1)
+        # self.cluster_ids, _ = dd_utils.cluster_by_faiss_kmeans(self.xyz_arr, 1000)
+        # pid2mean_desc += self.cluster_ids.reshape(-1, 1)
         return pid2mean_desc
 
     def write_pose(self, example, uv_arr, xyz_pred, result_file):
@@ -630,21 +630,21 @@ class RobotCarTrainer(BaseTrainer):
 
                 keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
 
-                data = pgt_matches[image_name_wo_dir]
-                uv_arr_pgt = np.array(data["uv"])
-                pid_list_pgt = np.array(data["pid"])
-
-                mask1 = [True if pid in self.pid2ind else False for pid in pid_list_pgt]
-                pid_list_pgt = pid_list_pgt[mask1]
-                uv_arr_pgt = uv_arr_pgt[mask1]
-
-                tree = KDTree(uv_arr_pgt)
-                dis, ind_sub1 = tree.query(keypoints, 1)
-                mask = dis < 1
-                indices_pgt = np.array([self.pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
-                keypoints = keypoints[mask]
-                descriptors = descriptors[mask]
-                descriptors += self.cluster_ids[indices_pgt].reshape(-1, 1)
+                # data = pgt_matches[image_name_wo_dir]
+                # uv_arr_pgt = np.array(data["uv"])
+                # pid_list_pgt = np.array(data["pid"])
+                #
+                # mask1 = [True if pid in self.pid2ind else False for pid in pid_list_pgt]
+                # pid_list_pgt = pid_list_pgt[mask1]
+                # uv_arr_pgt = uv_arr_pgt[mask1]
+                #
+                # tree = KDTree(uv_arr_pgt)
+                # dis, ind_sub1 = tree.query(keypoints, 1)
+                # mask = dis < 1
+                # indices_pgt = np.array([self.pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
+                # keypoints = keypoints[mask]
+                # descriptors = descriptors[mask]
+                # descriptors += self.cluster_ids[indices_pgt].reshape(-1, 1)
 
                 # keypoints, descriptors = self.process_descriptor(
                 #     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc

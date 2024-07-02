@@ -62,8 +62,8 @@ def main():
     test_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=True)
     train_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=True, evaluate=False)
 
-    local_indices, local_cluster_machine = perform_clustering(desc_local, nb_clusters=10)
-    # desc_local_arr = np.load(desc_local)
+    # local_indices, local_cluster_machine = perform_clustering(desc_local, nb_clusters=10)
+    # desc_local_arr = np.load(desc_local) 
     # desc_local_arr = np.load(desc_global)
 
     mean_acc = []
