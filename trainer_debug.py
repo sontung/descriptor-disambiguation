@@ -38,7 +38,7 @@ def compute_pose_error(pose, pose_gt):
 def combine_descriptors(local_desc, global_desc, lambda_value_, until=None):
     if until is None:
         until = local_desc.shape[1]
-    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[:until]
+    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[-until:]
     return res
 
 
@@ -191,7 +191,7 @@ class BaseTrainer:
         self.all_image_desc = all_desc
         self.all_names = all_names
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx, : self.feature_dim]
+            image2desc[name] = all_desc[idx, -self.feature_dim:]
         return image2desc
 
     def produce_image_descriptor(self, name):
