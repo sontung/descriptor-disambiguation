@@ -582,8 +582,12 @@ class RobotCarTrainer(BaseTrainer):
             camera_dict,
         )
 
-        qvec = " ".join(map(str, pose.q))
-        tvec = " ".join(map(str, pose.t))
+        if np.sum(np.isnan(pose.q)) > 0:
+            qvec = "0 0 0 1"
+            tvec = "0 0 0"
+        else:
+            qvec = " ".join(map(str, pose.q))
+            tvec = " ".join(map(str, pose.t))
 
         image_id = "/".join(example[2].split("/")[1:])
         print(f"{image_id} {qvec} {tvec}", file=result_file)
