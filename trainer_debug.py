@@ -630,6 +630,11 @@ class RobotCarTrainer(BaseTrainer):
                 data = pgt_matches[image_name_wo_dir]
                 uv_arr_pgt = np.array(data["uv"])
                 pid_list_pgt = np.array(data["pid"])
+
+                mask1 = [True if pid in self.pid2ind else False for pid in pid_list_pgt]
+                pid_list_pgt = pid_list_pgt[mask1]
+                uv_arr_pgt = uv_arr_pgt[mask1]
+
                 tree = KDTree(uv_arr_pgt)
                 dis, ind_sub1 = tree.query(keypoints, 1)
                 mask = dis < 1
