@@ -57,7 +57,7 @@ class BaseTrainer:
         collect_code_book=True,
         lambda_val=0.5,
         convert_to_db_desc=True,
-        codebook_dtype=np.float32,
+        codebook_dtype=np.float16,
     ):
         self.feature_dim = feature_dim
         self.dataset = train_ds
@@ -340,7 +340,7 @@ class BaseTrainer:
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
-                    image_descriptor.reshape(1, -1).astype(np.float32), 1
+                    image_descriptor.reshape(1, -1), 1
                 )
                 image_descriptor = self.all_image_desc[int(ind)]
 
@@ -358,7 +358,7 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc.astype(np.float32))
+            gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
             print(
                 f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}"
