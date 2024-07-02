@@ -640,7 +640,7 @@ class RobotCarTrainer(BaseTrainer):
                 indices_pgt = np.array([self.pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask]]])
                 keypoints = keypoints[mask]
                 descriptors = descriptors[mask]
-                descriptors += indices_pgt.reshape(-1, 1)
+                descriptors += self.cluster_ids[indices_pgt].reshape(-1, 1)
 
                 # keypoints, descriptors = self.process_descriptor(
                 #     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
