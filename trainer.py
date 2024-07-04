@@ -68,7 +68,7 @@ def roll_matrix(all_desc, nb, nd):
     count = 0
     for i in range(0, all_desc.shape[1], nd):
         start = i
-        end = min(i + nd, all_desc.shape[1])  # Ensure end doesn't exceed array dimensions
+        end = min(i + nd, all_desc.shape[1])
         all_desc_rolled[:, :end - start] += all_desc[:, start:end]
         count += 1
     all_desc_rolled /= count
@@ -234,10 +234,7 @@ class BaseTrainer:
     def collect_image_descriptors_for_test_set(self):
         global_descriptors_path = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_test.h5"
         if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
+            all_desc = np.zeros((len(self.test_dataset), self.global_feature_dim))
             all_names = []
             idx = 0
             with torch.no_grad():
@@ -250,6 +247,9 @@ class BaseTrainer:
                     idx += 1
 
             all_desc_rolled = roll_matrix(all_desc, len(self.test_dataset), self.feature_dim)
+            global_features_h5 = h5py.File(
+                str(global_descriptors_path), "a", libver="latest"
+            )
             for idx, name in enumerate(all_names):
                 dict_ = {"global_descriptor": all_desc_rolled[idx]}
                 dd_utils.write_to_h5_file(global_features_h5, name, dict_)
