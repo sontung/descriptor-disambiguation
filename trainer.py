@@ -141,7 +141,7 @@ class BaseTrainer:
         else:
             self.image2desc = {}
 
-        self.collect_image_descriptors_for_test_set()
+        self.global_descriptor_test_path = self.collect_image_descriptors_for_test_set()
 
         self.xyz_arr = None
         self.map_reduction = False
@@ -254,6 +254,7 @@ class BaseTrainer:
                 dict_ = {"global_descriptor": all_desc_rolled[idx]}
                 dd_utils.write_to_h5_file(global_features_h5, name, dict_)
             global_features_h5.close()
+        return global_descriptors_path
 
     def produce_image_descriptor(self, name):
         with torch.no_grad():
@@ -449,11 +450,10 @@ class BaseTrainer:
                 "w",
             )
 
-        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
-        assert os.path.isfile(global_descriptors_path)
+        assert os.path.isfile(self.global_descriptor_test_path)
 
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
@@ -590,10 +590,9 @@ class RobotCarTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
-        assert os.path.isfile(global_descriptors_path)
+        assert os.path.isfile(self.global_descriptor_test_path)
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
         if self.using_global_descriptors:
             result_file = open(
@@ -744,11 +743,10 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
-        assert os.path.isfile(global_descriptors_path)
+        assert os.path.isfile(self.global_descriptor_test_path), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
         testset = self.test_dataset
         name2err = {}
         rErrs = []
