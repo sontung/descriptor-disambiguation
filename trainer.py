@@ -64,6 +64,8 @@ def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
 
 
 def roll_matrix(all_desc, nb, nd):
+    if nd == all_desc.shape[1]:
+        return all_desc
     all_desc_rolled = np.zeros((nb, nd))
     count = 0
     for i in range(0, all_desc.shape[1], nd):
@@ -89,7 +91,7 @@ class BaseTrainer:
         using_global_descriptors,
         collect_code_book=True,
         lambda_val=0.5,
-        convert_to_db_desc=True,
+        convert_to_db_desc=False,
         codebook_dtype=np.float16,
     ):
         self.feature_dim = feature_dim
@@ -778,7 +780,6 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 t_err0, r_err = compute_pose_error(pose0, example[4])
                 tErrs.append(t_err0 * 100)
                 rErrs.append(r_err)
-                tqdm.write(f"{t_err0 * 100}")
 
         features_h5.close()
         global_features_h5.close()

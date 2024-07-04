@@ -59,7 +59,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=True,
+            convert_to_db_desc=False,
         )
 
         err = trainer_.evaluate()
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=4096,
+        default=512,
     )
     args = parser.parse_args()
     results = run_function(
