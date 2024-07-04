@@ -1103,6 +1103,11 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
 
         encoder_global = GCLModel()
         conf_ns_retrieval = None
+    elif retrieval_model == "dino":
+        from dino_model import DinoModel
+
+        encoder_global = DinoModel()
+        conf_ns_retrieval = None
     else:
         model_dict = conf[retrieval_model]["model"]
         device = "cuda" if torch.cuda.is_available() else "cpu"

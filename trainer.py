@@ -38,7 +38,7 @@ def compute_pose_error(pose, pose_gt):
 def combine_descriptors(local_desc, global_desc, lambda_value_, until=None):
     if until is None:
         until = local_desc.shape[1]
-    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[-until:]
+    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[:until]
     return res
 
 
@@ -61,6 +61,18 @@ def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
 
     image_id = "/".join(example[2].split("/")[1:])
     print(f"{image_id} {qvec} {tvec}", file=result_file)
+
+
+def roll_matrix(all_desc, nb, nd):
+    all_desc_rolled = np.zeros((nb, nd))
+    count = 0
+    for i in range(0, all_desc.shape[1], nd):
+        start = i
+        end = min(i + nd, all_desc.shape[1])  # Ensure end doesn't exceed array dimensions
+        all_desc_rolled[:, :end - start] += all_desc[:, start:end]
+        count += 1
+    all_desc_rolled /= count
+    return all_desc_rolled
 
 
 class BaseTrainer:
@@ -123,10 +135,13 @@ class BaseTrainer:
         self.convert_to_db_desc = convert_to_db_desc
         self.all_names = []
         self.all_image_desc = None
+
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
         else:
             self.image2desc = {}
+
+        self.collect_image_descriptors_for_test_set()
 
         self.xyz_arr = None
         self.map_reduction = False
@@ -208,12 +223,37 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         image2desc = {}
-        # if self.convert_to_db_desc:
-        self.all_image_desc = all_desc
+        all_desc_rolled = roll_matrix(all_desc, len(self.dataset), self.feature_dim)
+        self.all_image_desc = all_desc_rolled
         self.all_names = all_names
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx, - self.feature_dim:]
+            image2desc[name] = all_desc_rolled[idx]
+
         return image2desc
+
+    def collect_image_descriptors_for_test_set(self):
+        global_descriptors_path = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_test.h5"
+        if not os.path.isfile(global_descriptors_path):
+            global_features_h5 = h5py.File(
+                str(global_descriptors_path), "a", libver="latest"
+            )
+            all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
+            all_names = []
+            idx = 0
+            with torch.no_grad():
+                for example in tqdm(
+                    self.test_dataset, desc="Collecting global descriptors for test set"
+                ):
+                    image_descriptor = self.produce_image_descriptor(example[1])
+                    all_desc[idx] = image_descriptor
+                    all_names.append(example[1])
+                    idx += 1
+
+            all_desc_rolled = roll_matrix(all_desc, len(self.test_dataset), self.feature_dim)
+            for idx, name in enumerate(all_names):
+                dict_ = {"global_descriptor": all_desc_rolled[idx]}
+                dd_utils.write_to_h5_file(global_features_h5, name, dict_)
+            global_features_h5.close()
 
     def produce_image_descriptor(self, name):
         with torch.no_grad():
@@ -222,6 +262,7 @@ class BaseTrainer:
                 or "crica" in self.global_desc_model_name
                 or "salad" in self.global_desc_model_name
                 or "gcl" in self.global_desc_model_name
+                or "dino" in self.global_desc_model_name
             ):
                 image_descriptor = self.global_desc_model.process(name)
             else:
@@ -376,7 +417,7 @@ class BaseTrainer:
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
         if self.convert_to_db_desc and self.using_global_descriptors:
-            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
+            index2 = faiss.IndexFlatL2(self.feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
@@ -409,19 +450,7 @@ class BaseTrainer:
             )
 
         global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
+        assert os.path.isfile(global_descriptors_path)
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
@@ -551,13 +580,6 @@ class RobotCarTrainer(BaseTrainer):
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
 
-        indices = np.load("output/robotcar/bad_pids.npy")
-        mask = np.ones(self.xyz_arr.shape[0], dtype=bool)
-        mask[indices] = False
-        print(np.sum(mask)/self.xyz_arr.shape[0])
-        self.xyz_arr = self.xyz_arr[mask]
-        pid2mean_desc = pid2mean_desc[mask]
-
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
             pid2mean_desc,
@@ -569,20 +591,7 @@ class RobotCarTrainer(BaseTrainer):
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
-
+        assert os.path.isfile(global_descriptors_path)
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
 
@@ -735,22 +744,8 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
-        )
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
+        global_descriptors_path = f"output/{self.ds_name}/{self.global_desc_model_name}_{self.global_feature_dim}_desc_test.h5"
+        assert os.path.isfile(global_descriptors_path)
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(global_descriptors_path, "r")
@@ -785,6 +780,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                 t_err0, r_err = compute_pose_error(pose0, example[4])
                 tErrs.append(t_err0 * 100)
                 rErrs.append(r_err)
+                tqdm.write(f"{t_err0 * 100}")
 
         features_h5.close()
         global_features_h5.close()

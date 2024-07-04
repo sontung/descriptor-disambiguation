@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import faiss
 import open3d as o3d
-from numba.core.serialize import pickle
+import pickle
 from pykdtree.kdtree import KDTree
 from sklearn.neighbors import BallTree
 from sklearn.cluster import DBSCAN

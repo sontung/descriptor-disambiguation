@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=512,
+        default=4096,
     )
     args = parser.parse_args()
     results = run_function(
