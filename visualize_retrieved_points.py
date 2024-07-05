@@ -8,28 +8,28 @@ from dataset import CambridgeLandmarksDataset
 from trainer import CambridgeLandmarksTrainer
 import open3d as o3d
 import cv2
+import torch
+from trainer import project_using_pose
+from tqdm import tqdm
 
 
-def visualize(ds):
-    rr.init("rerun_example_app")
-
-    rr.connect()  # Connect to a remote viewer
-    rr.spawn()  # Spawn a child process with a viewer and connect
-    # rr.save("recording.rrd")  # Stream all logs to disk
-
-    # Associate subsequent data with 42 on the “frame” timeline
-    rr.set_time_sequence("frame", 42)
-
-    # Log colored 3D points to the entity at `path/to/points`
-
-    import open3d as o3d
-
-    point_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(ds.xyz_arr))
-    cl, inlier_ind = point_cloud.remove_radius_outlier(nb_points=16, radius=5)
-    rr.log(
-        "path/to/points",
-        rr.Points3D(ds.xyz_arr[inlier_ind], colors=ds.rgb_arr[inlier_ind] / 255),
+def compute_reproj_err(gt_pose, xyz, uv):
+    intrinsics = torch.eye(3)
+    intrinsics[0, 0] = 1670.480625
+    intrinsics[1, 1] = 1670.480625
+    intrinsics[0, 2] = 960.0
+    intrinsics[1, 2] = 540.0
+    uv_arr_pred = project_using_pose(
+        torch.from_numpy(gt_pose).cuda().unsqueeze(0).float(),
+        intrinsics.cuda().unsqueeze(0).float(),
+        xyz,
     )
+    m1 = uv_arr_pred[:, 0] > 0
+    m2 = uv_arr_pred[:, 1] > 0
+    m3 = uv_arr_pred[:, 0] < 1920
+    m4 = uv_arr_pred[:, 1] < 1080
+    oob = np.all([m1, m2, m3, m4], 0)
+    return np.mean(np.abs(uv-uv_arr_pred), 1), oob, uv_arr_pred
 
 
 def make_pic(good_result, bad_result, res_name, rgb_arr):
@@ -67,13 +67,13 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
     intrinsics[1, 2] = 240
 
     cam1 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, np.vstack([pose1.Rt, [0, 0, 0, 1]]), scale=7
+        427 * 2, 240 * 2, intrinsics, np.vstack([pose1.Rt, [0, 0, 0, 1]]), scale=9
     )
     cam2 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, np.vstack([pose2.Rt, [0, 0, 0, 1]]), scale=7
+        427 * 2, 240 * 2, intrinsics, np.vstack([pose2.Rt, [0, 0, 0, 1]]), scale=9
     )
     cam3 = o3d.geometry.LineSet.create_camera_visualization(
-        427 * 2, 240 * 2, intrinsics, gt_pose2, scale=7
+        427 * 2, 240 * 2, intrinsics, gt_pose2, scale=9
     )
 
     cam1.paint_uniform_color((0, 0, 0))
@@ -85,16 +85,27 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
     pred1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1))
     pred2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2))
 
-    not_inlier1 = np.bitwise_not(np.array(mask1))
-    not_inlier2 = np.bitwise_not(np.array(mask2))
-    bad_points1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz1[not_inlier1]))
-    bad_points2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz2[not_inlier2]))
-    bad_points1.paint_uniform_color((1, 0, 0))
-    bad_points2.paint_uniform_color((1, 0, 0))
+    dis1, oob1, uv1_pred = compute_reproj_err(gt_pose1, xyz1, uv_arr1)
+    dis2, oob2, uv2_pred = compute_reproj_err(gt_pose1, xyz2, uv_arr2)
+    colors1 = np.tile([1, 0, 0], (xyz1.shape[0], 1))
+    colors1[oob1] = [0, 1, 0]
+    colors2 = np.tile([1, 0, 0], (xyz1.shape[0], 1))
+    colors2[oob2] = [0, 1, 0]
+
+    pred1.colors = o3d.utility.Vector3dVector(colors1)
+    pred2.colors = o3d.utility.Vector3dVector(colors2)
+
+    # vis = o3d.visualization.Visualizer()
+    # vis.create_window()
+    # vis.add_geometry(pred2)
+    # vis.add_geometry(cam1)
+    # vis.add_geometry(cam2)
+    # vis.run()
+    # vis.destroy_window()
 
     vis = o3d.visualization.Visualizer()
-    vis.create_window(visible=False, width=1024, height=1016)
-    parameters = o3d.io.read_pinhole_camera_parameters("viewpoint2.json")
+    vis.create_window(visible=False, width=1848, height=1016)
+    parameters = o3d.io.read_pinhole_camera_parameters("viewpoints_pc_retrieval.json")
     vis.add_geometry(cam1, reset_bounding_box=True)
     vis.add_geometry(cam3, reset_bounding_box=True)
     vis.add_geometry(cam2, reset_bounding_box=True)
@@ -110,28 +121,26 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
     vis.add_geometry(cam2, reset_bounding_box=False)
     vis.add_geometry(pred2, reset_bounding_box=False)
     vis.capture_screen_image(f"debug/bad.png", do_render=True)
-
-    # vis.run()
     vis.destroy_window()
-    if t_err1 - t_err2 > 0:
-        im1 = cv2.imread(f"debug/good.png")
-        im2 = cv2.imread(f"debug/bad.png")
-        im3 = cv2.hconcat([im1[200:], im2[200:]])
-        t_err1, t_err2 = map(lambda du: round(du, 2), [t_err1, t_err2])
-        cv2.imwrite(f"debug/both-{res_name}-{t_err1}-{t_err2}.png", im3)
+
+    # if t_err1 - t_err2 > 0:
+    #
+    #     im1 = cv2.imread(f"debug/good.png")
+    #     im2 = cv2.imread(f"debug/bad.png")
+    #     im3 = cv2.hconcat([im2[150:850, 500:1500], im1[150:850, 500:1500]])
+    #     t_err1, t_err2 = map(lambda du: round(du, 2), [t_err1, t_err2])
+    #     cv2.imwrite(f"debug/both-{res_name}-{t_err1}-{t_err2}.png", im3)
 
     return
 
 
 def visualize_matches(good_results, bad_results, rgb_arr):
-    for idx in range(len(good_results)):
+    for idx in tqdm(range(len(good_results))):
         idx_str = "{:03d}".format(idx)
         make_pic(good_results[idx], bad_results[idx], idx_str, rgb_arr)
-    for idx in range(len(good_results)):
-        idx_str = "{:03d}".format(idx)
-        im1 = cv2.imread(f"debug/good-{idx_str}.png")
-        im2 = cv2.imread(f"debug/bad-{idx_str}.png")
-        im3 = cv2.hconcat([im2[200:], im1[200:]])
+        im1 = cv2.imread(f"debug/good.png")
+        im2 = cv2.imread(f"debug/bad.png")
+        im3 = cv2.hconcat([im2[150:850, 500:1500], im1[150:850, 500:1500]])
         cv2.imwrite(f"debug/both-{idx_str}.png", im3)
     return
 
@@ -188,12 +197,12 @@ def run_function(
         encoder_global,
         conf_ns,
         conf_ns_retrieval,
-        True,
+        False,
     )
 
     res = trainer_.process()
-    res2 = trainer_2.process()
-    visualize_matches(res, res2, trainer_.rgb_arr)
+    res_bad = trainer_2.process()
+    visualize_matches(res, res_bad, trainer_.rgb_arr)
 
     bad_name_list = [
         "rgb/seq4_frame00093.png",

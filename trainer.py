@@ -73,7 +73,7 @@ def roll_matrix(all_desc, nb, nd):
         end = min(i + nd, all_desc.shape[1])
         all_desc_rolled[:, :end - start] += all_desc[:, start:end]
         count += 1
-    all_desc_rolled /= count
+    # all_desc_rolled /= count
     return all_desc_rolled
 
 
@@ -795,25 +795,10 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
-        )
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
+        assert os.path.isfile(self.global_descriptor_test_path), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
         testset = self.test_dataset
         res = []
         with torch.no_grad():
@@ -823,7 +808,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
-                uv_arr, xyz_pred, pid_list = self.legal_predict(
+                uv_arr, xyz_pred, pid_list, _ = self.legal_predict(
                     keypoints, descriptors, gpu_index_flat, return_indices=True
                 )
 
