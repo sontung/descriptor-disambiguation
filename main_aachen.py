@@ -86,6 +86,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument("--convert", type=int, default=1)
+    parser.add_argument("--ablation", type=int, default=0)
+
     parser.add_argument(
         "--local_desc",
         type=str,
@@ -108,14 +110,15 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # run_function(
-    #     args.dataset,
-    #     args.local_desc,
-    #     args.global_desc,
-    #     int(args.local_desc_dim),
-    #     int(args.global_desc_dim),
-    #     bool(args.use_global),
-    #     bool(args.convert),
-    # )
-
-    run_ablation(args.dataset)
+    if args.ablation:
+        run_ablation(args.dataset)
+    else:
+        run_function(
+            args.dataset,
+            args.local_desc,
+            args.global_desc,
+            int(args.local_desc_dim),
+            int(args.global_desc_dim),
+            bool(args.use_global),
+            bool(args.convert),
+        )
