@@ -33,8 +33,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        if ds_name != "GreatCourt":
-            continue
+        # if ds_name != "GreatCourt":
+        #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_

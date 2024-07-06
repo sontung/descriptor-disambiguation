@@ -317,7 +317,7 @@ class BaseTrainer:
         dd_utils.write_to_h5_file(fd, name, dict_)
 
     def collect_descriptors_loop(
-        self, features_h5, pid2mean_desc, pid2count, using_global_desc, id_list=None
+        self, features_h5, pid2mean_desc, pid2count, using_global_desc
     ):
         pid2ind = {}
         index_for_array = -1
@@ -394,7 +394,7 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
-            if self.global_rand_indices:
+            if self.global_rand_indices is not None:
                 image_descriptor = image_descriptor[self.global_rand_indices]
 
             if self.convert_to_db_desc:
@@ -417,7 +417,7 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            if self.global_rand_indices:
+            if self.global_rand_indices is not None:
                 self.all_image_desc = self.all_outlier_descs[:, self.global_rand_indices]
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
