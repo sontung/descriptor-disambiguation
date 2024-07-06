@@ -1,12 +1,42 @@
 import argparse
-
 import numpy as np
-
 import dd_utils
 
-# from clustering import reduce_map_using_min_cover
 from dataset import AachenDataset
 from trainer import BaseTrainer
+from main_robotcar import ABLATION_METHODS
+
+
+def run_ablation(ds_dir):
+    using_global_descriptors = True
+    train_ds_ = AachenDataset(ds_dir=ds_dir)
+    test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
+
+    local_desc_model = "d2net"
+    for retrieval_model, global_desc_dim in ABLATION_METHODS:
+        encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
+            local_desc_model, retrieval_model, global_desc_dim
+        )
+
+        print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
+
+        for lambda_val in np.linspace(0, 1, 11):
+            if lambda_val == 0.0:
+                continue
+            trainer_ = BaseTrainer(
+                train_ds_,
+                test_ds_,
+                512,
+                global_desc_dim,
+                encoder,
+                encoder_global,
+                conf_ns,
+                conf_ns_retrieval,
+                using_global_descriptors,
+                lambda_val=lambda_val,
+                convert_to_db_desc=True,
+            )
+            trainer_.evaluate()
 
 
 def run_function(
@@ -29,10 +59,7 @@ def run_function(
     train_ds_ = AachenDataset(ds_dir=ds_dir)
     test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
 
-    for lambda_val in np.linspace(0, 1, 11):
-    # for lambda_val in [0.5]:
-        if lambda_val == 0.0:
-            continue
+    for lambda_val in [0.5]:
         trainer_ = BaseTrainer(
             train_ds_,
             test_ds_,
@@ -81,12 +108,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    run_function(
-        args.dataset,
-        args.local_desc,
-        args.global_desc,
-        int(args.local_desc_dim),
-        int(args.global_desc_dim),
-        bool(args.use_global),
-        bool(args.convert),
-    )
+    # run_function(
+    #     args.dataset,
+    #     args.local_desc,
+    #     args.global_desc,
+    #     int(args.local_desc_dim),
+    #     int(args.global_desc_dim),
+    #     bool(args.use_global),
+    #     bool(args.convert),
+    # )
+
+    run_ablation(args.dataset)
