@@ -81,6 +81,7 @@ class BaseTrainer:
         codebook_dtype=np.float16,
     ):
         self.global_rand_indices = None
+        self.use_rand_indices = feature_dim != global_feature_dim
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
@@ -212,7 +213,7 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         image2desc = {}
-        if self.feature_dim != self.global_feature_dim:
+        if self.use_rand_indices:
             indices = np.arange(self.global_feature_dim)
             np.random.shuffle(indices)
             indices = indices[:self.feature_dim]
@@ -394,7 +395,7 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
-            if self.global_rand_indices is not None:
+            if self.use_rand_indices:
                 image_descriptor = image_descriptor[self.global_rand_indices]
 
             if self.convert_to_db_desc:
@@ -417,7 +418,7 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            if self.global_rand_indices is not None:
+            if self.use_rand_indices:
                 self.all_image_desc = self.all_outlier_descs[:, self.global_rand_indices]
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
