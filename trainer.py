@@ -35,10 +35,8 @@ def compute_pose_error(pose, pose_gt):
     return t_err, r_err
 
 
-def combine_descriptors(local_desc, global_desc, lambda_value_, until=None):
-    if until is None:
-        until = local_desc.shape[1]
-    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[:until]
+def combine_descriptors(local_desc, global_desc, lambda_value_, indices):
+    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[indices]
     return res
 
 
@@ -61,20 +59,6 @@ def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
 
     image_id = "/".join(example[2].split("/")[1:])
     print(f"{image_id} {qvec} {tvec}", file=result_file)
-
-
-def roll_matrix(all_desc, nb, nd):
-    if nd == all_desc.shape[1]:
-        return all_desc
-    all_desc_rolled = np.zeros((nb, nd))
-    count = 0
-    for i in range(0, all_desc.shape[1], nd):
-        start = i
-        end = min(i + nd, all_desc.shape[1])
-        all_desc_rolled[:, :end - start] += all_desc[:, start:end]
-        count += 1
-    # all_desc_rolled /= count
-    return all_desc_rolled
 
 
 class BaseTrainer:
@@ -225,11 +209,14 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         image2desc = {}
-        all_desc_rolled = roll_matrix(all_desc, len(self.dataset), self.feature_dim)
-        self.all_image_desc = all_desc_rolled
+        indices = np.arange(self.global_feature_dim)
+        np.random.shuffle(indices)
+        indices = indices[:512]
+        self.global_rand_indices = indices
+        self.all_image_desc = all_desc
         self.all_names = all_names
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc_rolled[idx]
+            image2desc[name] = all_desc[idx, self.global_rand_indices]
 
         return image2desc
 
@@ -248,12 +235,11 @@ class BaseTrainer:
                     all_names.append(example[1])
                     idx += 1
 
-            all_desc_rolled = roll_matrix(all_desc, len(self.test_dataset), self.feature_dim)
             global_features_h5 = h5py.File(
                 str(global_descriptors_path), "a", libver="latest"
             )
             for idx, name in enumerate(all_names):
-                dict_ = {"global_descriptor": all_desc_rolled[idx]}
+                dict_ = {"global_descriptor": all_desc[idx]}
                 dd_utils.write_to_h5_file(global_features_h5, name, dict_)
             global_features_h5.close()
         return global_descriptors_path
@@ -343,7 +329,7 @@ class BaseTrainer:
             if using_global_desc:
                 image_descriptor = self.image2desc[example[1]]
                 selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val
+                    selected_descriptors, image_descriptor, self.lambda_val, self.global_rand_indices
                 )
 
             for idx, pid in enumerate(selected_pid):
@@ -410,7 +396,7 @@ class BaseTrainer:
                 image_descriptor = self.all_image_desc[int(ind)]
 
             descriptors = combine_descriptors(
-                descriptors, image_descriptor, self.lambda_val
+                descriptors, image_descriptor, self.lambda_val, self.global_rand_indices
             )
         return keypoints, descriptors
 
