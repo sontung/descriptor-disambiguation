@@ -35,9 +35,7 @@ def compute_pose_error(pose, pose_gt):
     return t_err, r_err
 
 
-def combine_descriptors(local_desc, global_desc, lambda_value_, indices):
-    if indices is not None:
-        global_desc = global_desc[indices]
+def combine_descriptors(local_desc, global_desc, lambda_value_):
     res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc
     return res
 
@@ -335,8 +333,10 @@ class BaseTrainer:
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
                 image_descriptor = self.image2desc[example[1]]
+                if self.use_rand_indices:
+                    image_descriptor = image_descriptor[self.global_rand_indices]
                 selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val, self.global_rand_indices
+                    selected_descriptors, image_descriptor, self.lambda_val
                 )
 
             for idx, pid in enumerate(selected_pid):
@@ -405,7 +405,7 @@ class BaseTrainer:
                 image_descriptor = self.all_image_desc[int(ind)]
 
             descriptors = combine_descriptors(
-                descriptors, image_descriptor, self.lambda_val, self.global_rand_indices
+                descriptors, image_descriptor, self.lambda_val
             )
         return keypoints, descriptors
 
