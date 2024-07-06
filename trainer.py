@@ -215,14 +215,14 @@ class BaseTrainer:
         if self.feature_dim != self.global_feature_dim:
             indices = np.arange(self.global_feature_dim)
             np.random.shuffle(indices)
-            indices = indices[:512]
+            indices = indices[:self.feature_dim]
             self.global_rand_indices = indices
             all_desc = all_desc[:, self.global_rand_indices]
 
         self.all_names = all_names
         self.all_image_desc = all_desc
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx, self.global_rand_indices]
+            image2desc[name] = all_desc[idx]
 
         return image2desc
 
