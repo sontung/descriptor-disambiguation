@@ -36,7 +36,7 @@ def compute_pose_error(pose, pose_gt):
 
 
 def combine_descriptors(local_desc, global_desc, lambda_value_, indices):
-    if global_desc.shape[0] != local_desc.shape[1]:
+    if indices is not None:
         global_desc = global_desc[indices]
     res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc
     return res
@@ -80,6 +80,7 @@ class BaseTrainer:
         convert_to_db_desc=False,
         codebook_dtype=np.float16,
     ):
+        self.global_rand_indices = None
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
@@ -211,12 +212,15 @@ class BaseTrainer:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         image2desc = {}
-        indices = np.arange(self.global_feature_dim)
-        np.random.shuffle(indices)
-        indices = indices[:512]
-        self.global_rand_indices = indices
-        self.all_image_desc = all_desc
+        if self.feature_dim != self.global_feature_dim:
+            indices = np.arange(self.global_feature_dim)
+            np.random.shuffle(indices)
+            indices = indices[:512]
+            self.global_rand_indices = indices
+            all_desc = all_desc[:, self.global_rand_indices]
+
         self.all_names = all_names
+        self.all_image_desc = all_desc
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx, self.global_rand_indices]
 
@@ -390,10 +394,12 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
+            if self.global_rand_indices:
+                image_descriptor = image_descriptor[self.global_rand_indices]
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
-                    image_descriptor[self.global_rand_indices].reshape(1, -1), 1
+                    image_descriptor.reshape(1, -1), 1
                 )
                 image_descriptor = self.all_image_desc[int(ind)]
 
@@ -411,7 +417,7 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc[self.global_rand_indices])
+            gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
             print(
                 f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}"
