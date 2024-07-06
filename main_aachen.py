@@ -29,8 +29,10 @@ def run_function(
     train_ds_ = AachenDataset(ds_dir=ds_dir)
     test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
 
-    # for lambda_val in np.linspace(0, 1, 11):
-    for lambda_val in [0.5]:
+    for lambda_val in np.linspace(0, 1, 11):
+    # for lambda_val in [0.5]:
+        if lambda_val == 0.0:
+            continue
         trainer_ = BaseTrainer(
             train_ds_,
             test_ds_,

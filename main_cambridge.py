@@ -33,8 +33,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        if ds_name != "GreatCourt":
-            continue
+        # if ds_name != "GreatCourt":
+        #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_
@@ -42,11 +42,6 @@ def run_function(
         test_ds_ = CambridgeLandmarksDataset(
             train=False, ds_name=ds_name, root_dir=root_dir_
         )
-
-        # set1 = set(train_ds_.rgb_files)
-        # set2 = set(test_ds_.rgb_files)
-        # set3 = set1.intersection(set2)
-        # assert len(set3) == 0
 
         trainer_ = CambridgeLandmarksTrainer(
             train_ds_,
