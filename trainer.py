@@ -137,10 +137,7 @@ class BaseTrainer:
         self.total_diff = np.zeros(self.global_feature_dim)
         self.count = 0
         self.special_pid_list = None
-        self.image2pid_via_new_features = {}
         self.pid2mean_desc_vanilla = None
-        self.centroids_for_image_desc = None
-        self.all_outlier_descs = None
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
@@ -320,7 +317,6 @@ class BaseTrainer:
     ):
         pid2ind = {}
         index_for_array = -1
-        self.image2pid_via_new_features = {}
         for example_id, example in enumerate(
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
@@ -419,7 +415,7 @@ class BaseTrainer:
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             if self.use_rand_indices:
-                self.all_image_desc = self.all_outlier_descs[:, self.global_rand_indices]
+                self.all_image_desc = self.all_image_desc[:, self.global_rand_indices]
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
             print(
