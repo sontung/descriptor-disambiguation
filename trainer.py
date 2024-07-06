@@ -217,7 +217,7 @@ class BaseTrainer:
             np.random.shuffle(indices)
             indices = indices[:self.feature_dim]
             self.global_rand_indices = indices
-            all_desc = all_desc[:, self.global_rand_indices]
+            # all_desc = all_desc[:, self.global_rand_indices]
 
         self.all_names = all_names
         self.all_image_desc = all_desc
@@ -417,6 +417,8 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
+            if self.global_rand_indices:
+                self.all_image_desc = self.all_outlier_descs[:, self.global_rand_indices]
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
             print(
