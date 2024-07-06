@@ -36,7 +36,9 @@ def compute_pose_error(pose, pose_gt):
 
 
 def combine_descriptors(local_desc, global_desc, lambda_value_, indices):
-    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc[indices]
+    if global_desc.shape[1] != local_desc.shape[1]:
+        global_desc = global_desc[indices]
+    res = lambda_value_ * local_desc + (1 - lambda_value_) * global_desc
     return res
 
 
