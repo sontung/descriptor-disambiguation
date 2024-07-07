@@ -391,15 +391,15 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
-            if self.use_rand_indices:
-                image_descriptor = image_descriptor[self.global_rand_indices]
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
                     image_descriptor.reshape(1, -1), 1
                 )
                 image_descriptor = self.all_image_desc[int(ind)]
-
+            
+            if self.use_rand_indices:
+                image_descriptor = image_descriptor[self.global_rand_indices]
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
             )
@@ -411,11 +411,9 @@ class BaseTrainer:
         gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
         gpu_index_flat.add(self.pid2mean_desc)
         if self.convert_to_db_desc and self.using_global_descriptors:
-            index2 = faiss.IndexFlatL2(self.feature_dim)  # build the index
+            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            if self.use_rand_indices:
-                self.all_image_desc = self.all_image_desc[:, self.global_rand_indices]
             gpu_index_flat_for_image_desc.add(self.all_image_desc)
             print("Converting to DB descriptors")
             print(
