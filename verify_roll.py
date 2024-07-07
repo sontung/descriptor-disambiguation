@@ -1,6 +1,8 @@
 import h5py
 import numpy as np
 import faiss
+from sklearn.decomposition import PCA
+
 from dataset import RobotCarDataset
 
 
@@ -40,6 +42,23 @@ gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
 gpu_index_flat_for_image_desc.add(desc0)
 
 dis, ind1 = gpu_index_flat_for_image_desc.search(desc1, 1)
+
+d = 8704  # data dimension
+cs = 512  # code size (bytes)
+
+# train set
+nt = 10000
+xt = np.random.rand(nt, d).astype('float32')
+
+# dataset to encode (could be same as train)
+n = 20000
+x = np.random.rand(n, d).astype('float32')
+
+pq = faiss.ProductQuantizer(d, cs, 8)
+pq.train(xt)
+
+# encode
+codes = pq.compute_codes(x)
 
 # desc0r = roll_matrix(desc0, 512, norm=True).astype(np.float32)
 # desc1r = roll_matrix(desc1, 512, norm=True).astype(np.float32)
