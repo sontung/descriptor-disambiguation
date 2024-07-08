@@ -77,7 +77,9 @@ class BaseTrainer:
         lambda_val=0.5,
         convert_to_db_desc=False,
         codebook_dtype=np.float16,
+        order="random",
     ):
+        self.order = order
         self.global_rand_indices = None
         self.use_rand_indices = feature_dim != global_feature_dim
         self.feature_dim = feature_dim
@@ -209,11 +211,34 @@ class BaseTrainer:
 
         image2desc = {}
         if self.use_rand_indices:
-            indices = np.arange(self.global_feature_dim)
-            np.random.shuffle(indices)
-            indices = indices[:self.feature_dim]
+            if "random" in self.order:
+                seed = int(self.order.split("-")[-1])
+                np.random.seed(seed)
+                indices = np.arange(self.global_feature_dim)
+                np.random.shuffle(indices)
+                indices = indices[:self.feature_dim]
+            elif self.order == "center":
+                n = self.global_feature_dim
+                m = self.feature_dim
+                assert m <= n
+                middle_index = n // 2
+
+                # Determine the start and end indices
+                start_index = max(middle_index - (m // 2), 0)
+                end_index = min(middle_index + (m // 2) + (m % 2), n)
+
+                # Adjust start_index if end_index exceeds the length of the vector
+                if end_index - start_index < m:
+                    start_index = max(end_index - m, 0)
+                indices = np.arange(start_index, end_index)
+            elif self.order == "first":
+                indices = np.arange(0, self.feature_dim)
+            elif self.order == "last":
+                start_index = max(self.global_feature_dim-self.feature_dim, 0)
+                indices = np.arange(start_index, self.global_feature_dim)
+            else:
+                raise NotImplementedError
             self.global_rand_indices = indices
-            # all_desc = all_desc[:, self.global_rand_indices]
 
         self.all_names = all_names
         self.all_image_desc = all_desc
@@ -434,7 +459,13 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}_{self.global_desc_model_name}_{self.global_feature_dim}_{self.lambda_val}_{self.convert_to_db_desc}.txt",
+                f"output/{self.ds_name}/Aachen_v1_1_eval_"
+                f"{self.local_desc_model_name}_"
+                f"{self.global_desc_model_name}_"
+                f"{self.global_feature_dim}_"
+                f"{self.lambda_val}_"
+                f"{self.convert_to_db_desc}_"
+                f"{self.order}.txt",
                 "w",
             )
         else:
@@ -594,7 +625,8 @@ class RobotCarTrainer(BaseTrainer):
                 f"{self.global_desc_model_name}_"
                 f"{self.global_feature_dim}_"
                 f"{self.lambda_val}_"
-                f"{self.convert_to_db_desc}.txt",
+                f"{self.convert_to_db_desc}_"
+                f"{self.order}.txt",
                 "w",
             )
         else:

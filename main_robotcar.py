@@ -4,13 +4,20 @@ import numpy as np
 
 import dd_utils
 from dataset import RobotCarDataset
-from trainer3 import RobotCarTrainer
+from trainer import RobotCarTrainer
 
 ABLATION_METHODS = [
     ["salad", 8448],
     ["crica", 10752],
     ["eigenplaces", 2048],
     ["mixvpr", 4096],
+]
+
+ABLATION_METHODS_ORDER = [
+    ["salad", 8448, 0.3],
+    ["crica", 10752, 0.3],
+    ["eigenplaces", 2048, 0.5],
+    ["mixvpr", 4096, 0.4],
 ]
 
 
@@ -41,6 +48,37 @@ def run_ablation(ds_dir):
                 using_global_descriptors,
                 lambda_val=lambda_val,
                 convert_to_db_desc=True,
+            )
+            trainer_.evaluate()
+
+
+def run_ablation_order(ds_dir):
+    using_global_descriptors = True
+    train_ds_ = RobotCarDataset(ds_dir=ds_dir)
+    test_ds_ = RobotCarDataset(ds_dir=ds_dir, train=False, evaluate=True)
+
+    local_desc_model = "d2net"
+    for retrieval_model, global_desc_dim, lambda_val in ABLATION_METHODS_ORDER:
+        encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
+            local_desc_model, retrieval_model, global_desc_dim
+        )
+
+        print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
+
+        for order in ["random-0", "random-1", "random-2", "first", "last", "central"]:
+            trainer_ = RobotCarTrainer(
+                train_ds_,
+                test_ds_,
+                512,
+                global_desc_dim,
+                encoder,
+                encoder_global,
+                conf_ns,
+                conf_ns_retrieval,
+                using_global_descriptors,
+                lambda_val=lambda_val,
+                convert_to_db_desc=True,
+                order=order
             )
             trainer_.evaluate()
 
@@ -116,7 +154,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     if args.ablation:
-        run_ablation(args.dataset)
+        run_ablation_order(args.dataset)
     else:
         run_function(
             args.dataset,

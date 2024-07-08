@@ -4,7 +4,7 @@ import dd_utils
 
 from dataset import AachenDataset
 from trainer import BaseTrainer
-from main_robotcar import ABLATION_METHODS
+from main_robotcar import ABLATION_METHODS, ABLATION_METHODS_ORDER
 
 
 def run_ablation(ds_dir):
@@ -35,6 +35,37 @@ def run_ablation(ds_dir):
                 using_global_descriptors,
                 lambda_val=lambda_val,
                 convert_to_db_desc=True,
+            )
+            trainer_.evaluate()
+
+
+def run_ablation_order(ds_dir):
+    using_global_descriptors = True
+    train_ds_ = AachenDataset(ds_dir=ds_dir)
+    test_ds_ = AachenDataset(ds_dir=ds_dir, train=False)
+
+    local_desc_model = "d2net"
+    for retrieval_model, global_desc_dim, lambda_val in ABLATION_METHODS_ORDER:
+        encoder, conf_ns, encoder_global, conf_ns_retrieval = dd_utils.prepare_encoders(
+            local_desc_model, retrieval_model, global_desc_dim
+        )
+
+        print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
+
+        for order in ["random-0", "random-1", "random-2", "first", "last", "central"]:
+            trainer_ = BaseTrainer(
+                train_ds_,
+                test_ds_,
+                512,
+                global_desc_dim,
+                encoder,
+                encoder_global,
+                conf_ns,
+                conf_ns_retrieval,
+                using_global_descriptors,
+                lambda_val=lambda_val,
+                convert_to_db_desc=True,
+                order=order
             )
             trainer_.evaluate()
 
@@ -111,7 +142,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.ablation:
-        run_ablation(args.dataset)
+        run_ablation_order(args.dataset)
     else:
         run_function(
             args.dataset,
