@@ -12,7 +12,7 @@ from sklearn.cluster import DBSCAN
 from tqdm import tqdm
 
 import dd_utils
-from dataset import CambridgeLandmarksDataset
+from dataset import CambridgeLandmarksDataset, RobotCarDataset
 from trainer import retrieve_pid
 
 
@@ -451,5 +451,43 @@ def reduce_map_using_min_cover(train_ds_, vis=False, min_cover=100):
     return chosen_pid
 
 
+def reduce_visible_set(train_ds_, all_desc, all_names):
+    indices, _ = dd_utils.cluster_by_faiss_kmeans(all_desc, 500, True)
+    img2cid = {all_names[i]: indices[i] for i in range(len(indices))}
+
+    pid2images = {}
+    for img in train_ds_.image2points:
+        name = train_ds_.image2name[img]
+        name2 = f"{train_ds_.images_dir}/{name[2:].replace('png', 'jpg')}"
+        cid = img2cid[name2]
+        for pid in train_ds_.image2points[img]:
+            pid2images.setdefault(pid, []).append(cid)
+
+    for pid in pid2images.keys():
+        pid2images[pid] = "-".join(map(str, sorted(set(pid2images[pid]))))
+
+    image2pid = {}
+    for pid in pid2images:
+        image = pid2images[pid]
+        image2pid.setdefault(image, []).append(pid)
+
+    final_desc = np.zeros((len(image2pid), all_desc.shape[1]))
+    count = 0
+    image2count = {}
+    for image in image2pid:
+        cid_list = set(map(int, image.split("-")))
+        mask = [True if ind in cid_list else False for ind in indices]
+        desc = all_desc[mask]
+        desc_m = np.mean(desc, 0)
+        final_desc[count] = desc_m
+        image2count[image] = count
+        count += 1
+
+    for pid in pid2images.keys():
+        pid2images[pid] = image2count[pid2images[pid]]
+    return pid2images, final_desc
+
+
 if __name__ == "__main__":
-    reduce_map_using_min_cover()
+    ds = RobotCarDataset(ds_dir="datasets/robotcar")
+    reduce_visible_set(ds)

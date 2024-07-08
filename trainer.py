@@ -397,7 +397,7 @@ class BaseTrainer:
                     image_descriptor.reshape(1, -1), 1
                 )
                 image_descriptor = self.all_image_desc[int(ind)]
-            
+
             if self.use_rand_indices:
                 image_descriptor = image_descriptor[self.global_rand_indices]
             descriptors = combine_descriptors(
