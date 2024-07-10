@@ -14,10 +14,10 @@ ABLATION_METHODS = [
 ]
 
 ABLATION_METHODS_ORDER = [
-    ["salad", 8448, 0.3],
-    ["crica", 10752, 0.3],
+    ["salad", 8448, 0.5],
+    ["crica", 10752, 0.5],
     ["eigenplaces", 2048, 0.5],
-    ["mixvpr", 4096, 0.4],
+    ["mixvpr", 4096, 0.5],
 ]
 
 
@@ -115,6 +115,7 @@ def run_function(
             using_global_descriptors,
             lambda_val=lambda_val,
             convert_to_db_desc=convert,
+            order="gaussian"
         )
         trainer_.evaluate()
 

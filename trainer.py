@@ -17,6 +17,7 @@ from tqdm import tqdm
 import kornia
 import dd_utils
 from ace_util import read_and_preprocess, project_using_pose
+import sklearn.preprocessing
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -88,7 +89,7 @@ class BaseTrainer:
         self.test_dataset = test_ds
         self.using_global_descriptors = using_global_descriptors
         self.global_feature_dim = global_feature_dim
-
+        print(f"Using {self.order} and lambda={lambda_val}")
         self.name2uv = {}
         self.ds_name = self.dataset.ds_type
         out_dir = Path(f"output/{self.ds_name}")
@@ -242,6 +243,7 @@ class BaseTrainer:
             elif self.order == "gaussian":
                 self.gaussian_transformer = GaussianRandomProjection(n_components=self.feature_dim)
                 all_desc = self.gaussian_transformer.fit_transform(all_desc)
+                all_desc = sklearn.preprocessing.normalize(all_desc)
                 indices = np.arange(0, self.feature_dim)
             else:
                 raise NotImplementedError
@@ -437,6 +439,7 @@ class BaseTrainer:
                 if self.order == "gaussian":
                     image_descriptor = self.gaussian_transformer.transform(image_descriptor.reshape(1, -1)).flatten()
                 image_descriptor = image_descriptor[self.global_rand_indices]
+            image_descriptor = sklearn.preprocessing.normalize(image_descriptor.reshape(1, -1)).flatten()
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
             )
