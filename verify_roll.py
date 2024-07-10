@@ -40,32 +40,19 @@ index2 = faiss.IndexFlat(desc0.shape[1], faiss.METRIC_L2)  # build the index
 res2 = faiss.StandardGpuResources()
 gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
 gpu_index_flat_for_image_desc.add(desc0)
-
 dis, ind1 = gpu_index_flat_for_image_desc.search(desc1, 1)
 
-d = 8704  # data dimension
-cs = 512  # code size (bytes)
-
-# train set
-nt = 10000
-xt = np.random.rand(nt, d).astype('float32')
-
-# dataset to encode (could be same as train)
-n = 20000
-x = np.random.rand(n, d).astype('float32')
-
-pq = faiss.ProductQuantizer(d, cs, 8)
-pq.train(xt)
-
-# encode
-codes = pq.compute_codes(x)
+from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
+transformer = SparseRandomProjection(n_components=512)
+desc0_red = transformer.fit_transform(desc0)
+desc1_red = transformer.transform(desc1)
 
 # desc0r = roll_matrix(desc0, 512, norm=True).astype(np.float32)
 # desc1r = roll_matrix(desc1, 512, norm=True).astype(np.float32)
 index2 = faiss.IndexFlat(512, faiss.METRIC_L2)
 gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-gpu_index_flat_for_image_desc.add(desc0[:,-512:])
-dis, ind2 = gpu_index_flat_for_image_desc.search(desc1[:,-512:], 1)
+gpu_index_flat_for_image_desc.add(desc0_red)
+dis, ind2 = gpu_index_flat_for_image_desc.search(desc1_red, 1)
 diff=ind2-ind1
 print(np.sum(diff==0)/diff.shape[0])
 
