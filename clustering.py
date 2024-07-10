@@ -4,7 +4,7 @@ import sys
 import h5py
 import numpy as np
 import faiss
-import open3d as o3d
+# import open3d as o3d
 import pickle
 from pykdtree.kdtree import KDTree
 from sklearn.neighbors import BallTree
