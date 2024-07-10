@@ -46,18 +46,32 @@ def get_index(xb):
 
 
 def main():
-
-    afile = open("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2ind_debug.pkl", "rb")
+    afile = open(
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2ind_debug.pkl",
+        "rb",
+    )
     pid2ind = pickle.load(afile)
     afile.close()
     desc_global = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_desc_debug.npy"
     desc_local = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_desc_debug_False_True.npy"
 
-    features_h5 = h5py.File("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_test.h5", "r")
-    global_features_h5 = h5py.File("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/salad_8448_8448_desc_test.h5", "r")
+    features_h5 = h5py.File(
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_test.h5",
+        "r",
+    )
+    global_features_h5 = h5py.File(
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/salad_8448_8448_desc_test.h5",
+        "r",
+    )
 
-    pgt_matches = h5py.File("/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/matches2d_3d.h5", "r")
-    pred_matches = h5py.File("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/matches2d3dTrue_True.npy", "r")
+    pgt_matches = h5py.File(
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/matches2d_3d.h5",
+        "r",
+    )
+    pred_matches = h5py.File(
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/matches2d3dTrue_True.npy",
+        "r",
+    )
     ind2pid = {ind: pid for pid, ind in pid2ind.items()}
     test_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=True)
     train_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=True, evaluate=False)
@@ -75,8 +89,13 @@ def main():
 
         img_id = "/".join(name.split("/")[-2:])
         local_desc_curr = np.array(features_h5[img_id]["descriptors"]).T
-        global_desc_curr = np.array(global_features_h5[img_id]["global_descriptor"]).reshape(-1, 1)
-        final_desc_curr = 0.3 * local_desc_curr + (1 - 0.3) * global_desc_curr[:local_desc_curr.shape[0]]
+        global_desc_curr = np.array(
+            global_features_h5[img_id]["global_descriptor"]
+        ).reshape(-1, 1)
+        final_desc_curr = (
+            0.3 * local_desc_curr
+            + (1 - 0.3) * global_desc_curr[: local_desc_curr.shape[0]]
+        )
 
         data = pgt_matches[image_name_wo_dir]
         data2 = pred_matches[image_name_wo_dir]
@@ -101,9 +120,12 @@ def main():
         indices_pgt_2 = [pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask]][mask2]]
         indices_pred_2 = [pid2ind[pid] for pid in pid_list_pred[mask2]]
         dis = np.mean(
-            np.abs(train_ds_.xyz_arr[pid_list_pred[mask2]]-
-                   train_ds_.xyz_arr[pid_list_pgt[ind_sub1[mask]][mask2]]),
-            1)
+            np.abs(
+                train_ds_.xyz_arr[pid_list_pred[mask2]]
+                - train_ds_.xyz_arr[pid_list_pgt[ind_sub1[mask]][mask2]]
+            ),
+            1,
+        )
         all_dis.extend(dis)
 
         img = cv2.imread(name)

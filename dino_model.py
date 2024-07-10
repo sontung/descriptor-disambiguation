@@ -6,7 +6,7 @@ import sys
 
 class DinoModel:
     def __init__(self):
-        self.model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14_reg')
+        self.model = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14_reg")
         self.model.eval()
         self.model.cuda()
         self.transform = torchvision.transforms.Compose(

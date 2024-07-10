@@ -15,14 +15,16 @@ def roll_matrix(all_desc, nd, norm=False):
     for i in range(0, all_desc.shape[1], nd):
         start = i
         end = min(i + nd, all_desc.shape[1])
-        all_desc_rolled[:, :end - start] += all_desc[:, start:end]
+        all_desc_rolled[:, : end - start] += all_desc[:, start:end]
         count += 1
     if norm:
         all_desc_rolled /= count
     return all_desc_rolled
 
 
-desc0 = np.load("/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/image_desc_salad_8448.npy")
+desc0 = np.load(
+    "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/image_desc_salad_8448.npy"
+)
 print(desc0.shape)
 desc1_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/salad_8448_8448_desc_test.h5"
 test_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=True)
@@ -43,6 +45,7 @@ gpu_index_flat_for_image_desc.add(desc0)
 dis, ind1 = gpu_index_flat_for_image_desc.search(desc1, 1)
 
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
+
 transformer = SparseRandomProjection(n_components=512)
 desc0_red = transformer.fit_transform(desc0)
 desc1_red = transformer.transform(desc1)
@@ -53,8 +56,8 @@ index2 = faiss.IndexFlat(512, faiss.METRIC_L2)
 gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
 gpu_index_flat_for_image_desc.add(desc0_red)
 dis, ind2 = gpu_index_flat_for_image_desc.search(desc1_red, 1)
-diff=ind2-ind1
-print(np.sum(diff==0)/diff.shape[0])
+diff = ind2 - ind1
+print(np.sum(diff == 0) / diff.shape[0])
 
 var_val = np.var(desc0, 0)
 indices = np.argsort(var_val)[-512:]
@@ -65,8 +68,7 @@ for _ in range(10):
     indices = indices[:512]
     index2 = faiss.IndexFlat(len(indices), faiss.METRIC_L2)
     gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-    gpu_index_flat_for_image_desc.add(desc0[:,indices])
-    dis, ind2 = gpu_index_flat_for_image_desc.search(desc1[:,indices], 1)
-    diff=ind2-ind1
-    print(np.sum(diff==0)/diff.shape[0])
-
+    gpu_index_flat_for_image_desc.add(desc0[:, indices])
+    dis, ind2 = gpu_index_flat_for_image_desc.search(desc1[:, indices], 1)
+    diff = ind2 - ind1
+    print(np.sum(diff == 0) / diff.shape[0])

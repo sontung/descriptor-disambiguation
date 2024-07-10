@@ -92,7 +92,9 @@ def db_feature_detection(feature_conf, images, outputs):
     return features
 
 
-def compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file, matches_2d_3d_path):
+def compute_pose(
+    train_ds_, test_ds_, features_h5, matches_h5, result_file, matches_2d_3d_path
+):
     file_dump = h5py.File(matches_2d_3d_path, "a", libver="latest")
 
     failed = 0
@@ -183,7 +185,7 @@ def main_sub(
     global_features,
     num_loc,
     sift_sfm,
-    matches_2d_3d_path
+    matches_2d_3d_path,
 ):
     # features = db_feature_detection(feature_conf, images, outputs)
 
@@ -212,7 +214,9 @@ def main_sub(
         "w",
     )
 
-    compute_pose(train_ds_, test_ds_, features_h5, matches_h5, result_file, matches_2d_3d_path)
+    compute_pose(
+        train_ds_, test_ds_, features_h5, matches_h5, result_file, matches_2d_3d_path
+    )
 
     matches_h5.close()
     features_h5.close()
@@ -243,7 +247,7 @@ def run(args):
     train_ds_ = RobotCarDataset(ds_dir=str(dataset))
     test_ds_ = RobotCarDataset(ds_dir=str(dataset), train=False, evaluate=True)
     global_features = process_db_global_desc(images, outputs)
-    matches_2d_3d_path = outputs/"matches2d_3d.h5"
+    matches_2d_3d_path = outputs / "matches2d_3d.h5"
     main_sub(
         train_ds_,
         test_ds_,
@@ -254,7 +258,7 @@ def run(args):
         global_features,
         args.num_loc,
         sift_sfm,
-        matches_2d_3d_path
+        matches_2d_3d_path,
     )
 
 

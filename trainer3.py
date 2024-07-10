@@ -209,11 +209,15 @@ class BaseTrainer:
             with open(file_name2, "wb") as handle:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        pid2cid, final_desc = clustering.reduce_visible_set(self.dataset, all_desc, all_names)
+        pid2cid, final_desc = clustering.reduce_visible_set(
+            self.dataset, all_desc, all_names
+        )
         return pid2cid, final_desc
 
     def collect_image_descriptors_for_test_set(self):
-        global_descriptors_path = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_test.h5"
+        global_descriptors_path = (
+            f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_test.h5"
+        )
         if not os.path.isfile(global_descriptors_path):
             all_desc = np.zeros((len(self.test_dataset), self.global_feature_dim))
             all_names = []
@@ -318,7 +322,9 @@ class BaseTrainer:
             selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
-                cid_list = np.array([self.pid2cid[pid] for pid in selected_pid])
+                cid_list = np.array(
+                    [self.pid2cid[pid] for pid in selected_pid]
+                ).reshape(-1, 1)
                 selected_descriptors += cid_list
             for idx, pid in enumerate(selected_pid):
                 if pid not in pid2ind:
@@ -677,7 +683,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        assert os.path.isfile(self.global_descriptor_test_path), self.global_descriptor_test_path
+        assert os.path.isfile(
+            self.global_descriptor_test_path
+        ), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
@@ -727,7 +735,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        assert os.path.isfile(self.global_descriptor_test_path), self.global_descriptor_test_path
+        assert os.path.isfile(
+            self.global_descriptor_test_path
+        ), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")

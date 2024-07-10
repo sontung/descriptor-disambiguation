@@ -29,7 +29,7 @@ def compute_reproj_err(gt_pose, xyz, uv):
     m3 = uv_arr_pred[:, 0] < 1920
     m4 = uv_arr_pred[:, 1] < 1080
     oob = np.all([m1, m2, m3, m4], 0)
-    return np.mean(np.abs(uv-uv_arr_pred), 1), oob, uv_arr_pred
+    return np.mean(np.abs(uv - uv_arr_pred), 1), oob, uv_arr_pred
 
 
 def make_pic(good_result, bad_result, res_name, rgb_arr):

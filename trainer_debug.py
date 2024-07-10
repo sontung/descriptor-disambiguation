@@ -191,7 +191,7 @@ class BaseTrainer:
         self.all_image_desc = all_desc
         self.all_names = all_names
         for idx, name in enumerate(all_names):
-            image2desc[name] = all_desc[idx, :self.feature_dim]
+            image2desc[name] = all_desc[idx, : self.feature_dim]
         return image2desc
 
     def produce_image_descriptor(self, name):
@@ -617,7 +617,11 @@ class RobotCarTrainer(BaseTrainer):
         pgt_matches = h5py.File(f"outputs/{self.ds_name}/matches2d_3d.h5", "r")
         ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
         mean_acc = []
-        file_dump = h5py.File(f"output/{self.ds_name}/matches2d3d{self.using_global_descriptors}_{self.convert_to_db_desc}.npy", "a", libver="latest")
+        file_dump = h5py.File(
+            f"output/{self.ds_name}/matches2d3d{self.using_global_descriptors}_{self.convert_to_db_desc}.npy",
+            "a",
+            libver="latest",
+        )
 
         result_file = open(
             f"output/{self.ds_name}/RobotCar_eval.txt",

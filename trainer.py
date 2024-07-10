@@ -216,7 +216,7 @@ class BaseTrainer:
                 np.random.seed(seed)
                 indices = np.arange(self.global_feature_dim)
                 np.random.shuffle(indices)
-                indices = indices[:self.feature_dim]
+                indices = indices[: self.feature_dim]
             elif self.order == "center":
                 n = self.global_feature_dim
                 m = self.feature_dim
@@ -234,7 +234,7 @@ class BaseTrainer:
             elif self.order == "first":
                 indices = np.arange(0, self.feature_dim)
             elif self.order == "last":
-                start_index = max(self.global_feature_dim-self.feature_dim, 0)
+                start_index = max(self.global_feature_dim - self.feature_dim, 0)
                 indices = np.arange(start_index, self.global_feature_dim)
             else:
                 raise NotImplementedError
@@ -248,7 +248,9 @@ class BaseTrainer:
         return image2desc
 
     def collect_image_descriptors_for_test_set(self):
-        global_descriptors_path = f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_test.h5"
+        global_descriptors_path = (
+            f"output/{self.ds_name}/image_desc_{self.global_desc_model_name}_test.h5"
+        )
         if not os.path.isfile(global_descriptors_path):
             all_desc = np.zeros((len(self.test_dataset), self.global_feature_dim))
             all_names = []
@@ -768,7 +770,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        assert os.path.isfile(self.global_descriptor_test_path), self.global_descriptor_test_path
+        assert os.path.isfile(
+            self.global_descriptor_test_path
+        ), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
@@ -818,7 +822,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        assert os.path.isfile(self.global_descriptor_test_path), self.global_descriptor_test_path
+        assert os.path.isfile(
+            self.global_descriptor_test_path
+        ), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
