@@ -12,6 +12,7 @@ import numpy as np
 import poselib
 import torch
 from pykdtree.kdtree import KDTree
+from sklearn.random_projection import GaussianRandomProjection
 from tqdm import tqdm
 import kornia
 import dd_utils
@@ -124,7 +125,7 @@ class BaseTrainer:
         )
         self.convert_to_db_desc = convert_to_db_desc
         self.all_names = []
-        self.all_image_desc = None
+        self.all_image_desc_for_db_conversion = None
 
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
@@ -209,6 +210,8 @@ class BaseTrainer:
             with open(file_name2, "wb") as handle:
                 pickle.dump(all_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        self.all_names = all_names
+        self.all_image_desc_for_db_conversion = np.copy(all_desc)
         image2desc = {}
         if self.use_rand_indices:
             if "random" in self.order:
@@ -236,12 +239,14 @@ class BaseTrainer:
             elif self.order == "last":
                 start_index = max(self.global_feature_dim - self.feature_dim, 0)
                 indices = np.arange(start_index, self.global_feature_dim)
+            elif self.order == "gaussian":
+                self.gaussian_transformer = GaussianRandomProjection(n_components=self.feature_dim)
+                all_desc = self.gaussian_transformer.fit_transform(all_desc)
+                indices = np.arange(0, self.feature_dim)
             else:
                 raise NotImplementedError
             self.global_rand_indices = indices
 
-        self.all_names = all_names
-        self.all_image_desc = all_desc
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx]
 
@@ -414,6 +419,9 @@ class BaseTrainer:
     def process_descriptor(
         self, name, features_h5, global_features_h5, gpu_index_flat_for_image_desc=None
     ):
+        """
+        process query descriptors only
+        """
         keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
 
         if self.using_global_descriptors:
@@ -423,9 +431,11 @@ class BaseTrainer:
                 _, ind = gpu_index_flat_for_image_desc.search(
                     image_descriptor.reshape(1, -1), 1
                 )
-                image_descriptor = self.all_image_desc[int(ind)]
+                image_descriptor = self.all_image_desc_for_db_conversion[int(ind)]
 
             if self.use_rand_indices:
+                if self.order == "gaussian":
+                    image_descriptor = self.gaussian_transformer.transform(image_descriptor.reshape(1, -1)).flatten()
                 image_descriptor = image_descriptor[self.global_rand_indices]
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
@@ -441,10 +451,10 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc)
+            gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion)
             print("Converting to DB descriptors")
             print(
-                f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc))}"
+                f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc_for_db_conversion))}"
             )
         else:
             gpu_index_flat_for_image_desc = None

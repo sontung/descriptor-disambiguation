@@ -55,7 +55,7 @@ def run_function(
             using_global_descriptors,
             lambda_val=0.5,
             convert_to_db_desc=True,
-            order="random-0",
+            order="gaussian",
         )
 
         err = trainer_.evaluate()
