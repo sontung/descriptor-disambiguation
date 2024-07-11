@@ -20,6 +20,8 @@ ABLATION_METHODS_ORDER = [
     ["mixvpr", 4096, 0.5],
 ]
 
+ORDERS = ["gaussian", "random-0", "first", "last", "central"]
+
 
 def run_ablation(ds_dir):
     using_global_descriptors = True
@@ -65,7 +67,7 @@ def run_ablation_order(ds_dir):
 
         print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
 
-        for order in ["random-0", "first", "last", "central"]:
+        for order in ORDERS:
             for lambda_val in np.linspace(0, 1, 11):
                 if lambda_val == 0.0:
                     continue

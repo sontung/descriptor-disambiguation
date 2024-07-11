@@ -4,7 +4,7 @@ import dd_utils
 
 from dataset import AachenDataset
 from trainer import BaseTrainer
-from main_robotcar import ABLATION_METHODS, ABLATION_METHODS_ORDER
+from main_robotcar import ABLATION_METHODS, ABLATION_METHODS_ORDER, ORDERS
 
 
 def run_ablation(ds_dir):
@@ -53,7 +53,7 @@ def run_ablation_order(ds_dir):
 
         print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
 
-        for order in ["random-0", "first", "last", "central", "gaussian"]:
+        for order in ORDERS:
             for lambda_val in np.linspace(0, 1, 11):
                 if lambda_val == 0.0:
                     continue
@@ -107,6 +107,7 @@ def run_function(
             using_global_descriptors,
             lambda_val=lambda_val,
             convert_to_db_desc=convert,
+            order="first"
         )
         trainer_.evaluate()
 

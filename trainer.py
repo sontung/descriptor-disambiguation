@@ -397,14 +397,7 @@ class BaseTrainer:
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-
-            pid_list = example[3]
-            uv = example[-1]
-            selected_pid2, mask2, ind2 = retrieve_pid(pid_list, uv, keypoints)
-
             selected_pid, mask, ind = load_selected_features_for_img(example[1], sfm_to_local_h5)
-            assert np.sum(np.abs(selected_pid-selected_pid2)) == 0
-            assert np.sum(np.abs(mask.astype(int)-mask2.astype(int))) == 0
 
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
@@ -488,9 +481,7 @@ class BaseTrainer:
                         image_descriptor.reshape(1, -1)
                     ).flatten()
                 image_descriptor = image_descriptor[self.global_rand_indices]
-            # image_descriptor = sklearn.preprocessing.normalize(
-            #     image_descriptor.reshape(1, -1)
-            # ).flatten()
+
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
             )
