@@ -16,8 +16,7 @@ from sklearn.random_projection import GaussianRandomProjection
 from tqdm import tqdm
 import kornia
 import dd_utils
-from ace_util import read_and_preprocess, project_using_pose
-import sklearn.preprocessing
+from ace_util import read_and_preprocess
 
 
 def retrieve_pid(pid_list, uv_gt, keypoints):
@@ -499,6 +498,8 @@ class BaseTrainer:
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion)
             print("Converting to DB descriptors")
+            print(self.all_image_desc_for_db_conversion.shape,
+                  self.all_image_desc_for_db_conversion.dtype)
             print(
                 f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc_for_db_conversion))}"
             )
