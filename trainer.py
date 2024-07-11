@@ -63,6 +63,16 @@ def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
     print(f"{image_id} {qvec} {tvec}", file=result_file)
 
 
+def load_selected_features_for_img(name, fd):
+    img_id = "/".join(name.split("/")[-2:])
+    grp = fd[img_id]
+    dict_ = {k: np.array(v) for k, v in grp.items()}
+    selected_pid = dict_["selected_pid"]
+    mask = dict_["mask"]
+    ind = dict_["ind"]
+    return selected_pid, mask, ind
+
+
 class BaseTrainer:
     def __init__(
         self,
@@ -167,6 +177,37 @@ class BaseTrainer:
         features_h5 = h5py.File(features_path, "r")
         return features_h5
 
+    def load_selected_local_features(self):
+        def helper(ds_):
+            for example in tqdm(ds_, desc="Selecting train features"):
+                name = example[1]
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+                pid_list = example[3]
+                uv = example[-1]
+                selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+                img_id = "/".join(name.split("/")[-2:])
+                dict_ = {
+                    "selected_pid": selected_pid,
+                    "mask": mask,
+                    "ind": ind,
+                }
+                assert img_id not in features_h5
+                grp = features_h5.create_group(img_id)
+                for k, v in dict_.items():
+                    grp.create_dataset(k, data=v)
+
+        features_path = (
+            f"output/{self.ds_name}/{self.local_desc_model_name}_selected_features.h5"
+        )
+
+        if not os.path.isfile(features_path):
+            features_h5 = h5py.File(str(features_path), "a", libver="latest")
+            with torch.no_grad():
+                helper(self.dataset)
+            features_h5.close()
+        features_h5 = h5py.File(features_path, "r")
+        return features_h5
+
     def detect_local_features_on_test_set(self):
         self.test_features_path = (
             f"output/{self.ds_name}/{self.local_desc_model_name}_features_test.h5"
@@ -250,7 +291,7 @@ class BaseTrainer:
                 raise NotImplementedError
             self.global_rand_indices = indices
             all_desc = all_desc[:, self.global_rand_indices]
-            
+
         all_desc = sklearn.preprocessing.normalize(all_desc)
 
         for idx, name in enumerate(all_names):
@@ -351,7 +392,7 @@ class BaseTrainer:
         dd_utils.write_to_h5_file(fd, name, dict_)
 
     def collect_descriptors_loop(
-        self, features_h5, pid2mean_desc, pid2count, using_global_desc
+        self, features_h5, sfm_to_local_h5, pid2mean_desc, pid2count, using_global_desc
     ):
         pid2ind = {}
         index_for_array = -1
@@ -362,8 +403,12 @@ class BaseTrainer:
 
             pid_list = example[3]
             uv = example[-1]
+            selected_pid2, mask2, ind2 = retrieve_pid(pid_list, uv, keypoints)
 
-            selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
+            selected_pid, mask, ind = load_selected_features_for_img(example[1], sfm_to_local_h5)
+            assert np.sum(np.abs(selected_pid-selected_pid2)) == 0
+            assert np.sum(np.abs(mask-mask2)) == 0
+
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
                 image_descriptor = self.image2desc[example[1]]
@@ -397,7 +442,8 @@ class BaseTrainer:
 
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
-
+        self.detect_local_features_on_test_set()
+        sfm_to_local_h5 = self.load_selected_local_features()
         pid2mean_desc = np.zeros(
             (len(self.dataset.recon_points), self.feature_dim),
             self.codebook_dtype,
@@ -405,7 +451,7 @@ class BaseTrainer:
         pid2count = np.zeros(len(self.dataset.recon_points))
 
         pid2mean_desc, pid2ind = self.collect_descriptors_loop(
-            features_h5, pid2mean_desc, pid2count, self.using_global_descriptors
+            features_h5, sfm_to_local_h5, pid2mean_desc, pid2count, self.using_global_descriptors
         )
         print(pid2mean_desc.shape)
 
@@ -419,7 +465,7 @@ class BaseTrainer:
             pid2mean_desc,
         )
         features_h5.close()
-
+        sfm_to_local_h5.close()
         return pid2mean_desc
 
     def process_descriptor(
@@ -477,7 +523,6 @@ class BaseTrainer:
         :return:
         """
         self.ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
-        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         if self.using_global_descriptors:
@@ -634,7 +679,6 @@ class RobotCarTrainer(BaseTrainer):
         return pid2mean_desc
 
     def evaluate(self):
-        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         assert os.path.isfile(self.global_descriptor_test_path)
@@ -686,7 +730,6 @@ class CMUTrainer(BaseTrainer):
         write to pose file as name.jpg qw qx qy qz tx ty tz
         :return:
         """
-        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         global_descriptors_path = (
@@ -788,7 +831,6 @@ class CMUTrainer(BaseTrainer):
 class CambridgeLandmarksTrainer(BaseTrainer):
     def evaluate(self, return_name2err=False):
         self.ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
-        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         assert os.path.isfile(
