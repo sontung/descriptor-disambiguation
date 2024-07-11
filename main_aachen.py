@@ -35,7 +35,7 @@ def run_ablation(ds_dir):
                 using_global_descriptors,
                 lambda_val=lambda_val,
                 convert_to_db_desc=True,
-                order="gaussian"
+                order="gaussian",
             )
             trainer_.evaluate()
 

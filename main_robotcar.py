@@ -118,7 +118,7 @@ def run_function(
             using_global_descriptors,
             lambda_val=lambda_val,
             convert_to_db_desc=convert,
-            order="gaussian"
+            order="gaussian",
         )
         trainer_.evaluate()
 

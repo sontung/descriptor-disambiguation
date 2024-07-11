@@ -241,13 +241,17 @@ class BaseTrainer:
                 start_index = max(self.global_feature_dim - self.feature_dim, 0)
                 indices = np.arange(start_index, self.global_feature_dim)
             elif self.order == "gaussian":
-                self.gaussian_transformer = GaussianRandomProjection(n_components=self.feature_dim)
+                self.gaussian_transformer = GaussianRandomProjection(
+                    n_components=self.feature_dim
+                )
                 all_desc = self.gaussian_transformer.fit_transform(all_desc)
-                all_desc = sklearn.preprocessing.normalize(all_desc)
                 indices = np.arange(0, self.feature_dim)
             else:
                 raise NotImplementedError
             self.global_rand_indices = indices
+            all_desc = all_desc[:, self.global_rand_indices]
+            
+        all_desc = sklearn.preprocessing.normalize(all_desc)
 
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx]
@@ -437,9 +441,13 @@ class BaseTrainer:
 
             if self.use_rand_indices:
                 if self.order == "gaussian":
-                    image_descriptor = self.gaussian_transformer.transform(image_descriptor.reshape(1, -1)).flatten()
+                    image_descriptor = self.gaussian_transformer.transform(
+                        image_descriptor.reshape(1, -1)
+                    ).flatten()
                 image_descriptor = image_descriptor[self.global_rand_indices]
-            image_descriptor = sklearn.preprocessing.normalize(image_descriptor.reshape(1, -1)).flatten()
+            image_descriptor = sklearn.preprocessing.normalize(
+                image_descriptor.reshape(1, -1)
+            ).flatten()
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
             )
