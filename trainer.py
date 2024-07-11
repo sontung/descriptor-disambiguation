@@ -177,11 +177,11 @@ class BaseTrainer:
         features_h5 = h5py.File(features_path, "r")
         return features_h5
 
-    def load_selected_local_features(self):
+    def load_selected_local_features(self, all_features_h5):
         def helper(ds_):
             for example in tqdm(ds_, desc="Selecting train features"):
                 name = example[1]
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, all_features_h5)
                 pid_list = example[3]
                 uv = example[-1]
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
@@ -443,7 +443,7 @@ class BaseTrainer:
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
         self.detect_local_features_on_test_set()
-        sfm_to_local_h5 = self.load_selected_local_features()
+        sfm_to_local_h5 = self.load_selected_local_features(features_h5)
         pid2mean_desc = np.zeros(
             (len(self.dataset.recon_points), self.feature_dim),
             self.codebook_dtype,
