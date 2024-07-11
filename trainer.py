@@ -254,6 +254,7 @@ class BaseTrainer:
 
         self.all_names = all_names
         self.all_image_desc_for_db_conversion = np.copy(all_desc)
+        print(f"Processes image descriptors of shape {all_desc.shape}")
         image2desc = {}
         if self.use_rand_indices:
             if "random" in self.order:
