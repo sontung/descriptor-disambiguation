@@ -407,7 +407,7 @@ class BaseTrainer:
 
             selected_pid, mask, ind = load_selected_features_for_img(example[1], sfm_to_local_h5)
             assert np.sum(np.abs(selected_pid-selected_pid2)) == 0
-            assert np.sum(np.abs(mask-mask2)) == 0
+            assert np.sum(np.abs(mask.astype(int)-mask2.astype(int))) == 0
 
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
