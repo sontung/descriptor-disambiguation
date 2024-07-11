@@ -290,9 +290,6 @@ class BaseTrainer:
             else:
                 raise NotImplementedError
             self.global_rand_indices = indices
-            all_desc = all_desc[:, self.global_rand_indices]
-
-        all_desc = sklearn.preprocessing.normalize(all_desc)
 
         for idx, name in enumerate(all_names):
             image2desc[name] = all_desc[idx]
@@ -491,9 +488,9 @@ class BaseTrainer:
                         image_descriptor.reshape(1, -1)
                     ).flatten()
                 image_descriptor = image_descriptor[self.global_rand_indices]
-            image_descriptor = sklearn.preprocessing.normalize(
-                image_descriptor.reshape(1, -1)
-            ).flatten()
+            # image_descriptor = sklearn.preprocessing.normalize(
+            #     image_descriptor.reshape(1, -1)
+            # ).flatten()
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
             )
