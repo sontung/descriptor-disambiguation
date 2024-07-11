@@ -54,8 +54,8 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=False,
-            order="gaussian",
+            convert_to_db_desc=True,
+            order="first",
         )
 
         err = trainer_.evaluate()

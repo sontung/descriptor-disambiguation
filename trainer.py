@@ -41,7 +41,7 @@ def combine_descriptors(local_desc, global_desc, lambda_value_):
     return res
 
 
-def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
+def write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file):
     camera = example[6]
     camera_dict = {
         "model": camera.model.name,
@@ -58,7 +58,6 @@ def write_pose_to_file(example, uv_arr, xyz_pred, result_file):
     qvec = " ".join(map(str, pose.q))
     tvec = " ".join(map(str, pose.t))
 
-    image_id = "/".join(example[2].split("/")[1:])
     print(f"{image_id} {qvec} {tvec}", file=result_file)
 
 
@@ -480,7 +479,8 @@ class BaseTrainer:
                     image_descriptor = self.gaussian_transformer.transform(
                         image_descriptor.reshape(1, -1)
                     ).flatten()
-                image_descriptor = image_descriptor[self.global_rand_indices]
+                else:
+                    image_descriptor = image_descriptor[self.global_rand_indices]
 
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
@@ -549,8 +549,8 @@ class BaseTrainer:
                     descriptors,
                     gpu_index_flat,
                 )
-
-                write_pose_to_file(example, uv_arr, xyz_pred, result_file)
+                image_id = example[2].split("/")[-1]
+                write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
 
         features_h5.close()
         result_file.close()
@@ -704,7 +704,8 @@ class RobotCarTrainer(BaseTrainer):
                     descriptors,
                     gpu_index_flat,
                 )
-                write_pose_to_file(example, uv_arr, xyz_pred, result_file)
+                image_id = "/".join(example[2].split("/")[1:])
+                write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
 
         result_file.close()
         features_h5.close()
