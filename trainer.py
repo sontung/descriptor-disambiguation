@@ -89,7 +89,7 @@ class BaseTrainer:
         lambda_val=0.5,
         convert_to_db_desc=False,
         codebook_dtype=np.float16,
-        order="gaussian",
+        order="random-0",
     ):
         self.order = order
         self.global_rand_indices = None
