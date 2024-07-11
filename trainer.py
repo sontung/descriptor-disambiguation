@@ -142,6 +142,7 @@ class BaseTrainer:
             self.image2desc = {}
 
         self.global_descriptor_test_path = self.collect_image_descriptors_for_test_set()
+        self.detect_local_features_on_test_set()
 
         self.xyz_arr = None
         self.map_reduction = False
@@ -431,7 +432,6 @@ class BaseTrainer:
 
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
-        self.detect_local_features_on_test_set()
         sfm_to_local_h5 = self.load_selected_local_features(features_h5)
         pid2mean_desc = np.zeros(
             (len(self.dataset.recon_points), self.feature_dim),
@@ -874,7 +874,6 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         return median_tErr, median_rErr
 
     def process(self):
-        self.detect_local_features_on_test_set()
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         assert os.path.isfile(
