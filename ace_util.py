@@ -1,33 +1,11 @@
-# Copyright © Niantic, Inc. 2022.
-import json
 import random
 from distutils.util import strtobool
 
 import PIL
 import cv2
 import numpy as np
-import poselib
 import torch
-from scipy.spatial.transform import Rotation
 from tqdm import tqdm
-
-
-def get_pixel_grid(subsampling_factor):
-    """
-    Generate target pixel positions according to a subsampling factor, assuming prediction at center pixel.
-    """
-    pix_range = torch.arange(np.ceil(5000 / subsampling_factor), dtype=torch.float32)
-    yy, xx = torch.meshgrid(pix_range, pix_range, indexing="ij")
-    return subsampling_factor * (torch.stack([xx, yy]) + 0.5)
-
-
-def to_homogeneous(input_tensor, dim=1):
-    """
-    Converts tensor to homogeneous coordinates by adding ones to the specified dimension
-    """
-    ones = torch.ones_like(input_tensor.select(dim, 0).unsqueeze(dim))
-    output = torch.cat([input_tensor, ones], dim=dim)
-    return output
 
 
 def read_nvm_file(file_name):
@@ -75,112 +53,6 @@ def read_nvm_file(file_name):
             image2uvs.setdefault(image_id, []).append([u, v])
 
     return xyz_arr, image2points, image2name, image2pose, image2info, image2uvs, rgb_arr
-
-
-def return_pose_mat(pose_q, pose_t):
-    pose_q = np.array([pose_q[1], pose_q[2], pose_q[3], pose_q[0]])
-    pose_R = Rotation.from_quat(pose_q).as_matrix()
-
-    pose_4x4 = np.identity(4)
-    pose_4x4[0:3, 0:3] = pose_R
-    pose_4x4[0:3, 3] = pose_t
-
-    # convert world->cam to cam->world for evaluation
-    pose_4x4_inv = np.linalg.inv(pose_4x4)
-    return pose_4x4_inv
-
-
-def read_reconstruction_mapillary(a_file):
-    f = open(a_file, "r")
-    data = json.load(f)
-    f.close()
-    print(len(data))
-    return
-
-
-def localize_pose_lib(pairs, f, c1, c2, max_error=16.0):
-    """
-    using pose lib to compute (usually best)
-    """
-    camera = {
-        "model": "SIMPLE_PINHOLE",
-        "height": int(c1 * 2),
-        "width": int(c2 * 2),
-        "params": [f, c1, c2],
-    }
-    object_points = []
-    image_points = []
-    for xy, xyz in pairs:
-        xyz = np.array(xyz).reshape((3, 1))
-        xy = np.array(xy)
-        xy = xy.reshape((2, 1)).astype(np.float64)
-        image_points.append(xy)
-        object_points.append(xyz)
-    pose, info = poselib.estimate_absolute_pose(
-        image_points, object_points, camera, {"max_reproj_error": max_error}, {}
-    )
-    return pose, info
-
-
-def localize_pose_lib_light(pairs, f, c1, c2, max_error=16.0):
-    """
-    using pose lib to compute (usually best)
-    """
-    camera = {
-        "model": "SIMPLE_PINHOLE",
-        "height": int(c1 * 2),
-        "width": int(c2 * 2),
-        "params": [f, c1, c2],
-    }
-    object_points = []
-    image_points = []
-    for xy, xyz in pairs:
-        xyz = np.array(xyz).reshape((3, 1))
-        xy = np.array(xy)
-        xy = xy.reshape((2, 1)).astype(np.float64)
-        image_points.append(xy)
-        object_points.append(xyz)
-    pose, info = poselib.estimate_absolute_pose(
-        image_points,
-        object_points,
-        camera,
-        {"max_reproj_error": max_error, "max_iterations": 2000},
-        {},
-    )
-    return pose, info
-
-
-def find_oob(example, uv):
-    w, h = example[1].shape[:2]
-
-    oob_mask1 = np.bitwise_and(0 <= uv[:, 0], uv[:, 0] < h)
-    oob_mask2 = np.bitwise_and(0 <= uv[:, 1], uv[:, 1] < w)
-    oob_mask = np.bitwise_and(oob_mask1, oob_mask2)
-    return oob_mask
-
-
-def normalize(a, b, arr, using_pt=False):
-    if using_pt:
-        min_val = torch.min(arr)
-        max_val = torch.max(arr)
-    else:
-        min_val = np.min(arr)
-        max_val = np.max(arr)
-    arr = (b - a) * (arr - min_val) / (max_val - min_val) + a
-    return arr
-
-
-def return_heat_map(scene_heatmap2):
-    scene_heatmap2 = normalize(1, 0, scene_heatmap2) * 255
-    scene_heatmap2 = cv2.applyColorMap(
-        scene_heatmap2.astype(np.uint8), cv2.COLORMAP_JET
-    )
-    return scene_heatmap2
-
-
-def normalize_shape(tensor_in):
-    """Bring tensor from shape BxCxHxW to NxC"""
-    return tensor_in.transpose(0, 1).flatten(1).transpose(0, 1)
 
 
 def read_image_by_hloc(path, grayscale=False):
@@ -309,16 +181,3 @@ def project_using_pose(gt_pose_inv_B44, intrinsics_B33, xyz):
     uv = uv[0:2] / uv[2]
     uv = uv.permute([1, 0]).cpu().numpy()
     return uv
-
-
-def project_using_pose2(example, xyzt):
-    gt_inv_pose_34 = example[4][:3]
-    cam_coords = torch.mm(gt_inv_pose_34, xyzt)
-    uv = torch.mm(example[6], cam_coords)
-    uv[2].clamp_(min=0.1)  # avoid division by zero
-    uv = uv[0:2] / uv[2]
-    uv = uv.permute([1, 0]).cpu().numpy()
-    oob_mask = find_oob(example, uv)
-    if np.sum(oob_mask) == 0:
-        return None, oob_mask
-    return uv[oob_mask], oob_mask

@@ -1,15 +1,11 @@
 import logging
 import os
-import pickle
 from pathlib import Path
 from types import SimpleNamespace
 
-import h5py
 import numpy as np
 import pycolmap
 import torch
-from hloc.pipelines.RobotCar.pipeline import CONDITIONS
-from pykdtree.kdtree import KDTree
 from scipy.spatial.transform import Rotation
 from skimage import color
 from skimage import io
@@ -20,11 +16,22 @@ import torchvision.transforms
 import ace_util
 import colmap_read
 import dd_utils
-from ace_util import project_using_pose
 from PIL import Image
 
 _logger = logging.getLogger(__name__)
 
+
+CONDITIONS = [
+    "dawn",
+    "dusk",
+    "night",
+    "night-rain",
+    "overcast-summer",
+    "overcast-winter",
+    "rain",
+    "snow",
+    "sun",
+]
 
 def read_intrinsic(file_name):
     with open(file_name) as file:

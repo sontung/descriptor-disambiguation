@@ -366,14 +366,14 @@ class BaseTrainer:
                 "keypoints": keypoints.squeeze().cpu().numpy(),
                 "descriptors": descriptors.squeeze().cpu().numpy().T,
             }
-            # dense = self.local_desc_model.describe(
-            #     torch.from_numpy(image).float().unsqueeze(0).cuda()
-            # )
-            # image2 = image*255
-            # image2 = image2.astype(np.uint8).transpose((1, 2, 0))
-            # for u, v in keypoints[0].int().cpu().numpy():
-            #     cv2.circle(image2, (u, v), 5, (0, 255, 0))
-            # cv2.imwrite("debug/img.png", image2)
+        elif self.local_desc_model_name == "how":
+            keypoints, descriptors = self.local_desc_model.process(
+                name
+            )
+            pred = {
+                "keypoints": keypoints,
+                "descriptors": descriptors.T,
+            }
         else:
             pred = self.local_desc_model(
                 {"image": torch.from_numpy(image).unsqueeze(0).cuda()}

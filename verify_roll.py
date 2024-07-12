@@ -1,9 +1,6 @@
 import h5py
 import numpy as np
 import faiss
-from sklearn.decomposition import PCA
-
-from dataset import RobotCarDataset
 
 
 def roll_matrix(all_desc, nd, norm=False):
@@ -27,12 +24,12 @@ desc0 = np.load(
 )
 print(desc0.shape)
 desc1_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/salad_8448_8448_desc_test.h5"
-test_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=True)
+# test_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=True)
 
-desc1 = np.zeros((len(test_ds_), desc0.shape[1]))
 with h5py.File(desc1_file, "r") as fd:
-    for idx, k in enumerate(test_ds_.img_ids):
-        v = np.array(fd[k.replace("png", "jpg")]["global_descriptor"])
+    desc1 = np.zeros((len(fd["rear"]), desc0.shape[1]))
+    for idx, k in enumerate(fd["rear"].keys()):
+        v = np.array(fd[f"rear/{k}"]["global_descriptor"])
         desc1[idx] = v
 
 # desc0 = desc0.astype(np.float32)
@@ -43,6 +40,12 @@ res2 = faiss.StandardGpuResources()
 gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
 gpu_index_flat_for_image_desc.add(desc0)
 dis, ind1 = gpu_index_flat_for_image_desc.search(desc1, 1)
+
+
+import umap
+transformer = umap.UMAP(n_components=512,n_neighbors=50)
+desc0_red = transformer.fit_transform(desc0)
+desc1_red = transformer.transform(desc1)
 
 from sklearn.random_projection import GaussianRandomProjection, SparseRandomProjection
 

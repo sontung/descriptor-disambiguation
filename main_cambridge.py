@@ -74,16 +74,16 @@ if __name__ == "__main__":
         default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--use_global", type=int, default=0)
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="d2net",
+        default="how",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=512,
+        default=128,
     )
     parser.add_argument(
         "--global_desc",
