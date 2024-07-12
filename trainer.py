@@ -374,6 +374,14 @@ class BaseTrainer:
                 "keypoints": keypoints,
                 "descriptors": descriptors.T,
             }
+        elif self.local_desc_model_name == "xfeat":
+            keypoints, descriptors = self.local_desc_model.process(
+                name
+            )
+            pred = {
+                "keypoints": keypoints,
+                "descriptors": descriptors.T,
+            }
         else:
             pred = self.local_desc_model(
                 {"image": torch.from_numpy(image).unsqueeze(0).cuda()}

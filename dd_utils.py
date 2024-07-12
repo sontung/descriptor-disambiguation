@@ -314,6 +314,10 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             from how_model import HowModel
             conf_ns = SimpleNamespace(**{**default_conf, **conf})
             encoder = HowModel()
+        elif local_desc_model == "xfeat":
+            from xfeat_model import XfeatModel
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            encoder = XfeatModel()
         else:
             raise NotImplementedError
 
