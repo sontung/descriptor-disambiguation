@@ -15,12 +15,13 @@ ABLATION_METHODS = [
 
 ABLATION_METHODS_ORDER = [
     ["salad", 8448, 0.5],
-    ["crica", 10752, 0.5],
-    ["eigenplaces", 2048, 0.5],
-    ["mixvpr", 4096, 0.5],
+    # ["crica", 10752, 0.5],
+    # ["eigenplaces", 2048, 0.5],
+    # ["mixvpr", 4096, 0.5],
 ]
 
-ORDERS = ["gaussian", "random-0", "first", "last", "central"]
+# ORDERS = ["gaussian", "random-0", "first", "last", "central"]
+ORDERS = ["first", "last", "central"]
 
 
 def run_ablation(ds_dir):
