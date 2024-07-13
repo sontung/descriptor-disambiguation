@@ -44,9 +44,10 @@ class XfeatModel:
         image = imageio.v2.imread(name)
         image = self.model.parse_input(image)
 
-        out1 = self.model.detectAndCompute(image, top_k=4096)[0]
-        kps = out1["keypoints"].cpu().numpy()
-        desc = out1["descriptors"].cpu().numpy()
+        # out1 = self.model.detectAndCompute(image, top_k=4096)[0]
+        out1 = self.model.detectAndComputeDense(image, top_k=None)
+        kps = out1["keypoints"].cpu().numpy()[0]
+        desc = out1["descriptors"].cpu().numpy()[0]
 
         # img = cv2.imread(name)
         # kps = kps.astype(int)
