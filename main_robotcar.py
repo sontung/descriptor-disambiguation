@@ -21,7 +21,7 @@ ABLATION_METHODS_ORDER = [
 ]
 
 # ORDERS = ["gaussian", "random-0", "first", "last", "central"]
-ORDERS = ["first", "last", "central"]
+ORDERS = ["last", "central"]
 
 
 def run_ablation(ds_dir):
