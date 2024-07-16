@@ -20,8 +20,8 @@ ABLATION_METHODS_ORDER = [
     # ["mixvpr", 4096, 0.5],
 ]
 
-# ORDERS = ["gaussian", "random-0", "first", "last", "central"]
-ORDERS = ["first", "center"]
+# ORDERS = ["gaussian", "random-0", "first", "last", "center"]
+ORDERS = ["last"]
 
 
 def run_ablation(ds_dir):
@@ -70,7 +70,7 @@ def run_ablation_order(ds_dir):
 
         for order in ORDERS:
             for lambda_val in np.linspace(0, 1, 11):
-                if lambda_val == 0.0:
+                if lambda_val == 0.0 or lambda_val == 0.1:
                     continue
                 trainer_ = RobotCarTrainer(
                     train_ds_,
