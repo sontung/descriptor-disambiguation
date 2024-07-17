@@ -70,7 +70,7 @@ def run_ablation_order(ds_dir):
 
         for order in ORDERS:
             for lambda_val in np.linspace(0, 1, 11):
-                if lambda_val == 0.0 or lambda_val == 0.1:
+                if lambda_val == 0.0 or lambda_val == 1.0:
                     continue
                 trainer_ = RobotCarTrainer(
                     train_ds_,
