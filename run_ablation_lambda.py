@@ -20,8 +20,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     if args.benchmark == "aachen":
-        main_aachen.run_ablation_order(args.dataset)
+        main_aachen.run_ablation(args.dataset)
     elif args.benchmark == "robotcar":
-        main_robotcar.run_ablation_order(args.dataset)
+        main_robotcar.run_ablation(args.dataset)
     else:
         raise NotImplementedError

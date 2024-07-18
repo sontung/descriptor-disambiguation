@@ -20,8 +20,7 @@ ABLATION_METHODS_ORDER = [
     # ["mixvpr", 4096, 0.5],
 ]
 
-# ORDERS = ["gaussian", "random-0", "first", "last", "center"]
-ORDERS = ["last"]
+ORDERS = ["gaussian", "random-0", "first", "last", "center"]
 
 
 def run_ablation(ds_dir):

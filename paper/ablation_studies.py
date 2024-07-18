@@ -125,19 +125,19 @@ robotcar = {
     },
     "last": {
         "salad": {
-            0.1: "",
-            0.2: "",
-            0.3: "",
-            0.4: "",
-            0.5: "",
-            0.6: "",
-            0.7: "",
-            0.8: "",
-            0.9: "",
-            1.0: "",
+            0.1: "44.8 / 80.6 / 98.8	4.7 / 17.2 / 58.3",
+            0.2: "60.8 / 92.9 / 100.0	26.8 / 66.9 / 95.3",
+            0.3: "60.3 / 93.7 / 100.0	31.2 / 78.1 / 98.6",
+            0.4: "61.1 / 93.7 / 100.0	29.1 / 74.6 / 99.1",
+            0.5: "61.7 / 93.8 / 100.0	23.3 / 58.7 / 86.2",
+            0.6: "60.9 / 93.8 / 100.0	16.8 / 44.3 / 68.5",
+            0.7: "61.0 / 93.8 / 100.0	12.8 / 37.8 / 57.6",
+            0.8: "61.1 / 93.8 / 99.9	12.1 / 34.3 / 53.1",
+            0.9: "61.0 / 93.8 / 99.9	11.2 / 33.8 / 49.7",
+            1.0: "60.8 / 93.8 / 99.9	11.9 / 33.6 / 49.7",
         },
     },
-    "central": {
+    "center": {
         "salad": {
             0.1: "45.3 / 81.0 / 99.0	4.4 / 17.7 / 58.0",
             0.2: "60.7 / 92.9 / 100.0	27.7 / 67.4 / 95.3",
@@ -173,24 +173,27 @@ def main():
     plt.xlabel("lambda")
     plt.ylabel("% successfully localized images")
     markers = {
-        "mixvpr": "o",
-        "eigen": "d",
-        "crica": "v",
-        "salad": "s",
+        "first": "o",
+        "center": "d",
+        "last": "v",
+        "random-0": "s",
+        "gaussian": "s",
     }
     plt.title("Aachen Day/Night v1.1")
     plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
     plt.axhline(y=80.3, color="b", linestyle="--", label="vanilla")
 
-    for method_ in ds:
+    for order_ in ds:
         all_numbers = []
-        for param_ in ds[method_]:
-            res = ds[method_][param_]
-            avg_res = find_numbers(res)
-            all_numbers.append(avg_res)
-        print(method_, all_numbers)
+        for method_ in ds[order_]:
+            for param_ in ds[order_][method_]:
+                res = ds[order_][method_][param_]
+                avg_res = find_numbers(res)
+                all_numbers.append(avg_res)
+        # method_ = f"{method_}-{order_}"
+        print(order_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], label=method_
+            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_
         )
     plt.legend(loc=4)
 
@@ -201,31 +204,27 @@ def main():
     plt.xticks(np.arange(1, 11) / 10)
     plt.xlabel("lambda")
     plt.ylabel("% successfully localized images")
-    markers = {
-        "mixvpr": "o",
-        "eigen": "d",
-        "crica": "v",
-        "salad": "s",
-    }
+
     plt.title("RobotCar Seasons v2")
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
     plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
 
-    for method_ in ds:
+    for order_ in ds:
         all_numbers = []
-        for param_ in ds[method_]:
-            res = ds[method_][param_]
-            avg_res = find_numbers(res)
-            all_numbers.append(avg_res)
-        print(method_, all_numbers)
+        for method_ in ds[order_]:
+            for param_ in ds[order_][method_]:
+                res = ds[order_][method_][param_]
+                avg_res = find_numbers(res)
+                all_numbers.append(avg_res)
+        print(order_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], label=method_
+            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_
         )
     plt.legend(loc=4)
     plt.tight_layout()
 
     plt.savefig(
-        "ablation.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1
+        "ablation_order.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1
     )
 
 
