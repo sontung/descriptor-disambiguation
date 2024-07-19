@@ -308,6 +308,8 @@ class BaseTrainer:
                 for example in tqdm(
                     self.test_dataset, desc="Collecting global descriptors for test set"
                 ):
+                    if example is None:
+                        continue
                     image_descriptor = self.produce_image_descriptor(example[1])
                     all_desc[idx] = image_descriptor
                     all_names.append(example[1])
@@ -732,29 +734,14 @@ class CMUTrainer(BaseTrainer):
         """
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
-        global_descriptors_path = (
-            f"output/{self.ds_name}/{self.global_desc_model_name}_desc_test.h5"
-        )
-        if not os.path.isfile(global_descriptors_path):
-            global_features_h5 = h5py.File(
-                str(global_descriptors_path), "a", libver="latest"
-            )
-            with torch.no_grad():
-                for example in tqdm(
-                    self.test_dataset, desc="Collecting global descriptors for test set"
-                ):
-                    if example is None:
-                        continue
-                    image_descriptor = self.produce_image_descriptor(example[1])
-                    name = example[1]
-                    dict_ = {"global_descriptor": image_descriptor}
-                    dd_utils.write_to_h5_file(global_features_h5, name, dict_)
-            global_features_h5.close()
+        assert os.path.isfile(
+            self.global_descriptor_test_path
+        ), self.global_descriptor_test_path
 
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(global_descriptors_path, "r")
+        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
         query_results = []
-        print(f"Reading global descriptors from {global_descriptors_path}")
+        print(f"Reading global descriptors from {self.global_descriptor_test_path}")
         print(f"Reading local descriptors from {self.test_features_path}")
 
         if self.using_global_descriptors:
