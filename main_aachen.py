@@ -35,7 +35,6 @@ def run_ablation(ds_dir):
                 using_global_descriptors,
                 lambda_val=lambda_val,
                 convert_to_db_desc=True,
-                order="gaussian",
             )
             trainer_.evaluate()
 
@@ -142,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=128,
+        default=4096,
     )
     args = parser.parse_args()
 

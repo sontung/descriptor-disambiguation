@@ -54,7 +54,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=True,
+            convert_to_db_desc=False,
             order="first",
         )
 
@@ -78,12 +78,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="xfeat",
+        default="r2d2",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=64,
+        default=128,
     )
     parser.add_argument(
         "--global_desc",
