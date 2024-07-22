@@ -6,13 +6,13 @@ import dd_utils
 from dataset import RobotCarDataset
 from trainer import RobotCarTrainer
 
+
 ABLATION_METHODS = [
-    ["mixvpr", 4096],
     ["salad", 8448],
     ["crica", 10752],
     ["eigenplaces", 2048],
+    ["mixvpr", 4096],
 ]
-
 ABLATION_METHODS_ORDER = [
     ["salad", 8448, 0.5],
     # ["crica", 10752, 0.5],
