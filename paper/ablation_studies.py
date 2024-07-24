@@ -154,11 +154,13 @@ robotcar = {
 }
 
 
-def find_numbers(string_):
+def find_numbers(string_, return_numbers=False):
     pattern = r"[-+]?(?:\d*\.*\d+)"
     # res = "53.2 / 85.8 / 95.3	3.5 / 11.7 / 25.2"
     matches = re.findall(pattern, string_)
     numbers = list(map(float, matches))
+    if return_numbers:
+        return numbers
     avg = sum(numbers) / len(matches)
     return avg
 

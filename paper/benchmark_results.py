@@ -1,4 +1,6 @@
 import numpy as np
+from ablation_studies import find_numbers
+
 
 aachen = {
     "mixvpr": "0.0 & 0.4 & 26.5 & 0.0 & 0.5 & 28.3",
@@ -11,6 +13,14 @@ aachen = {
     "sift": "86.3 & 90.3 & 94.1 & 25.7 & 29.8 & 37.2",
     "d2": "84.0 & 89.2 & 94.8 & 61.3 & 71.7 & 80.6 ",
     "superpoint": "84.5 & 91.5 & 95.8 & 50.3 & 63.9 & 75.4 ",
+    "d2_mixvpr_heavy": "",
+    "d2_mixvpr_light": "",
+    "d2_eigen_heavy": "",
+    "d2_eigen_light": "",
+    "d2_salad_heavy": "",
+    "d2_salad_light": "",
+    "d2_crica_heavy": "",
+    "d2_crica_light": "",
 }
 
 robotcar = {
@@ -24,6 +34,14 @@ robotcar = {
     "sift": "49.3 & 77.5 & 85.0 & 0.5 & 0.9 & 2.3 ",
     "d2": "60.8 & 93.8 & 99.9 & 11.9 & 33.6 & 49.7 ",
     "superpoint": "57.2 & 89.2 & 96.1 & 4.9 & 13.5 & 26.1 ",
+    "d2_mixvpr_heavy": "",
+    "d2_mixvpr_light": "",
+    "d2_eigen_heavy": "",
+    "d2_eigen_light": "",
+    "d2_salad_heavy": "",
+    "d2_salad_light": "",
+    "d2_crica_heavy": "",
+    "d2_crica_light": "",
 }
 
 cmu = {
@@ -37,6 +55,14 @@ cmu = {
     "sift": "53.0 & 57.8 & 64.1 & 33.4 & 38.3 & 46.9 & 17.3 & 19.7 & 25.1 ",
     "d2": "87.7 & 92.8 & 96.3 & 84.5 & 88.6 & 94.4 & 64.1 & 69.9 & 78.8 ",
     "superpoint": "76.8 & 81.9 & 87.0 & 63.4 & 68.5 & 77.2 & 40.2 & 44.6 & 53.6 ",
+    "d2_mixvpr_heavy": "91.2 / 96.3 / 98.9	91.9 / 95.5 / 99.1	79.4 / 85.9 / 94.1",
+    "d2_mixvpr_light": "89.6 / 94.6 / 97.7	87.9 / 91.8 / 96.7	71.6 / 78.0 / 87.4",
+    "d2_eigen_heavy": "	91.1 / 96.3 / 98.8	92.3 / 95.9 / 99.3	80.8 / 86.9 / 93.9",
+    "d2_eigen_light": "",
+    "d2_salad_heavy": "",
+    "d2_salad_light": "",
+    "d2_crica_heavy": "",
+    "d2_crica_light": "",
 }
 
 method_dict = {}
@@ -46,7 +72,12 @@ for name, ds in [["aachen", aachen], ["robotcar", robotcar], ["cmu", cmu]]:
         count = np.array([0, 0, 0])
         scores = np.array([0, 0, 0], dtype=float)
         res = ds[method_]
-        res = list(map(float, res.split("&")))
+        if len(res) == 0:
+            continue
+        if "&" not in res:
+            res = find_numbers(res, True)
+        else:
+            res = list(map(float, res.split("&")))
         assert len(res) % 3 == 0, f"{name} {method_}"
         for i in range(0, len(res), 3):
             scores += res[i: i+3]
