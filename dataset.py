@@ -677,7 +677,7 @@ class CMUDataset(Dataset):
             name2 = img_id
         try:
             image = io.imread(name2)
-        except ValueError:
+        except ValueError or FileNotFoundError:
             return None, name2
 
         if len(image.shape) < 3:

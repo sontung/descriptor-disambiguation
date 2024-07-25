@@ -1,8 +1,5 @@
 import argparse
-from pathlib import Path
-import numpy as np
 import dd_utils
-from clustering import reduce_map_using_min_cover
 from dataset import CambridgeLandmarksDataset
 from trainer import CambridgeLandmarksTrainer
 
@@ -74,7 +71,7 @@ if __name__ == "__main__":
         default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=0)
+    parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument(
         "--local_desc",
         type=str,
@@ -88,12 +85,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="salad",
+        default="mixvpr",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=8448,
+        default=128,
     )
     args = parser.parse_args()
     results = run_function(
