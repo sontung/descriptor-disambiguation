@@ -118,6 +118,7 @@ def run_function(
         conf_ns_retrieval,
         using_global_descriptors,
         convert_to_db_desc=convert,
+        lambda_val=0.3,
     )
     trainer_.evaluate()
 
