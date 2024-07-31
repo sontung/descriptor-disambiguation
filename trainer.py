@@ -59,13 +59,15 @@ def write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file):
 
     qvec = " ".join(map(str, pose.q))
     tvec = " ".join(map(str, pose.t))
+    mask = np.array(info["inliers"])
+    indices = np.arange(uv_arr.shape[0])
 
-    diff = np.mean(np.abs(xyz_pred-pose.t), 1)
+    diff = np.mean(np.abs(xyz_pred[mask]-pose.t), 1)
     clusters, centroids = kmeans1d.cluster(diff, 2)
+    mask[indices[mask][centroids==0]] = False
     assert centroids[0] < centroids[1]
     print(diff)
     print(centroids)
-    mask = clusters == 1
     pose, info = poselib.estimate_absolute_pose(
         uv_arr[mask],
         xyz_pred[mask],
