@@ -29,7 +29,7 @@ aachen = {
             0.4: "85.9 / 91.5 / 96.5	70.7 / 84.8 / 90.1",
             0.5: "84.5 / 90.5 / 95.9	67.0 / 78.5 / 85.9",
             0.6: "83.7 / 89.7 / 94.8	64.9 / 76.4 / 83.2",
-            0.7: "86.4 / 92.0 / 96.8	72.3 / 85.3 / 92.1",
+            0.7: "84.3 / 89.9 / 94.7	62.3 / 72.8 / 82.2",
             0.8: "84.2 / 89.4 / 94.5	62.8 / 73.8 / 81.7",
             0.9: "84.2 / 89.6 / 94.7	61.3 / 72.8 / 81.7",
             1.0: "84.0 / 89.2 / 94.8	61.3 / 71.7 / 80.6",
@@ -166,6 +166,12 @@ def find_numbers(string_, return_numbers=False):
 
 
 def main():
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.sans-serif": ["Helvetica"],
+
+        "text.latex.preamble": r"\usepackage{amsmath}", })
     plt.figure(figsize=(6, 10))
 
     plt.subplot(211)
@@ -178,14 +184,24 @@ def main():
         "first": "o",
         "center": "d",
         "last": "v",
-        "random-0": "s",
-        "gaussian": "s",
+        "random-0": "h",
+        "gaussian": "*",
     }
+    tableau_colors = plt.get_cmap('tab10')
+
+    colors = {
+        "first": tableau_colors(0),
+        "center": tableau_colors(1),
+        "last": tableau_colors(2),
+        "random-0": tableau_colors(3),
+        "gaussian": tableau_colors(4),
+    }
+    orders_ = ["first", "center", "last", "random-0", "gaussian"]
     plt.title("Aachen Day/Night v1.1")
     plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
     plt.axhline(y=80.3, color="b", linestyle="--", label="vanilla")
 
-    for order_ in ds:
+    for order_ in orders_:
         all_numbers = []
         for method_ in ds[order_]:
             for param_ in ds[order_][method_]:
@@ -195,7 +211,8 @@ def main():
         # method_ = f"{method_}-{order_}"
         print(order_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_
+            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_,
+            color=colors[order_]
         )
     plt.legend(loc=4)
 
@@ -211,7 +228,7 @@ def main():
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
     plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
 
-    for order_ in ds:
+    for order_ in orders_:
         all_numbers = []
         for method_ in ds[order_]:
             for param_ in ds[order_][method_]:
@@ -220,7 +237,9 @@ def main():
                 all_numbers.append(avg_res)
         print(order_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_
+            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_,
+            color=colors[order_]
+
         )
     plt.legend(loc=4)
     plt.tight_layout()

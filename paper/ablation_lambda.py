@@ -117,6 +117,13 @@ def find_numbers(string_):
 
 
 def main():
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.sans-serif": ["Helvetica"],
+
+        "text.latex.preamble": r"\usepackage{amsmath}", })
+
     plt.figure(figsize=(6, 10))
 
     plt.subplot(211)
@@ -131,6 +138,15 @@ def main():
         "crica": "v",
         "salad": "s",
     }
+    tableau_colors = plt.get_cmap('tab10')
+
+    colors = {
+        "mixvpr": tableau_colors(0),
+        "eigen": tableau_colors(1),
+        "crica": tableau_colors(2),
+        "salad": tableau_colors(4),
+    }
+
     plt.title("Aachen Day/Night v1.1")
     plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
     plt.axhline(y=80.3, color="b", linestyle="--", label="vanilla")
@@ -143,7 +159,9 @@ def main():
             all_numbers.append(avg_res)
         print(method_, all_numbers)
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], label=method_
+            np.arange(1, 11) / 10, all_numbers,
+            marker=markers[method_],
+            color=colors[method_], label=method_
         )
     plt.legend(loc=4)
 
@@ -154,15 +172,9 @@ def main():
     plt.xticks(np.arange(1, 11) / 10)
     plt.xlabel("lambda")
     plt.ylabel("% successfully localized images")
-    markers = {
-        "mixvpr": "o",
-        "eigen": "d",
-        "crica": "v",
-        "salad": "s",
-    }
     plt.title("RobotCar Seasons v2")
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
-    plt.axhline(y=58.3, color="b", linestyle="-", label="vanilla")
+    plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
 
     for method_ in ds:
         all_numbers = []
@@ -172,7 +184,8 @@ def main():
             all_numbers.append(avg_res)
         print(method_, all_numbers)
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], label=method_
+            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], color=colors[method_],
+            label=method_
         )
     plt.legend(loc=4)
     plt.tight_layout()

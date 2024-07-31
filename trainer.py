@@ -17,6 +17,7 @@ from sklearn.random_projection import GaussianRandomProjection
 from tqdm import tqdm
 import kornia
 import dd_utils
+import kmeans1d
 from ace_util import read_and_preprocess
 
 
@@ -53,6 +54,19 @@ def write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file):
     pose, info = poselib.estimate_absolute_pose(
         uv_arr,
         xyz_pred,
+        camera_dict,
+    )
+
+    qvec = " ".join(map(str, pose.q))
+    tvec = " ".join(map(str, pose.t))
+
+    diff = np.mean(np.abs(xyz_pred-pose.t), 1)
+    clusters, centroids = kmeans1d.cluster(diff, 2)
+    assert centroids[0] < centroids[1]
+    mask = clusters == 1
+    pose, info = poselib.estimate_absolute_pose(
+        uv_arr[mask],
+        xyz_pred[mask],
         camera_dict,
     )
 
