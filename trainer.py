@@ -63,6 +63,8 @@ def write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file):
     diff = np.mean(np.abs(xyz_pred-pose.t), 1)
     clusters, centroids = kmeans1d.cluster(diff, 2)
     assert centroids[0] < centroids[1]
+    print(diff)
+    print(centroids)
     mask = clusters == 1
     pose, info = poselib.estimate_absolute_pose(
         uv_arr[mask],
