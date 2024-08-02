@@ -30,8 +30,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        if ds_name != "GreatCourt":
-            continue
+        # if ds_name != "GreatCourt":
+        #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_
@@ -51,7 +51,7 @@ def run_function(
             conf_ns_retrieval,
             using_global_descriptors,
             lambda_val=0.5,
-            convert_to_db_desc=False,
+            convert_to_db_desc=True,
             order="first",
         )
 

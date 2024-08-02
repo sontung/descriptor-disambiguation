@@ -170,15 +170,15 @@ def main():
         "text.usetex": True,
         "font.family": "serif",
         "font.sans-serif": ["Helvetica"],
-
+        "font.size": 12,  # Set the global font size
         "text.latex.preamble": r"\usepackage{amsmath}", })
-    plt.figure(figsize=(6, 10))
+    plt.figure(figsize=(5, 7))
 
     plt.subplot(211)
     ds = aachen
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
-    plt.xlabel("lambda")
+    plt.xlabel(r"$\lambda$")
     plt.ylabel("% successfully localized images")
     markers = {
         "first": "o",
@@ -214,14 +214,14 @@ def main():
             np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_,
             color=colors[order_]
         )
-    plt.legend(loc=4)
+    plt.legend(loc=4, fontsize=9, ncol=1)
 
     plt.subplot(212)
 
     ds = robotcar
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
-    plt.xlabel("lambda")
+    plt.xlabel(r"$\lambda$")
     plt.ylabel("% successfully localized images")
 
     plt.title("RobotCar Seasons v2")
@@ -241,7 +241,7 @@ def main():
             color=colors[order_]
 
         )
-    plt.legend(loc=4)
+    plt.legend(loc=4, fontsize=9, ncol=1)
     plt.tight_layout()
 
     plt.savefig(
