@@ -157,7 +157,7 @@ def main():
             res = ds[method_][param_]
             avg_res = find_numbers(res)
             all_numbers.append(avg_res)
-        print(method_, all_numbers)
+        print(method_, max(all_numbers))
         plt.plot(
             np.arange(1, 11) / 10, all_numbers,
             marker=markers[method_],
@@ -182,7 +182,7 @@ def main():
             res = ds[method_][param_]
             avg_res = find_numbers(res)
             all_numbers.append(avg_res)
-        print(method_, all_numbers)
+        print(method_, max(all_numbers))
         plt.plot(
             np.arange(1, 11) / 10, all_numbers, marker=markers[method_], color=colors[method_],
             label=method_

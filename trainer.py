@@ -499,9 +499,10 @@ class BaseTrainer:
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
-                    image_descriptor.reshape(1, -1), 1
+                    image_descriptor.reshape(1, -1), 20
                 )
-                image_descriptor = self.all_image_desc_for_db_conversion[int(ind)]
+                # image_descriptor = self.all_image_desc_for_db_conversion[int(ind)]
+                image_descriptor = np.mean(self.all_image_desc_for_db_conversion[ind.flatten()], 0)
 
             if self.use_rand_indices:
                 if self.order == "gaussian":

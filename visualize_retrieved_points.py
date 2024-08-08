@@ -140,7 +140,7 @@ def visualize_matches(good_results, bad_results, rgb_arr):
         make_pic(good_results[idx], bad_results[idx], idx_str, rgb_arr)
         im1 = cv2.imread(f"debug/good.png")
         im2 = cv2.imread(f"debug/bad.png")
-        im3 = cv2.vconcat([im2[150:850, 500:1500], im1[150:850, 500:1500]])
+        im3 = cv2.vconcat([im2[150:, 500:1500], im1[150:850, 500:1500]])
         cv2.imwrite(f"debug/both-{idx_str}.png", im3)
     return
 
