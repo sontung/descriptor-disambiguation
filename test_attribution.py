@@ -44,14 +44,18 @@ transform_op = torchvision.transforms.Compose(
 checkpoint = torch.load("../salad/dino_salad.ckpt")
 salad_model.load_state_dict(checkpoint)
 salad_model = salad_model.cuda()
-image = Image.open("/home/n11373598/work/descriptor-disambiguation/datasets/robotcar/images/night/right/1418235223631964.jpg").convert("RGB")
+image = Image.open(
+    "/home/n11373598/work/descriptor-disambiguation/datasets/robotcar/images/night/right/1418235223631964.jpg"
+).convert("RGB")
 image = transform_op(image)
 inp = image.unsqueeze(0).cuda()
 # image_descriptor = model1.model(image.unsqueeze(0).cuda())
 # image_descriptor = image_descriptor.squeeze().cpu().numpy()
 
 neuron_deconv = GuidedGradCam(salad_model, salad_model.aggregator)
-attribution = neuron_deconv.attribute(inp, 0, additional_forward_args=("allow_unused",True))
+attribution = neuron_deconv.attribute(
+    inp, 0, additional_forward_args=("allow_unused", True)
+)
 
 for k in salad_model.state_dict().keys():
     print(k)

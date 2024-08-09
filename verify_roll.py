@@ -43,7 +43,8 @@ dis, ind1 = gpu_index_flat_for_image_desc.search(desc1, 1)
 
 
 import umap
-transformer = umap.UMAP(n_components=512,n_neighbors=50)
+
+transformer = umap.UMAP(n_components=512, n_neighbors=50)
 desc0_red = transformer.fit_transform(desc0)
 desc1_red = transformer.transform(desc1)
 

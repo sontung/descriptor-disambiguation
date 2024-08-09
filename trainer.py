@@ -182,7 +182,9 @@ class BaseTrainer:
         def helper(ds_):
             for example in tqdm(ds_, desc="Selecting train features"):
                 name = example[1]
-                keypoints, descriptors = dd_utils.read_kp_and_desc(name, all_features_h5)
+                keypoints, descriptors = dd_utils.read_kp_and_desc(
+                    name, all_features_h5
+                )
                 pid_list = example[3]
                 uv = example[-1]
                 selected_pid, mask, ind = retrieve_pid(pid_list, uv, keypoints)
@@ -371,17 +373,13 @@ class BaseTrainer:
                 "descriptors": descriptors.squeeze().cpu().numpy().T,
             }
         elif self.local_desc_model_name == "how":
-            keypoints, descriptors = self.local_desc_model.process(
-                name
-            )
+            keypoints, descriptors = self.local_desc_model.process(name)
             pred = {
                 "keypoints": keypoints,
                 "descriptors": descriptors.T,
             }
         elif self.local_desc_model_name == "xfeat":
-            keypoints, descriptors = self.local_desc_model.process(
-                name
-            )
+            keypoints, descriptors = self.local_desc_model.process(name)
             pred = {
                 "keypoints": keypoints,
                 "descriptors": descriptors.T,
@@ -409,7 +407,9 @@ class BaseTrainer:
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            selected_pid, mask, ind = load_selected_features_for_img(example[1], sfm_to_local_h5)
+            selected_pid, mask, ind = load_selected_features_for_img(
+                example[1], sfm_to_local_h5
+            )
 
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
@@ -452,7 +452,11 @@ class BaseTrainer:
         pid2count = np.zeros(len(self.dataset.recon_points))
 
         pid2mean_desc, pid2ind = self.collect_descriptors_loop(
-            features_h5, sfm_to_local_h5, pid2mean_desc, pid2count, self.using_global_descriptors
+            features_h5,
+            sfm_to_local_h5,
+            pid2mean_desc,
+            pid2count,
+            self.using_global_descriptors,
         )
         print(pid2mean_desc.shape)
 
@@ -485,7 +489,9 @@ class BaseTrainer:
                     image_descriptor.reshape(1, -1), 1
                 )
                 # image_descriptor = self.all_image_desc_for_db_conversion[int(ind)]
-                image_descriptor = np.mean(self.all_image_desc_for_db_conversion[ind.flatten()], 0)
+                image_descriptor = np.mean(
+                    self.all_image_desc_for_db_conversion[ind.flatten()], 0
+                )
 
             if self.use_rand_indices:
                 if self.order == "gaussian":
@@ -511,8 +517,10 @@ class BaseTrainer:
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
             gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion)
             print("Converting to DB descriptors")
-            print(self.all_image_desc_for_db_conversion.shape,
-                  self.all_image_desc_for_db_conversion.dtype)
+            print(
+                self.all_image_desc_for_db_conversion.shape,
+                self.all_image_desc_for_db_conversion.dtype,
+            )
             print(
                 f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc_for_db_conversion))}"
             )
@@ -668,7 +676,11 @@ class RobotCarTrainer(BaseTrainer):
         pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
         pid2mean_desc, pid2ind = self.collect_descriptors_loop(
-            features_h5, sfm_to_local_h5, pid2mean_desc, pid2count, self.using_global_descriptors
+            features_h5,
+            sfm_to_local_h5,
+            pid2mean_desc,
+            pid2count,
+            self.using_global_descriptors,
         )
         features_h5.close()
 
@@ -680,6 +692,13 @@ class RobotCarTrainer(BaseTrainer):
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
             pid2mean_desc,
         )
+
+        with open(
+            f"output/{self.ds_name}/pid2ind-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            "wb",
+        ) as handle:
+            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         return pid2mean_desc
 
     def evaluate(self):

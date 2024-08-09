@@ -5,19 +5,20 @@ import torch
 import sys
 import imageio
 
+
 def _convert_checkpoint(state):
     """Enable loading checkpoints in the old format"""
     if "_version" not in state:
         # Old checkpoint format
-        meta = state['meta']
-        state['net_params'] = {
-            "architecture": meta['architecture'],
+        meta = state["meta"]
+        state["net_params"] = {
+            "architecture": meta["architecture"],
             "pretrained": True,
-            "skip_layer": meta['skip_layer'],
+            "skip_layer": meta["skip_layer"],
             "dim_reduction": {"dim": meta["dim"]},
             "smoothing": {"kernel_size": meta["feat_pool_k"]},
             "runtime": {
-                "mean_std": [meta['mean'], meta['std']],
+                "mean_std": [meta["mean"], meta["std"]],
                 "image_size": 1024,
                 "features_num": 1000,
                 "scales": [2.0, 1.414, 1.0, 0.707, 0.5, 0.353, 0.25],
@@ -25,18 +26,20 @@ def _convert_checkpoint(state):
             },
         }
 
-        state_dict = state['state_dict']
-        state_dict['dim_reduction.weight'] = state_dict.pop("whiten.weight")
-        state_dict['dim_reduction.bias'] = state_dict.pop("whiten.bias")
+        state_dict = state["state_dict"]
+        state_dict["dim_reduction.weight"] = state_dict.pop("whiten.weight")
+        state_dict["dim_reduction.bias"] = state_dict.pop("whiten.bias")
 
-        state['_version'] = "how/2020"
+        state["_version"] = "how/2020"
 
     return state
 
 
 class XfeatModel:
     def __init__(self):
-        self.model = torch.hub.load('verlab/accelerated_features', 'XFeat', pretrained = True, top_k = 4096)
+        self.model = torch.hub.load(
+            "verlab/accelerated_features", "XFeat", pretrained=True, top_k=4096
+        )
 
         self.conf = {"name": "xfeat"}
 
@@ -58,6 +61,8 @@ class XfeatModel:
         return kps, desc
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     model = XfeatModel()
-    model.process("/home/n11373598/work/descriptor-disambiguation/datasets/robotcar/images/dusk/right/1424450252186877.jpg")
+    model.process(
+        "/home/n11373598/work/descriptor-disambiguation/datasets/robotcar/images/dusk/right/1424450252186877.jpg"
+    )

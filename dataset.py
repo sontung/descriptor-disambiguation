@@ -33,6 +33,7 @@ CONDITIONS = [
     "sun",
 ]
 
+
 def read_intrinsic(file_name):
     with open(file_name) as file:
         lines = [line.rstrip() for line in file]
