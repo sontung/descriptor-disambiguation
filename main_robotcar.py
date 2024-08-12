@@ -4,7 +4,7 @@ import numpy as np
 
 import dd_utils
 from dataset import RobotCarDataset
-from trainer import RobotCarTrainer
+from trainer3 import RobotCarTrainer
 
 
 ABLATION_METHODS = [

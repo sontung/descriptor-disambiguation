@@ -47,106 +47,75 @@ def get_index(xb):
 
 def main():
     afile = open(
-        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2ind_debug.pkl",
+        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2ind-d2net-salad_8448.npy",
         "rb",
     )
     pid2ind = pickle.load(afile)
     afile.close()
-    desc_global = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_desc_debug.npy"
-    desc_local = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/pid2mean_desc_debug_False_True.npy"
+    desc_global = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/codebook-d2net-salad_8448.npy"
+    all_desc = np.load(desc_global)
 
-    features_h5 = h5py.File(
-        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/d2net_features_test.h5",
-        "r",
-    )
-    global_features_h5 = h5py.File(
-        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/salad_8448_8448_desc_test.h5",
-        "r",
-    )
+    indices, _ = dd_utils.cluster_by_faiss_kmeans(all_desc, 1000, True)
+    all_clusters, counts = np.unique(indices, return_counts=True)
+    cluster_indices_sorted = np.argsort(counts)
 
-    pgt_matches = h5py.File(
-        "/home/n11373598/hpc-home/work/descriptor-disambiguation/outputs/robotcar/matches2d_3d.h5",
-        "r",
-    )
-    pred_matches = h5py.File(
-        "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/matches2d3dTrue_True.npy",
-        "r",
-    )
-    ind2pid = {ind: pid for pid, ind in pid2ind.items()}
-    test_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=True)
-    train_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=True, evaluate=False)
+    ds = RobotCarDataset()
 
-    # local_indices, local_cluster_machine = perform_clustering(desc_local, nb_clusters=10)
-    # desc_local_arr = np.load(desc_local)
-    # desc_local_arr = np.load(desc_global)
+    pid2im = {pid: [] for pid in pid2ind}
+    im2pid = {}
+    for img_id in ds.image2points:
+        for pid in ds.image2points[img_id]:
+            if pid in pid2im:
+                pid2im[pid].append(img_id)
+                im2pid.setdefault(img_id, []).append(pid)
+    point_indices = np.arange(all_desc.shape[0])
+    point_pids = np.zeros(all_desc.shape[0], int)
+    for pid, ind in pid2ind.items():
+        point_pids[ind] = pid
 
-    mean_acc = []
-    all_dis = []
-    count = 0
-    for example in tqdm(test_ds_, desc="Computing pose for test set"):
-        name = example[1]
-        image_name_wo_dir = name.split(test_ds_.images_dir_str)[-1][1:]
+    im_fills = {img_id: 0 for img_id in im2pid}
+    selected_clusters = []
+    for cluster_idx in tqdm(cluster_indices_sorted):
+        cluster = all_clusters[cluster_idx]
+        selected_clusters.append(cluster)
+        mask = indices==cluster
+        point_ind = point_indices[mask]
+        point_pid = point_pids[point_ind]
+        for pid in point_pid:
+            for im in pid2im[pid]:
+                if im in im_fills:
+                    im_fills[im] += 1
+        bad = [im for im in im_fills if im_fills[im] < 20]
+        # map_filled = np.sum(np.isin(indices, selected_clusters))/all_desc.shape[0]
+        db_images_filled = 1-len(bad)/len(im_fills)
+        if db_images_filled > 0.9:
+            break
+    print(len(selected_clusters)/all_clusters.shape[0])
 
-        img_id = "/".join(name.split("/")[-2:])
-        local_desc_curr = np.array(features_h5[img_id]["descriptors"]).T
-        global_desc_curr = np.array(
-            global_features_h5[img_id]["global_descriptor"]
-        ).reshape(-1, 1)
-        final_desc_curr = (
-            0.3 * local_desc_curr
-            + (1 - 0.3) * global_desc_curr[: local_desc_curr.shape[0]]
-        )
+    mask = np.isin(indices, selected_clusters)
+    xyz_arr = np.zeros((all_desc.shape[0], 3))
+    for pid in pid2ind:
+        xyz_arr[pid2ind[pid]] = ds.xyz_arr[pid]
 
-        data = pgt_matches[image_name_wo_dir]
-        data2 = pred_matches[image_name_wo_dir]
-        uv_arr_pgt = np.array(data["uv"])
-        uv_arr = np.array(data2["uv"])
-        pid_list_pgt = np.array(data["pid"])
-        ind_list = np.array(data2["pid"])
-        mask1 = [True if pid in pid2ind else False for pid in pid_list_pgt]
-        pid_list_pgt = pid_list_pgt[mask1]
-        uv_arr_pgt = uv_arr_pgt[mask1]
-        tree = KDTree(uv_arr_pgt)
-        dis, ind_sub1 = tree.query(uv_arr, 1)
-        mask = dis < 1
-        pid_list_pred = np.array([ind2pid[ind] for ind in ind_list[mask]])
-        diff = pid_list_pred - pid_list_pgt[ind_sub1[mask]]
-        acc = np.sum(diff == 0) / diff.shape[0]
+    np.save("output/robotcar/good_pids.npy", point_pids[mask])
 
-        mask2 = diff != 0
-        if np.sum(mask2) == 0:
-            print(acc)
-            continue
-        indices_pgt_2 = [pid2ind[pid] for pid in pid_list_pgt[ind_sub1[mask]][mask2]]
-        indices_pred_2 = [pid2ind[pid] for pid in pid_list_pred[mask2]]
-        dis = np.mean(
-            np.abs(
-                train_ds_.xyz_arr[pid_list_pred[mask2]]
-                - train_ds_.xyz_arr[pid_list_pgt[ind_sub1[mask]][mask2]]
-            ),
-            1,
-        )
-        all_dis.extend(dis)
-
-        img = cv2.imread(name)
-        uvs = uv_arr[mask][mask2].astype(int)
-        # for u, v in uvs[dis<1]:
-        #     cv2.circle(img, (u, v), 5, (255, 0, 0), -1)
-        # for u, v in uvs[dis>5]:
-        #     cv2.circle(img, (u, v), 5, (0, 0, 255), -1)
-
-        for u, v in uv_arr_pgt.astype(int):
-            cv2.circle(img, (u, v), 5, (255, 0, 0), -1)
-        for u, v in uv_arr.astype(int):
-            cv2.circle(img, (u, v), 5, (0, 255, 0), -1)
-        cv2.imwrite(f"debug/img{count}.png", img)
-        count += 1
-
-    print(np.mean(mean_acc))
-    features_h5.close()
-    global_features_h5.close()
-    pgt_matches.close()
-    pred_matches.close()
+    # import open3d as o3d
+    # pc1 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr[np.bitwise_not(mask)]))
+    # cl1, _ = pc1.remove_radius_outlier(
+    #     nb_points=16, radius=5, print_progress=True
+    # )
+    # pc2 = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz_arr))
+    # cl2, _ = pc2.remove_radius_outlier(
+    #     nb_points=16, radius=5, print_progress=True
+    # )
+    # cl1.paint_uniform_color((0, 1, 0))
+    # cl2.paint_uniform_color((1, 0, 0))
+    # vis = o3d.visualization.Visualizer()
+    # vis.create_window()
+    # # vis.add_geometry(cl2)
+    # vis.add_geometry(cl1)
+    # vis.run()
+    # vis.destroy_window()
 
     return
 
