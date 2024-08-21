@@ -131,7 +131,7 @@ def main():
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
     plt.xlabel(r"$\lambda$")
-    plt.ylabel("% successfully localized images")
+    plt.ylabel("\% successfully localized images")
     markers = {
         "mixvpr": "o",
         "eigen": "d",
@@ -171,7 +171,7 @@ def main():
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
     plt.xlabel(r"$\lambda$")
-    plt.ylabel("% successfully localized images")
+    plt.ylabel("\% successfully localized images")
     plt.title("RobotCar Seasons v2")
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
     plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")

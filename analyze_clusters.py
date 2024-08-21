@@ -78,7 +78,7 @@ def main():
     for cluster_idx in tqdm(cluster_indices_sorted):
         cluster = all_clusters[cluster_idx]
         selected_clusters.append(cluster)
-        mask = indices==cluster
+        mask = indices == cluster
         point_ind = point_indices[mask]
         point_pid = point_pids[point_ind]
         for pid in point_pid:
@@ -87,10 +87,10 @@ def main():
                     im_fills[im] += 1
         bad = [im for im in im_fills if im_fills[im] < 20]
         # map_filled = np.sum(np.isin(indices, selected_clusters))/all_desc.shape[0]
-        db_images_filled = 1-len(bad)/len(im_fills)
+        db_images_filled = 1 - len(bad) / len(im_fills)
         if db_images_filled > 0.9:
             break
-    print(len(selected_clusters)/all_clusters.shape[0])
+    print(len(selected_clusters) / all_clusters.shape[0])
 
     mask = np.isin(indices, selected_clusters)
     xyz_arr = np.zeros((all_desc.shape[0], 3))

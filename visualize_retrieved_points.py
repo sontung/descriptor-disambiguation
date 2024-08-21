@@ -1,9 +1,6 @@
 import argparse
-from pathlib import Path
 import numpy as np
-import rerun as rr
 import dd_utils
-from clustering import reduce_map_using_min_cover
 from dataset import CambridgeLandmarksDataset
 from trainer import CambridgeLandmarksTrainer
 import open3d as o3d

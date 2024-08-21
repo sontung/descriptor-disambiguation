@@ -1,7 +1,7 @@
 import argparse
 import dd_utils
 from dataset import CambridgeLandmarksDataset
-from trainer import CambridgeLandmarksTrainer
+from trainer_4 import CambridgeLandmarksTrainer
 
 
 def run_function(
@@ -30,8 +30,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        # if ds_name != "GreatCourt":
-        #     continue
+        if ds_name != "GreatCourt":
+            continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_

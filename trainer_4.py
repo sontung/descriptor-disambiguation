@@ -412,13 +412,6 @@ class BaseTrainer:
             )
 
             selected_descriptors = descriptors[ind[mask]]
-            if using_global_desc:
-                image_descriptor = self.image2desc[example[1]]
-                if self.use_rand_indices:
-                    image_descriptor = image_descriptor[self.global_rand_indices]
-                selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val
-                )
 
             for idx, pid in enumerate(selected_pid):
                 if pid not in pid2ind:
@@ -458,14 +451,16 @@ class BaseTrainer:
             pid2count,
             self.using_global_descriptors,
         )
+        print(pid2mean_desc.shape)
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         self.pid2ind = pid2ind
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.recon_points[pid].xyz
 
-        print(pid2mean_desc.shape)
-
+        self.new_codebook = np.copy(pid2mean_desc)
+        self.new_codebook[:, :3] = pid2mean_desc[:, :3] + 0.01 * self.xyz_arr
+        # self.new_codebook = np.hstack([self.new_codebook, self.xyz_arr])
         np.save(
             f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
             pid2mean_desc,
@@ -554,29 +549,24 @@ class BaseTrainer:
                 "w",
             )
 
-        assert os.path.isfile(self.global_descriptor_test_path)
-
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
         with torch.no_grad():
             for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
                 name = example[1]
-                keypoints, descriptors = self.process_descriptor(
-                    name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
-                )
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
 
                 uv_arr, xyz_pred = self.legal_predict(
                     keypoints,
                     descriptors,
                     gpu_index_flat,
                 )
+
                 image_id = example[2].split("/")[-1]
                 write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
 
         features_h5.close()
         result_file.close()
-        global_features_h5.close()
 
     def legal_predict(
         self,
@@ -631,42 +621,6 @@ class BaseTrainer:
 
 
 class RobotCarTrainer(BaseTrainer):
-    def reduce_map_size(self):
-        if self.map_reduction:
-            return
-        index_map_file_name = f"output/{self.ds_name}/indices.npy"
-        if os.path.isfile(index_map_file_name):
-            inlier_ind = np.load(index_map_file_name)
-        else:
-            import open3d as o3d
-
-            point_cloud = o3d.geometry.PointCloud(
-                o3d.utility.Vector3dVector(self.dataset.xyz_arr)
-            )
-            cl, inlier_ind = point_cloud.remove_radius_outlier(
-                nb_points=16, radius=5, print_progress=True
-            )
-
-            np.save(index_map_file_name, np.array(inlier_ind))
-
-            # vis = o3d.visualization.Visualizer()
-            # vis.create_window(width=1920, height=1025)
-            # vis.add_geometry(point_cloud)
-            # vis.run()
-            # vis.destroy_window()
-        img2points2 = {}
-        inlier_ind_set = set(inlier_ind)
-        for img in tqdm(
-            self.dataset.image2points, desc="Removing outlier points in the map"
-        ):
-            pid_list = self.dataset.image2points[img]
-            img2points2[img] = [pid for pid in pid_list if pid in inlier_ind_set]
-            mask = [True if pid in inlier_ind_set else False for pid in pid_list]
-            self.dataset.image2uvs[img] = np.array(self.dataset.image2uvs[img])[mask]
-        self.dataset.image2points = img2points2
-        self.map_reduction = True
-        return inlier_ind
-
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
         sfm_to_local_h5 = self.load_selected_local_features(features_h5)
@@ -685,34 +639,33 @@ class RobotCarTrainer(BaseTrainer):
         )
         features_h5.close()
 
-        good_pids = np.load(f"output/{self.ds_name}/good_pids.npy")
-        good_pids = set(list(good_pids))
-        indices = []
-        for pid in pid2ind:
-            if pid in good_pids:
-                indices.append(pid2ind[pid])
-
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         for pid in pid2ind:
             self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
-        self.xyz_arr = self.xyz_arr[indices]
-        pid2mean_desc = pid2mean_desc[indices]
 
-        # np.save(
-        #     f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
-        #     pid2mean_desc,
-        # )
-        #
-        # with open(
-        #     f"output/{self.ds_name}/pid2ind-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
-        #     "wb",
-        # ) as handle:
-        #     pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        self.new_codebook = np.copy(pid2mean_desc)
+        self.new_codebook[:, :3] = pid2mean_desc[:, :3] + 0.01 * self.xyz_arr
+
+        np.save(
+            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            pid2mean_desc,
+        )
+
+        with open(
+            f"output/{self.ds_name}/pid2ind-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            "wb",
+        ) as handle:
+            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         return pid2mean_desc
 
     def evaluate(self):
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
+        index2 = faiss.IndexFlatL2(self.new_codebook.shape[1])  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat2 = faiss.index_cpu_to_gpu(res, 0, index2)
+        gpu_index_flat2.add(self.new_codebook)
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
 
         assert os.path.isfile(self.global_descriptor_test_path)
         features_h5 = h5py.File(self.test_features_path, "r")
@@ -742,122 +695,57 @@ class RobotCarTrainer(BaseTrainer):
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
-                uv_arr, xyz_pred = self.legal_predict(
-                    keypoints,
-                    descriptors,
-                    gpu_index_flat,
+                uv_arr, xyz_pred, xyz_indices, _ = self.legal_predict(
+                    keypoints, descriptors, gpu_index_flat, return_indices=True
                 )
                 image_id = "/".join(example[2].split("/")[1:])
-                write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
+                camera = example[6]
+                camera_dict = {
+                    "model": camera.model.name,
+                    "height": camera.height,
+                    "width": camera.width,
+                    "params": camera.params,
+                }
+                pose, info = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    xyz_pred,
+                    camera_dict,
+                )
+
+                inlier_mask = np.array(info["inliers"])
+                not_inlier_mask = np.bitwise_not(info["inliers"])
+                gpu_index_flat3 = faiss.index_cpu_to_gpu(res, 0, index)
+                gpu_index_flat3.add(descriptors[inlier_mask])
+                _, ind3 = gpu_index_flat3.search(descriptors[not_inlier_mask], 1)
+                xyz_mean = xyz_pred[inlier_mask][ind3.ravel()]
+                new_desc = np.copy(descriptors[not_inlier_mask])
+                new_desc[:, :3] = new_desc[:, :3] + 0.01 * xyz_mean
+
+                distances, feature_indices = gpu_index_flat2.search(
+                    new_desc.astype(self.codebook_dtype), 1
+                )
+                xyz_indices[not_inlier_mask] = feature_indices.ravel()
+                write_pose_to_file(
+                    example, image_id, uv_arr, self.xyz_arr[xyz_indices], result_file
+                )
 
         result_file.close()
         features_h5.close()
         global_features_h5.close()
-
-
-class CMUTrainer(BaseTrainer):
-    def clear(self):
-        del self.pid2mean_desc
-
-    def evaluate(self):
-        """
-        write to pose file as name.jpg qw qx qy qz tx ty tz
-        :return:
-        """
-        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
-
-        assert os.path.isfile(
-            self.global_descriptor_test_path
-        ), self.global_descriptor_test_path
-
-        features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
-        query_results = []
-        print(f"Reading global descriptors from {self.global_descriptor_test_path}")
-        print(f"Reading local descriptors from {self.test_features_path}")
-
-        if self.using_global_descriptors:
-            result_file_name = (
-                f"output/{self.ds_name}/CMU_eval"
-                f"_{self.local_desc_model_name}_"
-                f"{self.global_desc_model_name}_"
-                f"{self.lambda_val}_"
-                f"{self.convert_to_db_desc}.txt"
-            )
-        else:
-            result_file_name = (
-                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
-            )
-
-        computed_images = {}
-        if os.path.isfile(result_file_name):
-            with open(result_file_name) as file:
-                lines = [line.rstrip() for line in file]
-            if len(lines) == len(self.test_dataset):
-                print(f"Found result file at {result_file_name}. Skipping")
-                return lines
-            else:
-                computed_images = {line.split(" ")[0]: line for line in lines}
-
-        result_file = open(result_file_name, "w")
-        with torch.no_grad():
-            for example in tqdm(self.test_dataset, desc="Computing pose for test set"):
-                if example is None:
-                    continue
-                name = example[1]
-                image_id = example[2].split("/")[-1]
-                if image_id in computed_images:
-                    line = computed_images[image_id]
-                else:
-                    keypoints, descriptors = self.process_descriptor(
-                        name,
-                        features_h5,
-                        global_features_h5,
-                        gpu_index_flat_for_image_desc,
-                    )
-
-                    uv_arr, xyz_pred = self.legal_predict(
-                        keypoints,
-                        descriptors,
-                        gpu_index_flat,
-                    )
-
-                    camera = example[6]
-
-                    camera_dict = {
-                        "model": "OPENCV",
-                        "height": camera.height,
-                        "width": camera.width,
-                        "params": camera.params,
-                    }
-                    pose, info = poselib.estimate_absolute_pose(
-                        uv_arr,
-                        xyz_pred,
-                        camera_dict,
-                    )
-
-                    qvec = " ".join(map(str, pose.q))
-                    tvec = " ".join(map(str, pose.t))
-                    line = f"{image_id} {qvec} {tvec}"
-                query_results.append(line)
-                print(line, file=result_file)
-        features_h5.close()
-        global_features_h5.close()
-        result_file.close()
-        return query_results
 
 
 class CambridgeLandmarksTrainer(BaseTrainer):
     def evaluate(self, return_name2err=False):
         self.ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
-        gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
-
-        assert os.path.isfile(
-            self.global_descriptor_test_path
-        ), self.global_descriptor_test_path
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.pid2mean_desc)
+        index2 = faiss.IndexFlatL2(self.new_codebook.shape[1])  # build the index
+        gpu_index_flat2 = faiss.index_cpu_to_gpu(res, 0, index2)
+        gpu_index_flat2.add(self.new_codebook)
 
         features_h5 = h5py.File(self.test_features_path, "r")
-        global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
         testset = self.test_dataset
         name2err = {}
         rErrs = []
@@ -866,9 +754,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
 
-                keypoints, descriptors = self.process_descriptor(
-                    name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
-                )
+                keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
 
                 uv_arr, xyz_pred, xyz_indices, desc_distances = self.legal_predict(
                     keypoints, descriptors, gpu_index_flat, return_indices=True
@@ -886,12 +772,33 @@ class CambridgeLandmarksTrainer(BaseTrainer):
                     xyz_pred,
                     camera_dict,
                 )
-                t_err0, r_err = compute_pose_error(pose0, example[4])
+                inlier_mask = np.array(info["inliers"])
+                not_inlier_mask = np.bitwise_not(info["inliers"])
+                # xyz_mean = np.mean(xyz_pred[inlier_mask], 0)
+                # new_desc = np.copy(descriptors)
+                # new_desc[:, :3] = descriptors[:, :3] + 0.001 * xyz_mean
+
+                gpu_index_flat3 = faiss.index_cpu_to_gpu(res, 0, index)
+                gpu_index_flat3.add(descriptors[inlier_mask])
+                _, ind3 = gpu_index_flat3.search(descriptors[not_inlier_mask], 1)
+                xyz_mean = xyz_pred[inlier_mask][ind3.ravel()]
+                new_desc = np.copy(descriptors[not_inlier_mask])
+                new_desc[:, :3] = new_desc[:, :3] + 0.01 * xyz_mean
+
+                distances, feature_indices = gpu_index_flat2.search(
+                    new_desc.astype(self.codebook_dtype), 1
+                )
+                xyz_indices[not_inlier_mask] = feature_indices.ravel()
+                pose1, info1 = poselib.estimate_absolute_pose(
+                    uv_arr,
+                    self.xyz_arr[xyz_indices],
+                    camera_dict,
+                )
+                t_err0, r_err = compute_pose_error(pose1, example[4])
                 tErrs.append(t_err0 * 100)
                 rErrs.append(r_err)
 
         features_h5.close()
-        global_features_h5.close()
 
         # Compute median errors.
         median_rErr = np.median(rErrs)

@@ -179,7 +179,7 @@ def main():
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
     plt.xlabel(r"$\lambda$")
-    plt.ylabel("% successfully localized images")
+    plt.ylabel("\% successfully localized images")
     markers = {
         "first": "o",
         "center": "d",
@@ -190,11 +190,11 @@ def main():
     tableau_colors = plt.get_cmap('tab10')
 
     colors = {
-        "first": tableau_colors(0),
-        "center": tableau_colors(1),
-        "last": tableau_colors(2),
-        "random-0": tableau_colors(3),
-        "gaussian": tableau_colors(4),
+        "first": tableau_colors(6),
+        "center": tableau_colors(7),
+        "last": tableau_colors(8),
+        "random-0": tableau_colors(9),
+        "gaussian": tableau_colors(3),
     }
     orders_ = ["first", "center", "last", "random-0", "gaussian"]
     plt.title("Aachen Day/Night v1.1")
@@ -222,7 +222,7 @@ def main():
     plt.ylim(0, 100)
     plt.xticks(np.arange(1, 11) / 10)
     plt.xlabel(r"$\lambda$")
-    plt.ylabel("% successfully localized images")
+    plt.ylabel("\% successfully localized images")
 
     plt.title("RobotCar Seasons v2")
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
