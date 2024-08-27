@@ -4,7 +4,7 @@ import numpy as np
 
 import dd_utils
 from dataset import RobotCarDataset
-from trainer_4 import RobotCarTrainer
+from trainer6 import RobotCarTrainer
 
 
 ABLATION_METHODS = [
@@ -131,7 +131,7 @@ if __name__ == "__main__":
         default="datasets/robotcar",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--use_global", type=int, default=0)
     parser.add_argument("--convert", type=int, default=1)
     parser.add_argument("--ablation", type=int, default=0)
 

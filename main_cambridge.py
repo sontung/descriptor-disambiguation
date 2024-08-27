@@ -1,7 +1,7 @@
 import argparse
 import dd_utils
 from dataset import CambridgeLandmarksDataset
-from trainer_4 import CambridgeLandmarksTrainer
+from trainer6 import CambridgeLandmarksTrainer
 
 
 def run_function(
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=1)
+    parser.add_argument("--use_global", type=int, default=0)
     parser.add_argument(
         "--local_desc",
         type=str,
