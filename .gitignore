@@ -36,6 +36,12 @@ vae_test.py
 verify_roll.py
 main_7scenes.py
 visualize_codebook.py
+process_d2_detection.py
+sfd2_models.py
+xfeat_model.py
+how_model.py
+dino_model.py
+gcl_model.py
 
 # Outputs.
 output/
