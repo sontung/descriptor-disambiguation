@@ -34,6 +34,8 @@ trainer6.py
 trainer_debug.py
 vae_test.py
 verify_roll.py
+main_7scenes.py
+visualize_codebook.py
 
 # Outputs.
 output/

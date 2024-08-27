@@ -1,16 +1,13 @@
-import math
+from types import SimpleNamespace
 
 import cv2
 import faiss
 import numpy as np
-import skimage
-from scipy.spatial.transform import Rotation as Rotation
-from skimage.transform import rotate
-from types import SimpleNamespace
-from kornia.feature import DeDoDe
 import torch
 from hloc import extractors
 from hloc.utils.base_model import dynamic_load
+from kornia.feature import DeDoDe
+from scipy.spatial.transform import Rotation as Rotation
 
 
 def cluster_by_faiss_kmeans(x, nb_clusters, verbose=False):
@@ -48,102 +45,6 @@ def return_pose_mat_no_inv(pose_q, pose_t):
     pose_4x4[0:3, 3] = pose_t
 
     return pose_4x4
-
-
-def return_pixel_grid_dsac():
-    pixel_grid = torch.zeros((2, math.ceil(5000 / 8), math.ceil(5000 / 8)))
-
-    for x in range(0, pixel_grid.size(2)):
-        for y in range(0, pixel_grid.size(1)):
-            pixel_grid[0, y, x] = x * 8 + 4
-            pixel_grid[1, y, x] = y * 8 + 4
-    return pixel_grid
-
-
-def rotate_image(t, angle_, order, mode="constant"):
-    t = t.permute(1, 2, 0).numpy()
-    t = rotate(t, angle_, order=order, mode=mode)
-    t = torch.from_numpy(t).permute(2, 0, 1).float()
-    return t
-
-
-def transform_kp(kp, max_size, image_ori, image_resize, angle):
-    height = image_ori.shape[1]
-    width = image_ori.shape[0]
-    scale = max_size / min([height, width])
-    kp = kp * scale
-
-    # if angle == 0 and type(angle) == int:
-    #     return kp.astype(np.int32)
-
-    h = image_resize.size(1)
-    w = image_resize.size(2)
-
-    translate = {"x": 0, "y": 0}
-
-    shear = {"x": -0.0, "y": -0.0}
-    scale = {"x": 1.0, "y": 1.0}
-
-    rotate = -angle
-    shift_x = w / 2 - 0.5
-    shift_y = h / 2 - 0.5
-
-    matrix_to_topleft = skimage.transform.SimilarityTransform(
-        translation=[-shift_x, -shift_y]
-    )
-    matrix_shear_y_rot = skimage.transform.AffineTransform(rotation=-np.pi / 2)
-    matrix_shear_y = skimage.transform.AffineTransform(shear=np.deg2rad(shear["y"]))
-    matrix_shear_y_rot_inv = skimage.transform.AffineTransform(rotation=np.pi / 2)
-    matrix_transforms = skimage.transform.AffineTransform(
-        scale=(scale["x"], scale["y"]),
-        translation=(translate["x"], translate["y"]),
-        rotation=np.deg2rad(rotate),
-        shear=np.deg2rad(shear["x"]),
-    )
-    matrix_to_center = skimage.transform.SimilarityTransform(
-        translation=[shift_x, shift_y]
-    )
-    matrix = (
-        matrix_to_topleft
-        + matrix_shear_y_rot
-        + matrix_shear_y
-        + matrix_shear_y_rot_inv
-        + matrix_transforms
-        + matrix_to_center
-    )
-
-    kp2 = np.copy(kp)
-    kp2 = np.expand_dims(kp2, 0)
-    kp2 = cv2.transform(kp2, matrix.params[:2]).squeeze()
-
-    return kp2.astype(np.int32)
-
-
-def transform_kp_aug_fast(
-    kp_indices, image_height, scale_factor, image, image_transformed, angle
-):
-    keypoints = transform_kp(
-        kp_indices,
-        int(image_height * scale_factor),
-        image,
-        image_transformed,
-        angle,
-    )
-
-    keypoints[:, [0, 1]] = keypoints[:, [1, 0]]
-    kp_map = np.zeros(
-        [image_transformed.shape[1], image_transformed.shape[2]], dtype=np.int8
-    )
-    mask1 = np.bitwise_and(
-        0 <= keypoints[:, 0], keypoints[:, 0] < image_transformed.shape[1]
-    )
-    mask2 = np.bitwise_and(
-        0 <= keypoints[:, 1], keypoints[:, 1] < image_transformed.shape[2]
-    )
-    mask = np.bitwise_and(mask1, mask2)
-    valid_keypoints = keypoints[mask]
-    kp_map[valid_keypoints[:, 0], valid_keypoints[:, 1]] = 1
-    return keypoints, valid_keypoints, kp_map, mask
 
 
 def hloc_conf_for_all_models():
@@ -243,20 +144,6 @@ def read_kp_and_desc(name, features_h5):
     else:
         descriptors = None
     return keypoints, descriptors
-
-
-def read_desc_only(name, features_h5):
-    img_id = "/".join(name.split("/")[-2:])
-    try:
-        grp = features_h5[img_id]
-    except KeyError:
-        grp = features_h5[name]
-
-    if "descriptors" in grp:
-        descriptors = np.array(grp["descriptors"]).T
-    else:
-        descriptors = None
-    return descriptors
 
 
 def read_global_desc(name, global_features_h5):

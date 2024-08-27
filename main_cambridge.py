@@ -1,7 +1,7 @@
 import argparse
 import dd_utils
 from dataset import CambridgeLandmarksDataset
-from trainer6 import CambridgeLandmarksTrainer
+from trainer import CambridgeLandmarksTrainer
 
 
 def run_function(

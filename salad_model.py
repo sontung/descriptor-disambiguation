@@ -1,4 +1,3 @@
-from collections import OrderedDict
 
 import torch
 import torchvision.transforms
@@ -26,18 +25,6 @@ class SaladModel:
                 "token_dim": 256,
             },
         )
-
-        # self.backbone = helper.get_backbone('dinov2_vitb14', {
-        #         'num_trainable_blocks': 4,
-        #         'return_token': True,
-        #         'norm_layer': True,
-        #     },)
-        # self.aggregator = helper.get_aggregator('SALAD', {
-        #         'num_channels': 768,
-        #         'num_clusters': 64,
-        #         'cluster_dim': 128,
-        #         'token_dim': 256,
-        #     })
 
         checkpoint = torch.load("../salad/dino_salad.ckpt")
         salad_model.load_state_dict(checkpoint)

@@ -1,23 +1,19 @@
-import math
 import os
 import pickle
 import sys
 from pathlib import Path
-import kmeans1d
-import cv2
+
 import faiss
 import h5py
 import hurry.filesize
 import numpy as np
 import poselib
-import sklearn
 import torch
 from pykdtree.kdtree import KDTree
 from sklearn.random_projection import GaussianRandomProjection
 from tqdm import tqdm
-import kornia
+
 import dd_utils
-import kmeans1d
 from ace_util import read_and_preprocess
 
 
@@ -110,8 +106,6 @@ class BaseTrainer:
         except AttributeError:
             if type(local_desc_model) == tuple:
                 self.local_desc_model_name = "sdf2"
-            elif type(local_desc_model) == kornia.feature.dedode.dedode.DeDoDe:
-                self.local_desc_model_name = "dedode"
 
         self.global_desc_model_name = (
             f"{global_desc_model.conf['name']}_{global_feature_dim}"

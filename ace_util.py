@@ -1,6 +1,3 @@
-import random
-from distutils.util import strtobool
-
 import PIL
 import cv2
 import numpy as np
@@ -83,72 +80,6 @@ def resize_image_by_hloc(image, size, interp):
     else:
         raise ValueError(f"Unknown interpolation {interp}.")
     return resized
-
-
-def set_seed(seed):
-    """
-    Seed all sources of randomness.
-    """
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-
-def _strtobool(x):
-    return bool(strtobool(x))
-
-
-def get_patch(image, center, patch_size, padding=False):
-    """
-    Function to extract a patch from an image given the center coordinate and patch size.
-    If padding is set to True, it adds padding to ensure the patch stays within the image boundaries.
-
-    Parameters:
-        image: numpy array representing the image.
-        center: tuple containing the (x, y) coordinates of the center of the patch.
-        patch_size: tuple containing the width and height of the patch.
-        padding: boolean indicating whether to add padding to the patch to ensure it stays within the image boundaries.
-
-    Returns:
-        patch: numpy array representing the extracted patch.
-    """
-    x, y = center
-    w, h = patch_size
-
-    if padding:
-        # Calculate padding to ensure the patch stays within the image boundaries
-        top_pad = max(0, -y + h // 2)
-        bottom_pad = max(0, y + h // 2 - image.shape[0])
-        left_pad = max(0, -x + w // 2)
-        right_pad = max(0, x + w // 2 - image.shape[1])
-
-        # Pad the image
-        image = cv2.copyMakeBorder(
-            image,
-            top_pad,
-            bottom_pad,
-            left_pad,
-            right_pad,
-            cv2.BORDER_CONSTANT,
-            value=(0, 0, 0),
-        )
-
-        # Adjust the center coordinates
-        x += left_pad
-        y += top_pad
-
-    # Calculate the top-left corner of the patch
-    x1 = int(x - w / 2)
-    y1 = int(y - h / 2)
-
-    # Calculate the bottom-right corner of the patch
-    x2 = x1 + w
-    y2 = y1 + h
-
-    # Extract the patch from the image
-    patch = image[y1:y2, x1:x2]
-
-    return patch
 
 
 def read_and_preprocess(name, conf):
