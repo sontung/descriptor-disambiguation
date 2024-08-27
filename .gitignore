@@ -23,6 +23,18 @@ roma/*
 *.sh
 *.npy
 
+analyze_clusters.py
+clustering.py
+test_attribution.py
+trainer2.py
+trainer3.py
+trainer_4.py
+trainer5.py
+trainer6.py
+trainer_debug.py
+vae_test.py
+verify_roll.py
+
 # Outputs.
 output/
 outputs/
