@@ -269,7 +269,6 @@ class AachenDataset(Dataset):
             self.image_id2points = {}
             self.pid2images = {}
 
-            index_map_file_name = f"output/{self.ds_type}/indices.npy"
             Path(f"output/{self.ds_type}").mkdir(parents=True, exist_ok=True)
 
             xyz_arr = np.zeros((len(self.recon_points), 3))
@@ -278,33 +277,10 @@ class AachenDataset(Dataset):
                 xyz_arr[idx] = self.recon_points[pid].xyz
                 all_pids[idx] = pid
 
-            if os.path.isfile(index_map_file_name):
-                inlier_ind = np.load(index_map_file_name)
-            else:
-                import open3d as o3d
-
-                point_cloud = o3d.geometry.PointCloud(
-                    o3d.utility.Vector3dVector(xyz_arr)
-                )
-                cl, inlier_ind = point_cloud.remove_radius_outlier(
-                    nb_points=16, radius=5, print_progress=True
-                )
-
-                np.save(index_map_file_name, np.array(inlier_ind))
-
-                # vis = o3d.visualization.Visualizer()
-                # vis.create_window(width=1920, height=1025)
-                # vis.add_geometry(cl)
-                # vis.run()
-                # vis.destroy_window()
-
-            self.good_pids = set(all_pids[inlier_ind])
-            # self.good_pids = set(all_pids)
             self.image_id2pids = {}
             self.image_id2uvs = {}
             for img_id in tqdm(self.recon_images, desc="Gathering points per image"):
                 pid_arr = self.recon_images[img_id].point3D_ids
-                # mask = [True if pid in self.good_pids else False for pid in pid_arr]
                 mask = pid_arr >= 0
                 self.image_id2pids[img_id] = pid_arr[mask]
                 self.image_id2uvs[img_id] = self.recon_images[img_id].xys[mask]
