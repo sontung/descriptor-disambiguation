@@ -43,6 +43,7 @@ xfeat_model.py
 how_model.py
 dino_model.py
 gcl_model.py
+robotcar_point_cloud_completion.py
 
 # Outputs.
 output/
