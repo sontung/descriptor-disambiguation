@@ -1,28 +1,47 @@
 # FUSELOC: Fusing Global and Local Descriptors to Disambiguate 2D-3D Matching in Visual Localization
+![Sample Image](paper/overview.png)
 [[Arxiv]](https://arxiv.org/abs/2408.12037)
 
-## Table of Contents
-
-- [Installation](#installation)
-- [Usage](#usage)
-- [Dataset](#dataset)
-- [Results](#results)
-- [Citation](#citation)
-- [License](#license)
+Here is the code for our paper on a simple way to disambiguate local descriptors in 2D-3D matching using global descriptors.
 
 ## Installation
 
-To get started with FUSELOC, clone this repository and install the required dependencies:
-
+We provided a list of requirements in this repo as a reference. Proceed at your own risk:
 ```bash
-git clone https://github.com/yourusername/FUSELOC.git
-cd FUSELOC
-pip install -r requirements.txt
+pip install -r requirements.txt 
 ```
+For the global descriptors, we provide the code re-written from the authors of SALAD, MixVPR, and CRICA. Download them from [here](https://drive.google.com/file/d/1AKbCzmEbWDne1Pr2ExtsOuDE1oZibhmR/view?usp=sharing) and unzip to the parent directory of this repo. An example:
+```shell
+work/descriptor-disambiguation # this repo
+work/CricaVPR
+work/salad
+work/MixVPR
+```
+
+## Dataset
+We used Aachen day/night v1.1, RobotCar Seasons v2, Extended CMU Seasons, and Cambridge Landmarks. Our repo contains io functions for these datasets, you just need to download them. To download, refer to this [link](https://github.com/cvg/Hierarchical-Localization/tree/master/hloc/pipelines).
 
 ## Usage
 
 Assume the dataset is downloaded somewhere, here is an example of usage:
 ```bash
 python main_robotcar.py --dataset /work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons --local_desc "d2net" --local_desc_dim 512 --global_desc "salad" --global_desc_dim 8448 --use_global 1 --convert 1
+```
+
+## Results
+
+![Sample Image](paper/matches_comparision_out.jpg)
+We consistently obtained significant improvement over the local-only baselines on the https://www.visuallocalization.net/ benchmark. See our paper for more details.
+
+## Citation
+```
+@misc{nguyen2024fuselocfusinggloballocal,
+      title={FUSELOC: Fusing Global and Local Descriptors to Disambiguate 2D-3D Matching in Visual Localization}, 
+      author={Son Tung Nguyen and Alejandro Fontan and Michael Milford and Tobias Fischer},
+      year={2024},
+      eprint={2408.12037},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2408.12037}, 
+}
 ```

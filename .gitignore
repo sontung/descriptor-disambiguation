@@ -10,8 +10,9 @@ datasets/pgt_*
 datasets/visloc_pseudo_gt_limitations
 datasets/*
 
+debug/*
 *.lprof
-*.png
+*.png !paper/overview.png
 test/*
 *.pdf
 *.json
