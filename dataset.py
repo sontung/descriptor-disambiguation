@@ -844,10 +844,5 @@ if __name__ == "__main__":
 
     # g = AachenDataset(train=False)
     # g[0]
-    train_ds_ = CambridgeLandmarksDataset(
-        train=True,
-        ds_name="ShopFacade",
-        root_dir=f"datasets/cambridge",
-    )
-    for _ in train_ds_:
-        continue
+    val_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=True)
+    print()

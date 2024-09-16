@@ -441,7 +441,7 @@ class BaseTrainer:
         sfm_to_local_h5 = self.load_selected_local_features(features_h5)
         pid2mean_desc = np.zeros(
             (len(self.dataset.recon_points), self.feature_dim),
-            self.codebook_dtype,
+            np.float64,
         )
         pid2count = np.zeros(len(self.dataset.recon_points))
 
