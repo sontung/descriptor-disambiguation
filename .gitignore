@@ -23,6 +23,7 @@ roma/*
 *.mp4
 *.sh
 *.npy
+test.py
 
 analyze_clusters.py
 clustering.py

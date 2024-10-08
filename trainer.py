@@ -82,7 +82,7 @@ class BaseTrainer:
         global_desc_conf,
         using_global_descriptors,
         collect_code_book=True,
-        lambda_val=0.5,
+        lambda_val=0.3,
         convert_to_db_desc=False,
         codebook_dtype=np.float16,
         order="random-0",
