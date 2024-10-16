@@ -81,6 +81,7 @@ def run_function(
     global_desc_dim,
     using_global_descriptors,
     convert,
+    lambda_val,
 ):
     if using_global_descriptors:
         print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
@@ -104,6 +105,7 @@ def run_function(
         conf_ns_retrieval,
         using_global_descriptors,
         convert_to_db_desc=convert,
+        lambda_val=lambda_val,
     )
     trainer_.evaluate()
 
@@ -119,7 +121,11 @@ if __name__ == "__main__":
     parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument("--convert", type=int, default=1)
     parser.add_argument("--ablation", type=int, default=0)
-
+    parser.add_argument(
+        "--lambda_val",
+        type=float,
+        default=0.3,
+    )
     parser.add_argument(
         "--local_desc",
         type=str,
@@ -153,4 +159,5 @@ if __name__ == "__main__":
             int(args.global_desc_dim),
             bool(args.use_global),
             bool(args.convert),
+            float(args.lambda_val),
         )

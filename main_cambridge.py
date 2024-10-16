@@ -30,8 +30,8 @@ def run_function(
 
     results = {}
     for ds_name in folders:
-        if ds_name != "GreatCourt":
-            continue
+        # if ds_name != "GreatCourt":
+        #     continue
         print(f"Processing {ds_name}")
         train_ds_ = CambridgeLandmarksDataset(
             train=True, ds_name=ds_name, root_dir=root_dir_
@@ -50,9 +50,9 @@ def run_function(
             conf_ns,
             conf_ns_retrieval,
             using_global_descriptors,
-            lambda_val=0.5,
-            convert_to_db_desc=True,
-            order="first",
+            lambda_val=0.3,
+            convert_to_db_desc=False,
+            order="random-0",
         )
 
         err = trainer_.evaluate()
@@ -71,26 +71,26 @@ if __name__ == "__main__":
         default="datasets/cambridge",
         help="Path to the dataset, default: %(default)s",
     )
-    parser.add_argument("--use_global", type=int, default=0)
+    parser.add_argument("--use_global", type=int, default=1)
     parser.add_argument(
         "--local_desc",
         type=str,
-        default="r2d2",
+        default="d2net",
     )
     parser.add_argument(
         "--local_desc_dim",
         type=int,
-        default=128,
+        default=512,
     )
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="mixvpr",
+        default="salad",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=128,
+        default=8448,
     )
     args = parser.parse_args()
     results = run_function(

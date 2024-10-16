@@ -5,7 +5,8 @@ from pathlib import Path
 
 import faiss
 import h5py
-import hurry.filesize
+
+# import hurry.filesize
 import numpy as np
 import poselib
 import torch
@@ -518,14 +519,10 @@ class BaseTrainer:
                 self.all_image_desc_for_db_conversion.shape,
                 self.all_image_desc_for_db_conversion.dtype,
             )
-            print(
-                f"DB desc size: {hurry.filesize.size(sys.getsizeof(self.all_image_desc_for_db_conversion))}"
-            )
         else:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat, gpu_index_flat_for_image_desc
 
-    @profile
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -557,7 +554,9 @@ class BaseTrainer:
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
         with torch.no_grad():
-            for count, example in enumerate(tqdm(self.test_dataset, desc="Computing pose for test set")):
+            for count, example in enumerate(
+                tqdm(self.test_dataset, desc="Computing pose for test set")
+            ):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
                     sys.exit()
                 name = example[1]
@@ -701,7 +700,6 @@ class RobotCarTrainer(BaseTrainer):
 
         return pid2mean_desc
 
-    @profile
     def evaluate(self):
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
@@ -727,7 +725,9 @@ class RobotCarTrainer(BaseTrainer):
             )
 
         with torch.no_grad():
-            for count, example in enumerate(tqdm(self.test_dataset, desc="Computing pose for test set")):
+            for count, example in enumerate(
+                tqdm(self.test_dataset, desc="Computing pose for test set")
+            ):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
                     sys.exit()
                 name = example[1]
@@ -752,7 +752,6 @@ class CMUTrainer(BaseTrainer):
     def clear(self):
         del self.pid2mean_desc
 
-    @profile
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -795,7 +794,9 @@ class CMUTrainer(BaseTrainer):
 
         result_file = open(result_file_name, "w")
         with torch.no_grad():
-            for count, example in enumerate(tqdm(self.test_dataset, desc="Computing pose for test set")):
+            for count, example in enumerate(
+                tqdm(self.test_dataset, desc="Computing pose for test set")
+            ):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
                     sys.exit()
                 if example is None:
