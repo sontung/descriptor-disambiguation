@@ -1,6 +1,56 @@
+import argparse
+import itertools
+
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from submit_vloc_entries import view
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description="Login to a website.")
+    parser.add_argument("username", type=str, help="Your username")
+    parser.add_argument("password", type=str, help="Your password")
+
+    args = parser.parse_args()
+
+    # Call the main function with parsed arguments
+    global USERNAME, PASSWORD
+    USERNAME, PASSWORD = args.username, args.password
+
+
+get_args()
+ENTRIES = view(USERNAME, PASSWORD)
+METHOD2SCORES = {}
+LOCAL_DESCRIPTORS = ["d2net", "r2d2", "dog", "superpoint"]
+GLOBAL_DESCRIPTORS = ["vanilla", "mixvpr", "eigenplaces", "salad"]
+
+MATRIX = np.zeros((len(LOCAL_DESCRIPTORS), len(GLOBAL_DESCRIPTORS)))
+for data_name in ENTRIES:
+    for method_name, scores in ENTRIES[data_name]:
+        if method_name not in METHOD2SCORES:
+            METHOD2SCORES[method_name] = [None, None, None]
+        index = 0
+        if "robotcar" in data_name.lower():
+            index = 1
+        elif "cmu" in data_name.lower():
+            index = 2
+        METHOD2SCORES[method_name][index] = scores
+
+for method_name in METHOD2SCORES:
+    list0 = method_name.split("_")
+    i0 = LOCAL_DESCRIPTORS.index(list0[0])
+    i1 = 0
+    if len(list0) == 2:
+        i1 = GLOBAL_DESCRIPTORS.index(list0[1])
+    flattened_list = [item for sublist in METHOD2SCORES[method_name]
+                      if sublist is not None for item in sublist]
+    avg_score = np.mean(flattened_list)
+    MATRIX[i1, i0] = avg_score
+    print(list0, i0, i1, avg_score)
+
+
+
 
 aachen = {
     "hloc": "89.8&96.1&99.4 & 77.0&90.6&100.0",
@@ -63,12 +113,29 @@ cmu = {
 }
 
 # Generate random data
-data = np.random.rand(10, 12)  # 10 rows and 12 columns of random data
+data = MATRIX
 
 # Create a heatmap
 plt.figure(figsize=(10, 6))
-sns.heatmap(data, annot=True, cmap="YlGnBu")
+ax = sns.heatmap(data, annot=True, cmap="YlGnBu", vmin=0, vmax=100)
+ax.set_xlabel("Local methods")
+ax.set_ylabel("Global methods")
+
+x_ticks = LOCAL_DESCRIPTORS
+ax.set_xticks(np.arange(len(x_ticks)) + 0.5)  # Align tick labels to centers
+ax.set_xticklabels(x_ticks)  # Rotate for readability
+
+# Set custom y ticks
+y_ticks = GLOBAL_DESCRIPTORS
+ax.set_yticks(np.arange(len(y_ticks)) + 0.5)  # Align tick labels to centers
+ax.set_yticklabels(y_ticks)
 
 # Display the plot
 plt.title("Heatmap of Random Data")
-plt.show()
+plt.tight_layout()
+
+plt.savefig(
+    "heatmap.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1
+)
+plt.close()  # This closes the plot window without displaying it
+
