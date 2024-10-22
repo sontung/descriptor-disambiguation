@@ -166,12 +166,15 @@ def find_numbers(string_, return_numbers=False):
 
 
 def main():
-    plt.rcParams.update({
-        "text.usetex": True,
-        "font.family": "serif",
-        "font.sans-serif": ["Helvetica"],
-        "font.size": 12,  # Set the global font size
-        "text.latex.preamble": r"\usepackage{amsmath}", })
+    plt.rcParams.update(
+        {
+            "text.usetex": True,
+            "font.family": "serif",
+            "font.sans-serif": ["Helvetica"],
+            "font.size": 12,  # Set the global font size
+            "text.latex.preamble": r"\usepackage{amsmath}",
+        }
+    )
     plt.figure(figsize=(5, 7))
 
     plt.subplot(211)
@@ -187,7 +190,7 @@ def main():
         "random-0": "h",
         "gaussian": "*",
     }
-    tableau_colors = plt.get_cmap('tab10')
+    tableau_colors = plt.get_cmap("tab10")
 
     colors = {
         "first": tableau_colors(6),
@@ -211,8 +214,11 @@ def main():
         # method_ = f"{method_}-{order_}"
         print(order_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_,
-            color=colors[order_]
+            np.arange(1, 11) / 10,
+            all_numbers,
+            marker=markers[order_],
+            label=order_,
+            color=colors[order_],
         )
     plt.legend(loc=4, fontsize=9, ncol=1)
 
@@ -237,9 +243,11 @@ def main():
                 all_numbers.append(avg_res)
         print(order_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[order_], label=order_,
-            color=colors[order_]
-
+            np.arange(1, 11) / 10,
+            all_numbers,
+            marker=markers[order_],
+            label=order_,
+            color=colors[order_],
         )
     plt.legend(loc=4, fontsize=9, ncol=1)
     plt.tight_layout()

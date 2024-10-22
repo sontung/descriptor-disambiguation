@@ -108,7 +108,9 @@ def make_pic(good_result, bad_result, res_name, rgb_arr):
     vis.add_geometry(cam2, reset_bounding_box=True)
     vis.add_geometry(pred1, reset_bounding_box=True)
     vis.add_geometry(pred2, reset_bounding_box=True)
-    vis.get_view_control().convert_from_pinhole_camera_parameters(parameters, allow_arbitrary=True)
+    vis.get_view_control().convert_from_pinhole_camera_parameters(
+        parameters, allow_arbitrary=True
+    )
     vis.remove_geometry(cam2, reset_bounding_box=False)
     vis.remove_geometry(pred2, reset_bounding_box=False)
     vis.capture_screen_image(f"debug/good.png", do_render=True)
@@ -135,8 +137,8 @@ def visualize_matches(good_results, bad_results, rgb_arr):
     for idx in tqdm(range(len(good_results))):
         idx_str = "{:03d}".format(idx)
         oob1, oob2 = make_pic(good_results[idx], bad_results[idx], idx_str, rgb_arr)
-        score1 = np.sum(oob1)/oob1.shape[0]
-        score2 = np.sum(oob2)/oob2.shape[0]
+        score1 = np.sum(oob1) / oob1.shape[0]
+        score2 = np.sum(oob2) / oob2.shape[0]
 
         im1 = cv2.imread(f"debug/good.png")[150:850, 500:1500]
         im2 = cv2.imread(f"debug/bad.png")[150:, 500:1500]
@@ -144,23 +146,42 @@ def visualize_matches(good_results, bad_results, rgb_arr):
         font_scale = 2.5
         thick = 5
         # Get the text size to calculate the bottom-right position
-        (text_width, text_height), _ = cv2.getTextSize(f"{score1*100:.1f}%",
-                                                       cv2.FONT_HERSHEY_SIMPLEX,
-                                                       font_scale, thick)
+        (text_width, text_height), _ = cv2.getTextSize(
+            f"{score1*100:.1f}%", cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick
+        )
 
         # Calculate the position for the text (bottom-right corner)
-        position = (im1.shape[1] - text_width - 10, text_height + 10)  # 10px margin from the edges
-        position2 = (im2.shape[1] - text_width - 10, text_height + 10)  # 10px margin from the edges
+        position = (
+            im1.shape[1] - text_width - 10,
+            text_height + 10,
+        )  # 10px margin from the edges
+        position2 = (
+            im2.shape[1] - text_width - 10,
+            text_height + 10,
+        )  # 10px margin from the edges
 
-        cv2.putText(im1,
-                    f"{score1*100:.1f}%", position, cv2.FONT_HERSHEY_SIMPLEX,
-                    font_scale, (0, 0, 0), thick, cv2.LINE_AA)
-        cv2.putText(im2,
-                    f"{score2*100:.1f}%", position2, cv2.FONT_HERSHEY_SIMPLEX,
-                    font_scale, (0, 0, 0), thick, cv2.LINE_AA)
+        cv2.putText(
+            im1,
+            f"{score1*100:.1f}%",
+            position,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (0, 0, 0),
+            thick,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            im2,
+            f"{score2*100:.1f}%",
+            position2,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            (0, 0, 0),
+            thick,
+            cv2.LINE_AA,
+        )
         im3 = cv2.vconcat([im2, im1])
         cv2.imwrite(f"debug/both-{idx_str}.png", im3)
-
 
     return
 

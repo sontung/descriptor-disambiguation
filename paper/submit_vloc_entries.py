@@ -36,14 +36,18 @@ def login(driver, username, password):
 
 
 def extract_numbers(input_string):
+    if input_string is None:
+        return None
     # Use regex to find all numbers in the format of floating-point numbers
     numbers = re.findall(r"\d+\.\d+", input_string)
     return [float(num) for num in numbers]
 
 
-def get_present_substrings(main_string,
-                           substrings1=["d2net", "r2d2", "superpoint", "dog"],
-                           substrings2=["salad", "eigenplaces", "mixvpr"]):
+def get_present_substrings(
+    main_string,
+    substrings1=["d2net", "r2d2", "superpoint", "dog"],
+    substrings2=["salad", "eigenplaces", "mixvpr"],
+):
     local = [substring for substring in substrings1 if substring in main_string]
     glo = [substring for substring in substrings2 if substring in main_string]
     local.extend(glo)
@@ -189,11 +193,7 @@ if __name__ == "__main__":
     USERNAME, PASSWORD = args.username, args.password
     # view(USERNAME, PASSWORD)
     delete()
-    ds2id = {
-        "aachen": "aachenv11",
-        "robotcar": "robotcarv2",
-        "cmu": "extended-cmu"
-    }
+    ds2id = {"aachen": "aachenv11", "robotcar": "robotcarv2", "cmu": "extended-cmu"}
     output_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output"
     all_res_files = glob.glob(f"{output_dir}/*/*_eval_*")
     all_res_files = sorted(all_res_files)

@@ -23,8 +23,7 @@ aachen = {
     "d2_crica_light": "84.0 / 89.8 / 95.1	62.3 / 73.8 / 83.8",
     "d2_salad_heavy_0.3": "86.3 / 91.5 / 97.3	69.6 / 85.9 / 93.7",
     "d2_salad_light_0.3": "	85.2 / 90.7 / 95.9	69.1 / 83.8 / 90.1",
-    "glace": "8.6 / 20.8 / 64.0	1.0 / 1.0 / 17.3"
-
+    "glace": "8.6 / 20.8 / 64.0	1.0 / 1.0 / 17.3",
 }
 
 robotcar = {
@@ -49,7 +48,6 @@ robotcar = {
     "topk=400": "61.5 / 94.0 / 100.0	32.2 / 83.2 / 99.1",
     "d2_salad_heavy_0.3": "61.1 / 93.1 / 100.0	32.9 / 80.9 / 99.1",
     "d2_salad_light_0.3": "	61.4 / 94.0 / 100.0	24.0 / 62.5 / 89.7",
-
 }
 
 cmu = {
@@ -73,7 +71,6 @@ cmu = {
     "d2_crica_light": "89.1 / 94.1 / 97.3	86.8 / 90.7 / 96.1	68.9 / 75.0 / 84.1",
     "d2_salad_heavy_0.3": "	91.1 / 96.4 / 99.0	92.2 / 96.1 / 99.5	82.2 / 88.4 / 95.4",
     "d2_salad_light_0.3": "	90.3 / 95.6 / 98.6	90.6 / 94.5 / 99.0	76.8 / 83.3 / 92.6",
-
 }
 
 method_dict = {}
@@ -91,7 +88,7 @@ for name, ds in [["aachen", aachen], ["robotcar", robotcar], ["cmu", cmu]]:
             res = list(map(float, res.split("&")))
         assert len(res) % 3 == 0, f"{name} {method_}"
         for i in range(0, len(res), 3):
-            scores += res[i: i+3]
+            scores += res[i : i + 3]
             count += 1
         scores /= count
         method_dict.setdefault(method_, []).extend(scores)

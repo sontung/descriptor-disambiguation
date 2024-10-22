@@ -53,7 +53,7 @@ aachen = {
         0.8: "84.8 / 89.7 / 94.9	62.3 / 72.3 / 81.7",
         0.9: "84.5 / 89.3 / 94.9	61.8 / 71.7 / 81.2",
         1.0: "84.0 / 89.2 / 94.8	61.3 / 71.7 / 80.6",
-    }
+    },
 }
 
 robotcar = {
@@ -104,7 +104,7 @@ robotcar = {
         0.8: "61.1 / 93.8 / 99.9	13.5 / 34.7 / 53.1",
         0.9: "61.1 / 93.7 / 99.9	11.7 / 33.1 / 50.3",
         1.0: "60.8 / 93.8 / 99.9	11.9 / 33.6 / 49.7",
-    }
+    },
 }
 
 
@@ -117,12 +117,15 @@ def find_numbers(string_):
 
 
 def main():
-    plt.rcParams.update({
-        "text.usetex": True,
-        "font.family": "serif",
-        "font.sans-serif": ["Helvetica"],
-        "font.size": 12,  # Set the global font size
-        "text.latex.preamble": r"\usepackage{amsmath}", })
+    plt.rcParams.update(
+        {
+            "text.usetex": True,
+            "font.family": "serif",
+            "font.sans-serif": ["Helvetica"],
+            "font.size": 12,  # Set the global font size
+            "text.latex.preamble": r"\usepackage{amsmath}",
+        }
+    )
 
     plt.figure(figsize=(5, 7))
 
@@ -138,7 +141,7 @@ def main():
         "crica": "v",
         "salad": "s",
     }
-    tableau_colors = plt.get_cmap('tab10')
+    tableau_colors = plt.get_cmap("tab10")
 
     colors = {
         "mixvpr": tableau_colors(0),
@@ -159,9 +162,11 @@ def main():
             all_numbers.append(avg_res)
         print(method_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers,
+            np.arange(1, 11) / 10,
+            all_numbers,
             marker=markers[method_],
-            color=colors[method_], label=method_
+            color=colors[method_],
+            label=method_,
         )
     plt.legend(loc=4, fontsize=9, ncol=1)
 
@@ -184,8 +189,11 @@ def main():
             all_numbers.append(avg_res)
         print(method_, max(all_numbers))
         plt.plot(
-            np.arange(1, 11) / 10, all_numbers, marker=markers[method_], color=colors[method_],
-            label=method_
+            np.arange(1, 11) / 10,
+            all_numbers,
+            marker=markers[method_],
+            color=colors[method_],
+            label=method_,
         )
     plt.legend(loc=4, fontsize=9, ncol=1)
     plt.tight_layout()
