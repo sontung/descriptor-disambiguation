@@ -732,7 +732,7 @@ class RobotCarTrainer(BaseTrainer):
             f"{self.global_feature_dim}_"
             f"{self.lambda_val}_"
             f"{self.convert_to_db_desc}_"
-            f"{self.order}.h5",
+            f"{self.order}_{self.using_global_descriptors}.h5",
             "a",
             libver="latest",
         )
