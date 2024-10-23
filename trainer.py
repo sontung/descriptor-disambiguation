@@ -61,6 +61,7 @@ def write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file):
     tvec = " ".join(map(str, pose.t))
 
     print(f"{image_id} {qvec} {tvec}", file=result_file)
+    return image_id, qvec, tvec, info["inliers"]
 
 
 def load_selected_features_for_img(name, fd):
@@ -724,6 +725,18 @@ class RobotCarTrainer(BaseTrainer):
                 "w",
             )
 
+        result_h5py = h5py.File(
+            f"output/{self.ds_name}/RobotCar_eval_"
+            f"{self.local_desc_model_name}_"
+            f"{self.global_desc_model_name}_"
+            f"{self.global_feature_dim}_"
+            f"{self.lambda_val}_"
+            f"{self.convert_to_db_desc}_"
+            f"{self.order}.h5py",
+            "a",
+            libver="latest",
+        )
+
         with torch.no_grad():
             for count, example in enumerate(
                 tqdm(self.test_dataset, desc="Computing pose for test set")
@@ -741,11 +754,18 @@ class RobotCarTrainer(BaseTrainer):
                     gpu_index_flat,
                 )
                 image_id = "/".join(example[2].split("/")[1:])
-                write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
+                image_id, qvec, tvec, inlier_ratio = write_pose_to_file(
+                    example, image_id, uv_arr, xyz_pred, result_file
+                )
+                grp = result_h5py.create_group(image_id)
+                grp.create_dataset("qvec", data=qvec)
+                grp.create_dataset("tvec", data=tvec)
+                grp.create_dataset("inliers", data=inlier_ratio)
 
         result_file.close()
         features_h5.close()
         global_features_h5.close()
+        result_h5py.close()
 
 
 class CMUTrainer(BaseTrainer):

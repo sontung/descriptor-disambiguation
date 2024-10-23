@@ -108,10 +108,9 @@ for method_name in METHOD2SCORES:
     if len(list0) == 2:
         i1 = GLOBAL_DESCRIPTORS.index(list0[1])
     flattened_list = [
-        item
+        np.mean(sublist)
         for sublist in METHOD2SCORES[method_name]
         if sublist is not None
-        for item in sublist
     ]
     avg_score = np.mean(flattened_list)
     MATRIX[i1, i0] = avg_score
@@ -120,23 +119,33 @@ for method_name in METHOD2SCORES:
 # Generate random data
 data = MATRIX
 
+plt.rcParams.update(
+    {
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.sans-serif": ["Helvetica"],
+        "font.size": 15,  # Set the global font size
+        "text.latex.preamble": r"\usepackage{amsmath}",
+    }
+)
+
 # Create a heatmap
-plt.figure(figsize=(10, 6))
-ax = sns.heatmap(data, annot=True, cmap="YlGnBu", vmin=0, vmax=100)
+plt.figure(figsize=(10, 7))
+ax = sns.heatmap(data, annot=True, cmap="Oranges", vmin=0, vmax=100)
 ax.set_xlabel("Local methods")
 ax.set_ylabel("Global methods")
 
-x_ticks = LOCAL_DESCRIPTORS
+x_ticks = ["d2net", "r2d2", "sift", "superpoint"]
 ax.set_xticks(np.arange(len(x_ticks)) + 0.5)  # Align tick labels to centers
 ax.set_xticklabels(x_ticks)  # Rotate for readability
 
 # Set custom y ticks
-y_ticks = GLOBAL_DESCRIPTORS
+y_ticks = ["vanilla", "mixvpr", "eigenplaces", "salad"]
 ax.set_yticks(np.arange(len(y_ticks)) + 0.5)  # Align tick labels to centers
 ax.set_yticklabels(y_ticks)
 
 # Display the plot
-plt.title("Heatmap of Random Data")
+plt.title("Average accuracy for different local/global methods")
 plt.tight_layout()
 
 plt.savefig("heatmap.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1)
