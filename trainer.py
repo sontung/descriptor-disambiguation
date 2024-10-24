@@ -748,18 +748,19 @@ class RobotCarTrainer(BaseTrainer):
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
-                uv_arr, xyz_pred = self.legal_predict(
+                uv_arr, xyz_pred, pid, _ = self.legal_predict(
                     keypoints,
                     descriptors,
                     gpu_index_flat,
+                    return_indices=True
                 )
                 image_id = "/".join(example[2].split("/")[1:])
                 image_id, qvec, tvec, inlier_ratio = write_pose_to_file(
                     example, image_id, uv_arr, xyz_pred, result_file
                 )
                 grp = result_h5py.create_group(image_id)
-                grp.create_dataset("qvec", data=qvec)
-                grp.create_dataset("tvec", data=tvec)
+                grp.create_dataset("uv", data=uv_arr)
+                grp.create_dataset("pid", data=pid)
                 grp.create_dataset("inliers", data=inlier_ratio)
 
         result_file.close()
