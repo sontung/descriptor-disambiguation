@@ -761,6 +761,7 @@ class RobotCarTrainer(BaseTrainer):
                 grp = result_h5py.create_group(image_id)
                 grp.create_dataset("uv", data=uv_arr)
                 grp.create_dataset("pid", data=pid)
+                grp.create_dataset("xyz", data=xyz_pred)
                 grp.create_dataset("inliers", data=inlier_ratio)
 
         result_file.close()
