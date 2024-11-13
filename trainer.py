@@ -758,11 +758,12 @@ class RobotCarTrainer(BaseTrainer):
                 image_id, qvec, tvec, inlier_ratio = write_pose_to_file(
                     example, image_id, uv_arr, xyz_pred, result_file
                 )
-                grp = result_h5py.create_group(image_id)
-                grp.create_dataset("uv", data=uv_arr)
-                grp.create_dataset("pid", data=pid)
-                grp.create_dataset("xyz", data=xyz_pred)
-                grp.create_dataset("inliers", data=inlier_ratio)
+                if not BENCHMARKING_FPS:
+                    grp = result_h5py.create_group(image_id)
+                    grp.create_dataset("uv", data=uv_arr)
+                    grp.create_dataset("pid", data=pid)
+                    grp.create_dataset("xyz", data=xyz_pred)
+                    grp.create_dataset("inliers", data=inlier_ratio)
 
         result_file.close()
         features_h5.close()
