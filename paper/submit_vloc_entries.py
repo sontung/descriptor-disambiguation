@@ -69,7 +69,11 @@ def view(username, password):
         h3_element = table.find_element(By.XPATH, "./preceding::h3[1]")
         ds_id = h3_element.text
         numbers = extract_numbers(" ".join(row.text.split(" ")[1:]))
-        desc = get_present_substrings(row.text)
+        if "sift" in row.text:
+            str_ = row.text.replace("sift", "dog")
+        else:
+            str_ = row.text
+        desc = get_present_substrings(str_)
         method_name_ = "_".join(desc)
         data.setdefault(ds_id, []).append([method_name_, numbers])
         print(method_name_)
@@ -192,10 +196,10 @@ if __name__ == "__main__":
     # Call the main function with parsed arguments
     USERNAME, PASSWORD = args.username, args.password
     # view(USERNAME, PASSWORD)
-    delete()
+    # delete()
     ds2id = {"aachen": "aachenv11", "robotcar": "robotcarv2", "cmu": "extended-cmu"}
     output_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output"
-    all_res_files = glob.glob(f"{output_dir}/*/*_eval_*")
+    all_res_files = glob.glob(f"{output_dir}/*/*_eval_*.txt")
     all_res_files = sorted(all_res_files)
     all_fields = []
     for txt_name in all_res_files:

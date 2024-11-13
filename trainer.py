@@ -17,7 +17,7 @@ from tqdm import tqdm
 import dd_utils
 from ace_util import read_and_preprocess
 
-BENCHMARKING_FPS = False
+BENCHMARKING_FPS = True
 NB_BENCHMARKING_FRAMES = 100
 
 

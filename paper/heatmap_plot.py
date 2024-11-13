@@ -131,7 +131,7 @@ plt.rcParams.update(
 
 # Create a heatmap
 plt.figure(figsize=(10, 7))
-ax = sns.heatmap(data, annot=True, cmap="Oranges", vmin=0, vmax=100)
+ax = sns.heatmap(data, annot=True, cmap="Oranges", vmin=0, vmax=100, annot_kws={"size": 20})
 ax.set_xlabel("Local methods")
 ax.set_ylabel("Global methods")
 
