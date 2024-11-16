@@ -426,18 +426,13 @@ class RobotCarDataset(Dataset):
         name2 = str(self.images_dir / name).replace(".png", ".jpg")
         return name2
 
-    def _load_image(self, img_id):
-        name = self.recon_images[img_id].name
-        name2 = str(self.images_dir / name)
-
-        return None, name2
     def __len__(self):
         return len(self.img_ids)
 
     def _get_single_item(self, idx):
         if self.train:
             img_id = self.img_ids[idx]
-            image, image_name = self._load_image(img_id)
+            image_name = self._process_id_to_name(img_id)
             if type(self.image2pose[img_id]) == list:
                 qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
                 tx, ty, tz = -(
@@ -449,7 +444,7 @@ class RobotCarDataset(Dataset):
                 )
             else:
                 pose_mat = self.image2pose[img_id]
-
+            image = None
             intrinsics = torch.eye(3)
             if img_id in self.image2info:
                 focal, radial = self.image2info[img_id]
@@ -466,7 +461,6 @@ class RobotCarDataset(Dataset):
                     cx = 500.107605
                     cy = 511.461426
 
-            assert image.shape == (1024, 1024, 3)
             intrinsics[0, 0] = focal
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
