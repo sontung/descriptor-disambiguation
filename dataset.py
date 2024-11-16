@@ -7,8 +7,6 @@ import numpy as np
 import pycolmap
 import torch
 from scipy.spatial.transform import Rotation
-from skimage import color
-from skimage import io
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
 from tqdm import tqdm
@@ -295,13 +293,8 @@ class AachenDataset(Dataset):
     def _load_image(self, img_id):
         name = self.recon_images[img_id].name
         name2 = str(self.images_dir / name)
-        image = io.imread(name2)
 
-        if len(image.shape) < 3:
-            # Convert to RGB if needed.
-            image = color.gray2rgb(image)
-
-        return image, name2
+        return None, name2
 
     def __len__(self):
         return len(self.img_ids)
@@ -434,15 +427,10 @@ class RobotCarDataset(Dataset):
         return name2
 
     def _load_image(self, img_id):
-        name2 = self._process_id_to_name(img_id)
-        image = io.imread(name2)
+        name = self.recon_images[img_id].name
+        name2 = str(self.images_dir / name)
 
-        if len(image.shape) < 3:
-            # Convert to RGB if needed.
-            image = color.gray2rgb(image)
-
-        return image, name2
-
+        return None, name2
     def __len__(self):
         return len(self.img_ids)
 
@@ -647,22 +635,10 @@ class CMUDataset(Dataset):
             self.recon_points.clear()
 
     def _load_image(self, img_id):
-        if self.train:
-            name = self.recon_images[img_id].name
-            name2 = str(self.images_dir / name)
-        else:
-            name2 = img_id
-        try:
-            image = io.imread(name2)
-        except ValueError or FileNotFoundError:
-            return None, name2
+        name = self.recon_images[img_id].name
+        name2 = str(self.images_dir / name)
 
-        if len(image.shape) < 3:
-            # Convert to RGB if needed.
-            image = color.gray2rgb(image)
-
-        return image, name2
-
+        return None, name2
     def __len__(self):
         return len(self.img_ids)
 
