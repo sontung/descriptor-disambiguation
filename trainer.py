@@ -514,7 +514,7 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion)
+            gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion.astype(np.float32))
             print("Converting to DB descriptors")
             print(
                 self.all_image_desc_for_db_conversion.shape,
