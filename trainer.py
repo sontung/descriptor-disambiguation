@@ -727,17 +727,17 @@ class RobotCarTrainer(BaseTrainer):
                 "w",
             )
 
-        result_h5py = h5py.File(
-            f"output/{self.ds_name}/RobotCar_eval_"
-            f"{self.local_desc_model_name}_"
-            f"{self.global_desc_model_name}_"
-            f"{self.global_feature_dim}_"
-            f"{self.lambda_val}_"
-            f"{self.convert_to_db_desc}_"
-            f"{self.order}_{self.using_global_descriptors}.h5",
-            "a",
-            libver="latest",
-        )
+        # result_h5py = h5py.File(
+        #     f"output/{self.ds_name}/RobotCar_eval_"
+        #     f"{self.local_desc_model_name}_"
+        #     f"{self.global_desc_model_name}_"
+        #     f"{self.global_feature_dim}_"
+        #     f"{self.lambda_val}_"
+        #     f"{self.convert_to_db_desc}_"
+        #     f"{self.order}_{self.using_global_descriptors}.h5",
+        #     "a",
+        #     libver="latest",
+        # )
 
         with torch.no_grad():
             for count, example in enumerate(
@@ -760,17 +760,17 @@ class RobotCarTrainer(BaseTrainer):
                 image_id, qvec, tvec, inlier_ratio = write_pose_to_file(
                     example, image_id, uv_arr, xyz_pred, result_file
                 )
-                if not BENCHMARKING_FPS:
-                    grp = result_h5py.create_group(image_id)
-                    grp.create_dataset("uv", data=uv_arr)
-                    grp.create_dataset("pid", data=pid)
-                    grp.create_dataset("xyz", data=xyz_pred)
-                    grp.create_dataset("inliers", data=inlier_ratio)
+                # if not BENCHMARKING_FPS:
+                #     grp = result_h5py.create_group(image_id)
+                #     grp.create_dataset("uv", data=uv_arr)
+                #     grp.create_dataset("pid", data=pid)
+                #     grp.create_dataset("xyz", data=xyz_pred)
+                #     grp.create_dataset("inliers", data=inlier_ratio)
 
         result_file.close()
         features_h5.close()
         global_features_h5.close()
-        result_h5py.close()
+        # result_h5py.close()
 
 
 class CMUTrainer(BaseTrainer):
