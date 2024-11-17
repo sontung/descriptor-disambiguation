@@ -89,7 +89,7 @@ class BaseTrainer:
         collect_code_book=True,
         lambda_val=0.3,
         convert_to_db_desc=False,
-        codebook_dtype=np.float16,
+        codebook_dtype=np.float32,
         order="random-0",
     ):
         self.order = order
