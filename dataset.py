@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+import cv2
 import numpy as np
 import pycolmap
 import torch
@@ -629,10 +630,18 @@ class CMUDataset(Dataset):
             self.recon_points.clear()
 
     def _load_image(self, img_id):
-        name = self.recon_images[img_id].name
-        name2 = str(self.images_dir / name)
+        if self.train:
+            name = self.recon_images[img_id].name
+            name2 = str(self.images_dir / name)
+        else:
+            name2 = img_id
+        try:
+            image = cv2.imread(name2)
+        except ValueError or FileNotFoundError:
+            return None, name2
 
-        return None, name2
+        return image, name2
+
     def __len__(self):
         return len(self.img_ids)
 
