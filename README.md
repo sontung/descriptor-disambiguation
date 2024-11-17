@@ -6,9 +6,11 @@ Here is the code for our paper on a simple way to disambiguate local descriptors
 
 ## Installation
 
-We provided a list of requirements in this repo as a reference. Proceed at your own risk:
+We provided a list of requirements in this repo as a reference. Proceed at your own risk. Here are the installation instructions:
 ```bash
-pip install -r requirements.txt 
+mamba install -c pytorch -c nvidia faiss-gpu=1.8.0 pytorch=1.12.1 cudatoolkit=11.2 pytorch-cuda=11 numpy
+mamba install pycolmap h5py pykdtree poselib hloc scikit-learn
+mamba install pytorch-lightning pytorch-metric-learning prettytable
 ```
 For the global descriptors, we provide the code re-written from the authors of SALAD, MixVPR, and CRICA. Download them from [here](https://drive.google.com/file/d/1AKbCzmEbWDne1Pr2ExtsOuDE1oZibhmR/view?usp=sharing) and unzip to the parent directory of this repo. An example:
 ```shell

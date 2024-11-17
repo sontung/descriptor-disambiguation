@@ -514,7 +514,7 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion.astype(np.float32))
+            gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion)
             print("Converting to DB descriptors")
             print(
                 self.all_image_desc_for_db_conversion.shape,
@@ -594,10 +594,10 @@ class BaseTrainer:
             feature_indices = feature_indices[mask][:, 0]
             uv_arr = uv_arr[mask]
         else:
-            features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
+            # features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
 
             distances, feature_indices = gpu_index_flat.search(
-                features_ori, 1
+                features_ori.astype(self.codebook_dtype), 1
             )
 
         feature_indices = feature_indices.ravel()
