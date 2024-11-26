@@ -12,7 +12,7 @@ from tqdm import tqdm
 def main():
     desc_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/image_desc_salad_8448.npy"
     name_file = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output/robotcar/image_desc_name_salad_8448.npy"
-    train_ds_ = RobotCarDataset(ds_dir="datasets/robotcar")
+    train_ds_ = RobotCarDataset(ds_dir="datasets/robotcar", train=False, evaluate=False)
     all_desc = np.load(desc_file)
     afile = open(name_file, "rb")
     all_names = pickle.load(afile)
@@ -45,8 +45,8 @@ def main():
         example = train_ds_[idx]
         pose_mat = example[4]
         all_poses[idx] = pose_mat
-        cluster_id = name2color[example[1].split("images/")[-1]]
-        all_cluster_ids.append(cluster_id)
+        # cluster_id = name2color[example[1].split("images/")[-1]]
+        # all_cluster_ids.append(cluster_id)
         # if cluster_id == 0:
         #     cam = o3d.geometry.LineSet.create_camera_visualization(
         #         427 * 2, 240 * 2, intrinsics, pose_mat, scale=10
