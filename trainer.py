@@ -562,7 +562,7 @@ class BaseTrainer:
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
-                    sys.exit()
+                    break
                 name = example[1]
                 keypoints, descriptors = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
@@ -755,7 +755,7 @@ class RobotCarTrainer(BaseTrainer):
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
-                    sys.exit()
+                    break
                 name = example[1]
                 keypoints, descriptors = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
@@ -841,7 +841,7 @@ class CMUTrainer(BaseTrainer):
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
-                    sys.exit()
+                    break
                 if example is None:
                     continue
                 name = example[1]
