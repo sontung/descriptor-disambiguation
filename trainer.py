@@ -1,6 +1,7 @@
 import os
 import pickle
 import sys
+import time
 from pathlib import Path
 
 import faiss
@@ -555,6 +556,8 @@ class BaseTrainer:
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
         with torch.no_grad():
+            start_time = time.time()
+
             for count, example in enumerate(
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
@@ -572,7 +575,14 @@ class BaseTrainer:
                 )
                 image_id = example[2].split("/")[-1]
                 write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
+            end_time = time.time()
 
+            # Calculate FPS
+            num_frames = count + 1  # Add 1 since count is zero-indexed
+            elapsed_time = end_time - start_time
+            fps = num_frames / elapsed_time if elapsed_time > 0 else 0
+
+            print(f"Processed {num_frames} frames in {elapsed_time:.2f} seconds ({fps:.2f} FPS)")
         features_h5.close()
         result_file.close()
         global_features_h5.close()
@@ -740,6 +750,7 @@ class RobotCarTrainer(BaseTrainer):
         # )
 
         with torch.no_grad():
+            start_time = time.time()
             for count, example in enumerate(
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
@@ -766,7 +777,14 @@ class RobotCarTrainer(BaseTrainer):
                 #     grp.create_dataset("pid", data=pid)
                 #     grp.create_dataset("xyz", data=xyz_pred)
                 #     grp.create_dataset("inliers", data=inlier_ratio)
+            end_time = time.time()
 
+            # Calculate FPS
+            num_frames = count + 1  # Add 1 since count is zero-indexed
+            elapsed_time = end_time - start_time
+            fps = num_frames / elapsed_time if elapsed_time > 0 else 0
+
+            print(f"Processed {num_frames} frames in {elapsed_time:.2f} seconds ({fps:.2f} FPS)")
         result_file.close()
         features_h5.close()
         global_features_h5.close()
