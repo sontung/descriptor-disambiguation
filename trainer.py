@@ -837,6 +837,7 @@ class CMUTrainer(BaseTrainer):
 
         result_file = open(result_file_name, "w")
         with torch.no_grad():
+            start_time = time.time()
             for count, example in enumerate(
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
@@ -881,6 +882,16 @@ class CMUTrainer(BaseTrainer):
                     line = f"{image_id} {qvec} {tvec}"
                 query_results.append(line)
                 print(line, file=result_file)
+            end_time = time.time()
+
+            # Calculate FPS
+            num_frames = count + 1  # Add 1 since count is zero-indexed
+            elapsed_time = end_time - start_time
+            fps = num_frames / elapsed_time if elapsed_time > 0 else 0
+
+            print(f"Processed {num_frames} frames in {elapsed_time:.2f} seconds ({fps:.2f} FPS)")
+            if BENCHMARKING_FPS:
+                sys.exit()
         features_h5.close()
         global_features_h5.close()
         result_file.close()
