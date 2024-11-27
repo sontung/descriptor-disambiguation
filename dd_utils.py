@@ -179,7 +179,7 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         Model = dynamic_load(extractors, model_dict["name"])
-        encoder = Model(model_dict).eval().cuda()
+        encoder = Model(model_dict).eval().to(device)
         conf_ns = SimpleNamespace(**{**default_conf, **conf})
         conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
         conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]

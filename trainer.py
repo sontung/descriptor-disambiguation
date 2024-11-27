@@ -384,6 +384,7 @@ class BaseTrainer:
                 "descriptors": descriptors.T,
             }
         else:
+            print(self.local_desc_model.device)
             pred = self.local_desc_model(
                 {"image": torch.from_numpy(image).unsqueeze(0).cuda()}
             )
