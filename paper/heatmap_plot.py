@@ -124,14 +124,14 @@ plt.rcParams.update(
         "text.usetex": True,
         "font.family": "serif",
         "font.sans-serif": ["Helvetica"],
-        "font.size": 15,  # Set the global font size
+        "font.size": 20,  # Set the global font size
         "text.latex.preamble": r"\usepackage{amsmath}",
     }
 )
 
 # Create a heatmap
 plt.figure(figsize=(10, 7))
-ax = sns.heatmap(data, annot=True, cmap="Oranges", vmin=0, vmax=100, annot_kws={"size": 20})
+ax = sns.heatmap(data, annot=True, cmap="Oranges", vmin=30, vmax=100, annot_kws={"size": 20})
 ax.set_xlabel("Local methods")
 ax.set_ylabel("Global methods")
 

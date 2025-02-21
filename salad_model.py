@@ -51,3 +51,10 @@ class SaladModel:
         image_descriptor = self.model(image.unsqueeze(0).cuda())
         image_descriptor = image_descriptor.squeeze().cpu().numpy()  # 8448
         return image_descriptor
+
+
+if __name__ == '__main__':
+    model = SaladModel()
+    with torch.no_grad():
+        out = model.process("/home/n11373598/work/descriptor-disambiguation/datasets/robotcar/images/overcast-reference/rear/1417178903018872.jpg")
+    print()
