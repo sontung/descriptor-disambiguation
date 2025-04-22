@@ -555,6 +555,12 @@ class BaseTrainer:
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
+        result_h5py = h5py.File(
+            f"output/{self.ds_name}/results.h5",
+            "a",
+            libver="latest",
+        )
+
         with torch.no_grad():
             start_time = time.time()
 
@@ -568,13 +574,21 @@ class BaseTrainer:
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
-                uv_arr, xyz_pred = self.legal_predict(
+                uv_arr, xyz_pred, pid, distances = self.legal_predict(
                     keypoints,
                     descriptors,
                     gpu_index_flat,
+                    return_indices=True,
                 )
                 image_id = example[2].split("/")[-1]
-                write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
+                _, _, _, mask = write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
+                grp = result_h5py.create_group(image_id)
+                grp.create_dataset("uv", data=uv_arr)
+                grp.create_dataset("pid", data=pid)
+                grp.create_dataset("xyz", data=xyz_pred)
+                grp.create_dataset("inliers", data=mask)
+                grp.create_dataset("name", data=example[2])
+
             end_time = time.time()
 
             # Calculate FPS
@@ -586,6 +600,7 @@ class BaseTrainer:
         features_h5.close()
         result_file.close()
         global_features_h5.close()
+        result_h5py.close()
 
     def legal_predict(
         self,

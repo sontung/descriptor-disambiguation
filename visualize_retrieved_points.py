@@ -116,7 +116,7 @@ def compute_reproj_err(gt_pose, xyz, uv):
     return np.mean(np.abs(uv - uv_arr_pred), 1), oob, uv_arr_pred
 
 
-def make_pic(good_result, bad_result, res_name, rgb_arr):
+def make_pic(good_result, bad_result):
     (
         name1,
         t_err1,
@@ -523,17 +523,17 @@ def run_function(
 
     res = trainer_.process()
     res_bad = trainer_2.process()
-    visualize_matches(res, res_bad, trainer_.rgb_arr)
+    # visualize_matches(res, res_bad, trainer_.rgb_arr)
 
     res00 = sorted([du for du in res if "seq1" in du[0]], key=lambda du: du[0])
     res10 = sorted([du for du in res_bad if "seq1" in du[0]], key=lambda du: du[0])
+    visualize_matches2(res00, res10, trainer_.rgb_arr)
 
     err1, err2, score1, score2 = compute_info(res00, res10)
     err1 = smooth_measurements(err1, window_size=10)*10
     err2 = smooth_measurements(err2, window_size=10)*10
     score1 = smooth_measurements(score1, window_size=10)
     score2 = smooth_measurements(score2, window_size=10)
-    visualize_matches2(res00, res10, trainer_.rgb_arr)
 
     animate_stats(err1, err2, score1, score2)
 
