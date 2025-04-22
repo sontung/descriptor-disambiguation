@@ -479,7 +479,7 @@ class BaseTrainer:
         """
         process query descriptors only
         """
-        keypoints, descriptors = dd_utils.read_kp_and_desc(name, features_h5)
+        keypoints, descriptors, scale = dd_utils.read_kp_and_desc(name, features_h5, return_scale=True)
 
         if self.using_global_descriptors:
             image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
@@ -488,7 +488,6 @@ class BaseTrainer:
                 _, ind = gpu_index_flat_for_image_desc.search(
                     image_descriptor.reshape(1, -1).astype(np.float32), 1
                 )
-                # image_descriptor = self.all_image_desc_for_db_conversion[int(ind)]
                 image_descriptor = np.mean(
                     self.all_image_desc_for_db_conversion[ind.flatten()], 0
                 )
@@ -504,7 +503,7 @@ class BaseTrainer:
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
             )
-        return keypoints, descriptors
+        return keypoints, descriptors, scale
 
     def return_faiss_indices(self):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
@@ -570,7 +569,7 @@ class BaseTrainer:
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
                     break
                 name = example[1]
-                keypoints, descriptors = self.process_descriptor(
+                keypoints, descriptors, scale = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
@@ -588,6 +587,7 @@ class BaseTrainer:
                 grp.create_dataset("xyz", data=xyz_pred)
                 grp.create_dataset("inliers", data=mask)
                 grp.create_dataset("name", data=example[2])
+                grp.create_dataset("scale", data=scale)
 
             end_time = time.time()
 

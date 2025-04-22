@@ -129,7 +129,7 @@ def hloc_conf_for_all_models():
     return conf, default_conf
 
 
-def read_kp_and_desc(name, features_h5):
+def read_kp_and_desc(name, features_h5, return_scale=False):
     img_id = "/".join(name.split("/")[-2:])
     try:
         grp = features_h5[img_id]
@@ -143,6 +143,8 @@ def read_kp_and_desc(name, features_h5):
         descriptors = pred["descriptors"].T
     else:
         descriptors = None
+    if return_scale:
+        return keypoints, descriptors, scale
     return keypoints, descriptors
 
 
