@@ -149,7 +149,6 @@ if __name__ == "__main__":
         default=4096,
     )
     args = parser.parse_args()
-    sys.exit()
     if args.ablation:
         run_ablation_order(args.dataset)
     else:

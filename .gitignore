@@ -21,7 +21,6 @@ labels_test/*
 labels_train/*
 roma/*
 *.mp4
-*.sh
 *.npy
 test.py
 
