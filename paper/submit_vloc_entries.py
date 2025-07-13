@@ -105,10 +105,11 @@ def delete():
     #     WebDriverWait(driver, 10).until(EC.url_changes(link))
 
     for key1 in data:
-        for name, link in data[key1]:
-            print(name)
-            driver.get(link)
-            WebDriverWait(driver, 10).until(EC.url_changes(link))
+        if key1 in ["My Aachen Day-Night Submissions"]:
+            for name, link in data[key1]:
+                print(name)
+                driver.get(link)
+                WebDriverWait(driver, 10).until(EC.url_changes(link))
 
     # for name, link in data["My RobotCar-Seasons v2 Submissions"]:
     #     if "sampler" in name.lower() or "results" in name.lower():
@@ -196,7 +197,7 @@ if __name__ == "__main__":
     # Call the main function with parsed arguments
     USERNAME, PASSWORD = args.username, args.password
     # view(USERNAME, PASSWORD)
-    # delete()
+    delete()
     ds2id = {"aachen": "aachenv11", "robotcar": "robotcarv2", "cmu": "extended-cmu"}
     output_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/output"
     all_res_files = glob.glob(f"{output_dir}/*/*_eval_*.txt")
