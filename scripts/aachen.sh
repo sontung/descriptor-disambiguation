@@ -9,7 +9,7 @@ set -e  # Exit on error
 # Note: gputype line is optional! Delete if any gpu is fine.
 
 # Activate your conda environment (should already be created and all packages installed)
-conda activate scrstudio
+conda activate env2
 
 cd /home/n11373598/work/descriptor-disambiguation
 python main_aachen.py --local_desc d2net --local_desc_dim 512 --global_desc eigenplaces --global_desc_dim 2048
