@@ -95,7 +95,7 @@ class BaseTrainer:
     ):
         self.order = order
         self.global_rand_indices = None
-        self.use_rand_indices = feature_dim != global_feature_dim
+        self.use_rand_indices = feature_dim != global_feature_dim and self.order != "pca"
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
@@ -137,6 +137,7 @@ class BaseTrainer:
         self.convert_to_db_desc = convert_to_db_desc
         self.all_names = []
         self.all_image_desc_for_db_conversion = None
+        self.pca_model = None
 
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
@@ -291,6 +292,12 @@ class BaseTrainer:
                 )
                 all_desc = self.gaussian_transformer.fit_transform(all_desc)
                 indices = np.arange(0, self.feature_dim)
+            elif self.order == "pca":
+                from cuml import PCA
+
+                self.pca_model = PCA(n_components=self.feature_dim, copy=False)
+                self.pca_model.fit(all_desc)
+                all_desc = self.pca_model.transform(all_desc)
             else:
                 raise NotImplementedError
             self.global_rand_indices = indices
@@ -492,7 +499,12 @@ class BaseTrainer:
                     self.all_image_desc_for_db_conversion[ind.flatten()], 0
                 )
 
-            if self.use_rand_indices:
+            if self.order == "pca":
+                image_descriptor = self.pca_model.transform(
+                    image_descriptor.reshape(1, -1)
+                ).flatten()
+
+            elif self.use_rand_indices:
                 if self.order == "gaussian":
                     image_descriptor = self.gaussian_transformer.transform(
                         image_descriptor.reshape(1, -1)
