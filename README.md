@@ -7,6 +7,9 @@ Here is the code for our paper on a simple way to disambiguate local descriptors
 ## Installation
 
 We provided a list of requirements in this repo as a reference. Proceed at your own risk. Here are the installation instructions:
+
+pixi add pycolmap h5py pykdtree poselib scikit-learn pytorch-lightning pytorch-metric-learning prettytable hloc
+
 ```bash
 mamba install -c pytorch -c nvidia faiss-gpu=1.8.0 pytorch=1.12.1 cudatoolkit=11.2 pytorch-cuda=11 numpy
 mamba install pycolmap h5py pykdtree poselib hloc scikit-learn
