@@ -9,10 +9,7 @@ set -e  # Exit on error
 # Note: gputype line is optional! Delete if any gpu is fine.
 
 # Activate your conda environment (should already be created and all packages installed)
-cd /home/n11373598/work/descriptor-disambiguation
-cd env_pixi
-/home/n11373598/.pixi/bin/pixi shell
-cd ..
-python -c "import torch; print(torch.__version__); print('CUDA available:', torch.cuda.is_available())"
+cd /home/n11373598/work/descriptor-disambiguation/env_pixi
 
-#python main_aachen.py --local_desc d2net --local_desc_dim 512 --global_desc eigenplaces --global_desc_dim 2048
+# Run the test command inside the pixi environment
+/home/n11373598/.pixi/bin/pixi run python -c "import torch; print(torch.__version__); print('CUDA available:', torch.cuda.is_available())"
