@@ -13,5 +13,6 @@ cd /home/n11373598/work/descriptor-disambiguation
 cd env_pixi
 /home/n11373598/.pixi/bin/pixi shell
 cd ..
+python -c "import torch; print(torch.__version__); print('CUDA available:', torch.cuda.is_available())"
 
-python main_aachen.py --local_desc d2net --local_desc_dim 512 --global_desc eigenplaces --global_desc_dim 2048
+#python main_aachen.py --local_desc d2net --local_desc_dim 512 --global_desc eigenplaces --global_desc_dim 2048
