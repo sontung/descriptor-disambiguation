@@ -442,7 +442,7 @@ class D2Net(BaseModel):
     def _init(self, conf):
         model_file = conf["checkpoint_dir"] / conf["model_name"]
         if not model_file.exists():
-            model_file.parent.mkdir(exist_ok=True)
+            model_file.parent.mkdir(exist_ok=True, parents=True)
             cmd = [
                 "wget",
                 "https://dusmanu.com/files/d2-net/" + conf["model_name"],
