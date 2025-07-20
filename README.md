@@ -8,7 +8,6 @@ Here is the code for our paper on a simple way to disambiguate local descriptors
 
 ### If you are using [Pixi](https://pixi.sh/latest/installation/) (Recommended):
 ```shell
-cd env_pixi
 pixi install
 pixi shell # activate the environment
 ```
