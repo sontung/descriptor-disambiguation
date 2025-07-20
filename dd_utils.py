@@ -112,9 +112,10 @@ def hloc_conf_for_all_models():
             "model": {"name": "openibl"},
             "preprocessing": {"resize_max": 1024},
         },
-        "eigenplaces": {
-            "output": "global-feats-eigenplaces",
-            "model": {"name": "eigenplaces"},
+
+        "megaloc": {
+            "output": "global-feats-megaloc",
+            "model": {"name": "megaloc"},
             "preprocessing": {"resize_max": 1024},
         },
     }
