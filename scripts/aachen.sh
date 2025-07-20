@@ -12,4 +12,4 @@ set -e  # Exit on error
 cd /home/n11373598/work/descriptor-disambiguation/env_pixi
 
 # Run the test command inside the pixi environment
-/home/n11373598/.pixi/bin/pixi run python -c "import torch; print(torch.__version__); print('CUDA available:', torch.cuda.is_available())"
+/home/n11373598/.pixi/bin/pixi run python -c "import torch; print(torch.__version__)"
