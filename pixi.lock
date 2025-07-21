@@ -79,7 +79,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/distributed-2024.12.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/rapidsai/linux-64/distributed-ucxx-0.42.00-py3.10_250213_g762a6ed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/dlpack-0.8-h59595ed_3.conda
-      - conda: https://conda.anaconda.org/pytorch/linux-64/faiss-gpu-1.11.0-py3.10_h4818125_0_cuda12.1.1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/fastrlock-0.8.3-py310h8c668a6_1.conda
       - conda: https://conda.anaconda.org/pytorch/linux-64/ffmpeg-4.3-hf484d3e_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/filelock-3.18.0-pyhd8ed1ab_0.conda
@@ -142,7 +141,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libedit-3.1.20250104-pl5321h7949ede_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libev-4.33-hd590300_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libevent-2.1.12-hf998b51_1.conda
-      - conda: https://conda.anaconda.org/pytorch/linux-64/libfaiss-1.11.0-h4818125_0_cuda12.1.1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.6-h2dba641_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-15.1.0-h767d61c_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/libgcc-ng-15.1.0-h69a702a_3.conda
@@ -1500,28 +1498,6 @@ packages:
   - littleutils ; extra == 'tests'
   - rich ; python_full_version >= '3.11' and extra == 'tests'
   requires_python: '>=3.8'
-- conda: https://conda.anaconda.org/pytorch/linux-64/faiss-gpu-1.11.0-py3.10_h4818125_0_cuda12.1.1.conda
-  build_number: 0
-  sha256: 1d6777481a0bdbf9f48480b39f9e0935c3577bd13ba344bf3e92eccad6c3725a
-  md5: e10c31f557f2cb1715c5fb58d25e51bf
-  depends:
-  - __glibc >=2.17,<3.0.a0
-  - _openmp_mutex >=4.5
-  - libfaiss 1.11.0 h4818125_0_cuda12.1.1
-  - libgcc >=14
-  - libstdcxx >=14
-  - mkl 2023.0.*
-  - numpy >=1.19,<2
-  - numpy >=1.26.4,<2.0a0
-  - packaging
-  - python >=3.10,<3.11.0a0
-  - python_abi 3.10.* *_cp310
-  license: MIT
-  license_family: MIT
-  purls:
-  - pkg:pypi/faiss?source=hash-mapping
-  size: 3127868
-  timestamp: 1745595861310
 - pypi: https://files.pythonhosted.org/packages/90/2b/0817a2b257fe88725c25589d89aec060581aabf668707a8d03b2e9e0cb2a/fastjsonschema-2.21.1-py3-none-any.whl
   name: fastjsonschema
   version: 2.21.1
@@ -2658,22 +2634,6 @@ packages:
   purls: []
   size: 427426
   timestamp: 1685725977222
-- conda: https://conda.anaconda.org/pytorch/linux-64/libfaiss-1.11.0-h4818125_0_cuda12.1.1.conda
-  build_number: 0
-  sha256: 0924601ba80c14b5946031529975da6128f42fcb527388ed397b086d0a1a3376
-  md5: 896e4022fa34dd136f32fbabcaed8a9b
-  depends:
-  - __glibc >=2.17,<3.0.a0
-  - cuda-cudart >=12.1,<13
-  - libcublas >=12.1,<13
-  - libgcc >=14
-  - libstdcxx >=14
-  - mkl 2023.0.*
-  license: MIT
-  license_family: MIT
-  purls: []
-  size: 155197026
-  timestamp: 1745594173981
 - conda: https://conda.anaconda.org/conda-forge/linux-64/libffi-3.4.6-h2dba641_1.conda
   sha256: 764432d32db45466e87f10621db5b74363a9f847d2b8b1f9743746cd160f06ab
   md5: ede4673863426c0883c0063d853bbd85

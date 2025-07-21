@@ -19,7 +19,6 @@ pykdtree = "*"
 poselib = "*"
 scikit-learn = "*"
 pip = ">=25.1.1,<26"
-faiss-gpu = "*"
 
 [pypi-dependencies]
 opencv-python = "*"
