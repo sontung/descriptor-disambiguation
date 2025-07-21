@@ -566,11 +566,11 @@ class BaseTrainer:
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
-        result_h5py = h5py.File(
-            f"output/{self.ds_name}/results.h5",
-            "a",
-            libver="latest",
-        )
+        # result_h5py = h5py.File(
+        #     f"output/{self.ds_name}/results.h5",
+        #     "a",
+        #     libver="latest",
+        # )
 
         with torch.no_grad():
             start_time = time.time()
@@ -593,13 +593,13 @@ class BaseTrainer:
                 )
                 image_id = example[2].split("/")[-1]
                 _, _, _, mask = write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
-                grp = result_h5py.create_group(image_id)
-                grp.create_dataset("uv", data=uv_arr)
-                grp.create_dataset("pid", data=pid)
-                grp.create_dataset("xyz", data=xyz_pred)
-                grp.create_dataset("inliers", data=mask)
-                grp.create_dataset("name", data=example[2])
-                grp.create_dataset("scale", data=scale)
+                # grp = result_h5py.create_group(image_id)
+                # grp.create_dataset("uv", data=uv_arr)
+                # grp.create_dataset("pid", data=pid)
+                # grp.create_dataset("xyz", data=xyz_pred)
+                # grp.create_dataset("inliers", data=mask)
+                # grp.create_dataset("name", data=example[2])
+                # grp.create_dataset("scale", data=scale)
 
             end_time = time.time()
 
@@ -612,7 +612,7 @@ class BaseTrainer:
         features_h5.close()
         result_file.close()
         global_features_h5.close()
-        result_h5py.close()
+        # result_h5py.close()
 
     def legal_predict(
         self,
