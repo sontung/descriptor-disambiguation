@@ -518,14 +518,10 @@ class BaseTrainer:
         return keypoints, descriptors, scale
 
     def return_faiss_indices(self):
-        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
-        res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat = faiss.IndexFlatL2(self.feature_dim)  # build the index
         gpu_index_flat.add(self.pid2mean_desc.astype(np.float32))
         if self.convert_to_db_desc and self.using_global_descriptors:
-            index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
-            res2 = faiss.StandardGpuResources()
-            gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
+            gpu_index_flat_for_image_desc = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion.astype(np.float32))
             print("Converting to DB descriptors")
             print(
