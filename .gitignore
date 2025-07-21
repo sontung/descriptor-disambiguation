@@ -9,7 +9,7 @@ datasets/wayspots_*
 datasets/pgt_*
 datasets/visloc_pseudo_gt_limitations
 datasets/*
-
+third_party/*
 debug/*
 *.lprof
 *.png !paper/overview.png
