@@ -10,6 +10,12 @@ Here is the code for our paper on a simple way to disambiguate local descriptors
 ```shell
 pixi install
 pixi shell # activate the environment
+
+# this is for hloc from pip
+cd ..
+git clone --recursive https://github.com/cvg/Hierarchical-Localization/
+cd Hierarchical-Localization/
+python -m pip install -e .
 ```
 
 ### Otherwise, plain Conda:

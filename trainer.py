@@ -631,10 +631,10 @@ class BaseTrainer:
             feature_indices = feature_indices[mask][:, 0]
             uv_arr = uv_arr[mask]
         else:
-            # features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
+            features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
 
             distances, feature_indices = gpu_index_flat.search(
-                features_ori.astype(self.codebook_dtype), 1
+                features_ori, 1
             )
 
         feature_indices = feature_indices.ravel()
