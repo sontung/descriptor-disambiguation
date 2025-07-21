@@ -634,32 +634,12 @@ class BaseTrainer:
             features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
             features_ori = features_ori.astype(np.float32)
 
+            print(features_ori.shape, self.pid2mean_desc.shape)
             distances, feature_indices = gpu_index_flat.search(
                 features_ori, 1
             )
 
         feature_indices = feature_indices.ravel()
-        if self.special_pid_list is not None:
-            mask = [
-                True if self.ind2pid[ind] in self.special_pid_list else False
-                for ind in feature_indices
-            ]
-            feature_indices = feature_indices[mask]
-            uv_arr = uv_arr[mask]
-
-        if remove_duplicate:
-            pid2uv = {}
-            for idx in range(feature_indices.shape[0]):
-                pid = feature_indices[idx]
-                dis = distances[idx][0]
-                uv = uv_arr[idx]
-                if pid not in pid2uv:
-                    pid2uv[pid] = [dis, uv]
-                else:
-                    if dis < pid2uv[pid][0]:
-                        pid2uv[pid] = [dis, uv]
-            uv_arr = np.array([pid2uv[pid][1] for pid in pid2uv])
-            feature_indices = [pid for pid in pid2uv]
 
         pred_scene_coords_b3 = self.xyz_arr[feature_indices]
 
