@@ -422,8 +422,8 @@ class BaseTrainer:
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
                 image_descriptor = self.image2desc[example[1]]
-                if self.use_rand_indices:
-                    image_descriptor = image_descriptor[self.global_rand_indices]
+                image_descriptor = self.compress_gl_descriptor(image_descriptor)
+
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, image_descriptor, self.lambda_val
                 )
@@ -449,6 +449,21 @@ class BaseTrainer:
         print(f"Codebook size: {round(sys.getsizeof(pid2mean_desc) / 1e9, 2)} GB")
         print(f"Codebook dtype: {pid2mean_desc.dtype}")
         return pid2mean_desc, pid2ind
+
+    def compress_gl_descriptor(self, image_descriptor):
+        if self.order == "pca":
+            image_descriptor = self.pca_model.transform(
+                image_descriptor.reshape(1, -1)
+            ).flatten()
+
+        elif self.use_rand_indices:
+            if self.order == "gaussian":
+                image_descriptor = self.gaussian_transformer.transform(
+                    image_descriptor.reshape(1, -1)
+                ).flatten()
+            else:
+                image_descriptor = image_descriptor[self.global_rand_indices]
+        return image_descriptor
 
     def collect_descriptors(self, vis=False):
         features_h5 = self.load_local_features()
@@ -500,18 +515,7 @@ class BaseTrainer:
                     self.all_image_desc_for_db_conversion[ind.flatten()], 0
                 )
 
-            if self.order == "pca":
-                image_descriptor = self.pca_model.transform(
-                    image_descriptor.reshape(1, -1)
-                ).flatten()
-
-            elif self.use_rand_indices:
-                if self.order == "gaussian":
-                    image_descriptor = self.gaussian_transformer.transform(
-                        image_descriptor.reshape(1, -1)
-                    ).flatten()
-                else:
-                    image_descriptor = image_descriptor[self.global_rand_indices]
+            image_descriptor = self.compress_gl_descriptor(image_descriptor)
 
             descriptors = combine_descriptors(
                 descriptors, image_descriptor, self.lambda_val
