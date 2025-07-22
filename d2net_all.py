@@ -88,6 +88,7 @@ def interpolate_dense_features(pos, dense_features, return_corners=False):
         ], dim=0)
         return [descriptors, pos, ids, corners]
 
+
 def process_multiscale(image, model, scales=[.5, 1, 2]):
     b, _, h_init, w_init = image.size()
     device = image.device

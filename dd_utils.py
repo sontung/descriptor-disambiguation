@@ -181,19 +181,14 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
         model_dict = conf[local_desc_model]["model"]
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        Model = dynamic_load(extractors, model_dict["name"])
-        encoder = Model(model_dict).eval().to(device)
-        conf_ns = SimpleNamespace(**{**default_conf, **conf})
-        conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
-        conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]
-    except ModuleNotFoundError:
-        if local_desc_model != "d2net":
-            print(f"Model {local_desc_model} cannot found in extractors, try d2net")
-            raise ModuleNotFoundError
-        from d2net_all import D2Net
-        model_dict = conf[local_desc_model]["model"]
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        encoder = D2Net(model_dict).eval().to(device)
+        if local_desc_model == "d2net":
+            from d2net_all import D2Net
+            model_dict = conf[local_desc_model]["model"]
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = D2Net(model_dict).eval().to(device)
+        else:
+            Model = dynamic_load(extractors, model_dict["name"])
+            encoder = Model(model_dict).eval().to(device)
         conf_ns = SimpleNamespace(**{**default_conf, **conf})
         conf_ns.grayscale = conf[local_desc_model]["preprocessing"]["grayscale"]
         conf_ns.resize_max = conf[local_desc_model]["preprocessing"]["resize_max"]

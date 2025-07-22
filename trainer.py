@@ -359,8 +359,6 @@ class BaseTrainer:
 
     def produce_local_descriptors(self, name, fd=None):
         image, scale = read_and_preprocess(name, self.local_desc_conf)
-        # print(image.shape)
-        # sys.exit()
         if self.local_desc_model_name == "sfd2":
             model, extractor, conf = self.local_desc_model
             pred = extractor(

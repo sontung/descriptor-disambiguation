@@ -16,6 +16,9 @@ cd ..
 git clone --recursive https://github.com/cvg/Hierarchical-Localization/
 cd Hierarchical-Localization/
 python -m pip install -e .
+
+# this is for faiss
+pip install https://github.com/kyamagu/faiss-wheels/releases/download/v1.7.3/faiss_gpu-1.7.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 ```
 
 ### Otherwise, plain Conda:
