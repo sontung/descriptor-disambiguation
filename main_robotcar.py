@@ -14,11 +14,11 @@ ABLATION_METHODS = [
     ["mixvpr", 4096],
 ]
 ABLATION_METHODS_ORDER = [
-    ["salad", 8448, 0.5],
+    # ["salad", 8448, 0.5],
     ["megaloc", 8448, 0.5],
     # ["crica", 10752, 0.5],
     # ["eigenplaces", 2048, 0.5],
-    ["mixvpr", 4096, 0.5],
+    # ["mixvpr", 4096, 0.5],
 ]
 
 ORDERS = ["gaussian", "random-0", "first", "last", "center", "pca"]
