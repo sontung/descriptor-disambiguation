@@ -1,0 +1,3 @@
+[submodule "VPR-methods-evaluation"]
+	path = VPR-methods-evaluation
+	url = git@github.com:gmberton/VPR-methods-evaluation.git

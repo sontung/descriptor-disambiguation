@@ -106,6 +106,7 @@ class BaseTrainer:
         self.ds_name = self.dataset.ds_type
         out_dir = Path(f"output/{self.ds_name}")
         out_dir.mkdir(parents=True, exist_ok=True)
+        Path("results").mkdir(exist_ok=True)
 
         try:
             self.local_desc_model_name = local_desc_model.conf["name"]
@@ -546,7 +547,7 @@ class BaseTrainer:
 
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/Aachen_v1_1_eval_"
+                f"results/Aachen_v1_1_eval_"
                 f"{self.local_desc_model_name}_"
                 f"{self.global_desc_model_name}_"
                 f"{self.global_feature_dim}_"
@@ -557,7 +558,7 @@ class BaseTrainer:
             )
         else:
             result_file = open(
-                f"output/{self.ds_name}/Aachen_v1_1_eval_{self.local_desc_model_name}.txt",
+                f"results/Aachen_v1_1_eval_{self.local_desc_model_name}.txt",
                 "w",
             )
 
@@ -566,20 +567,12 @@ class BaseTrainer:
         features_h5 = h5py.File(self.test_features_path, "r")
         global_features_h5 = h5py.File(self.global_descriptor_test_path, "r")
 
-        # result_h5py = h5py.File(
-        #     f"output/{self.ds_name}/results.h5",
-        #     "a",
-        #     libver="latest",
-        # )
-
         with torch.no_grad():
             start_time = time.time()
 
             for count, example in enumerate(
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
-                if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
-                    break
                 name = example[1]
                 keypoints, descriptors, scale = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
@@ -593,14 +586,6 @@ class BaseTrainer:
                 )
                 image_id = example[2].split("/")[-1]
                 _, _, _, mask = write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
-                # grp = result_h5py.create_group(image_id)
-                # grp.create_dataset("uv", data=uv_arr)
-                # grp.create_dataset("pid", data=pid)
-                # grp.create_dataset("xyz", data=xyz_pred)
-                # grp.create_dataset("inliers", data=mask)
-                # grp.create_dataset("name", data=example[2])
-                # grp.create_dataset("scale", data=scale)
-
             end_time = time.time()
 
             # Calculate FPS
@@ -612,14 +597,12 @@ class BaseTrainer:
         features_h5.close()
         result_file.close()
         global_features_h5.close()
-        # result_h5py.close()
 
     def legal_predict(
         self,
         uv_arr,
         features_ori,
         gpu_index_flat,
-        remove_duplicate=False,
         return_indices=False,
         ratio_test=False,
     ):
@@ -730,7 +713,7 @@ class RobotCarTrainer(BaseTrainer):
 
         if self.using_global_descriptors:
             result_file = open(
-                f"output/{self.ds_name}/RobotCar_eval_"
+                f"results/RobotCar_eval_"
                 f"{self.local_desc_model_name}_"
                 f"{self.global_desc_model_name}_"
                 f"{self.global_feature_dim}_"
@@ -741,21 +724,9 @@ class RobotCarTrainer(BaseTrainer):
             )
         else:
             result_file = open(
-                f"output/{self.ds_name}/RobotCar_eval_{self.local_desc_model_name}.txt",
+                f"results/RobotCar_eval_{self.local_desc_model_name}.txt",
                 "w",
             )
-
-        # result_h5py = h5py.File(
-        #     f"output/{self.ds_name}/RobotCar_eval_"
-        #     f"{self.local_desc_model_name}_"
-        #     f"{self.global_desc_model_name}_"
-        #     f"{self.global_feature_dim}_"
-        #     f"{self.lambda_val}_"
-        #     f"{self.convert_to_db_desc}_"
-        #     f"{self.order}_{self.using_global_descriptors}.h5",
-        #     "a",
-        #     libver="latest",
-        # )
 
         with torch.no_grad():
             start_time = time.time()
@@ -765,7 +736,7 @@ class RobotCarTrainer(BaseTrainer):
                 if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
                     break
                 name = example[1]
-                keypoints, descriptors = self.process_descriptor(
+                keypoints, descriptors, _ = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
@@ -779,12 +750,6 @@ class RobotCarTrainer(BaseTrainer):
                 image_id, qvec, tvec, inlier_ratio = write_pose_to_file(
                     example, image_id, uv_arr, xyz_pred, result_file
                 )
-                # if not BENCHMARKING_FPS:
-                #     grp = result_h5py.create_group(image_id)
-                #     grp.create_dataset("uv", data=uv_arr)
-                #     grp.create_dataset("pid", data=pid)
-                #     grp.create_dataset("xyz", data=xyz_pred)
-                #     grp.create_dataset("inliers", data=inlier_ratio)
             end_time = time.time()
 
             # Calculate FPS
@@ -796,7 +761,6 @@ class RobotCarTrainer(BaseTrainer):
         result_file.close()
         features_h5.close()
         global_features_h5.close()
-        # result_h5py.close()
 
 
 class CMUTrainer(BaseTrainer):
@@ -822,7 +786,7 @@ class CMUTrainer(BaseTrainer):
 
         if self.using_global_descriptors:
             result_file_name = (
-                f"output/{self.ds_name}/CMU_eval"
+                f"results/CMU_eval"
                 f"_{self.local_desc_model_name}_"
                 f"{self.global_desc_model_name}_"
                 f"{self.lambda_val}_"
@@ -830,7 +794,7 @@ class CMUTrainer(BaseTrainer):
             )
         else:
             result_file_name = (
-                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
+                f"results/CMU_eval_{self.local_desc_model_name}.txt"
             )
 
         computed_images = {}
@@ -849,8 +813,6 @@ class CMUTrainer(BaseTrainer):
             for count, example in enumerate(
                 tqdm(self.test_dataset, desc="Computing pose for test set")
             ):
-                if BENCHMARKING_FPS and count > NB_BENCHMARKING_FRAMES:
-                    break
                 if example is None:
                     continue
                 name = example[1]
@@ -858,7 +820,7 @@ class CMUTrainer(BaseTrainer):
                 if image_id in computed_images:
                     line = computed_images[image_id]
                 else:
-                    keypoints, descriptors = self.process_descriptor(
+                    keypoints, descriptors, _ = self.process_descriptor(
                         name,
                         features_h5,
                         global_features_h5,
@@ -898,8 +860,6 @@ class CMUTrainer(BaseTrainer):
             fps = num_frames / elapsed_time if elapsed_time > 0 else 0
 
             print(f"Processed {num_frames} frames in {elapsed_time:.2f} seconds ({fps:.2f} FPS)")
-            if BENCHMARKING_FPS:
-                sys.exit()
         features_h5.close()
         global_features_h5.close()
         result_file.close()
@@ -925,7 +885,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
 
-                keypoints, descriptors = self.process_descriptor(
+                keypoints, descriptors, _ = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
@@ -973,7 +933,7 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         with torch.no_grad():
             for example in tqdm(testset, desc="Computing pose for test set"):
                 name = "/".join(example[1].split("/")[-2:])
-                keypoints, descriptors = self.process_descriptor(
+                keypoints, descriptors, _ = self.process_descriptor(
                     name, features_h5, global_features_h5, gpu_index_flat_for_image_desc
                 )
 
