@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #PBS -N aachen_dd
-#PBS -l select=1:ncpus=20:ngpus=1:mem=100GB:qlist=qvpr
+#PBS -l select=1:ncpus=20:ngpus=1:mem=100GB
 #PBS -l walltime=48:00:00
 #PBS -j oe
 
