@@ -54,7 +54,8 @@ def run_ablation_order(ds_dir):
 
         print(f"Using {local_desc_model} and {retrieval_model}-{global_desc_dim}")
 
-        for order in ORDERS:
+        # for order in ORDERS:
+        for order in ["pca"]:
             for lambda_val in np.linspace(0, 1, 11):
                 if lambda_val == 0.0 or lambda_val == 1:
                     continue
