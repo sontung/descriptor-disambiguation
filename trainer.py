@@ -95,7 +95,7 @@ class BaseTrainer:
     ):
         self.order = order
         self.global_rand_indices = None
-        self.use_rand_indices = feature_dim != global_feature_dim and self.order != "pca"
+        self.use_rand_indices = feature_dim != global_feature_dim
         self.feature_dim = feature_dim
         self.dataset = train_ds
         self.test_dataset = test_ds
@@ -126,7 +126,6 @@ class BaseTrainer:
         self.test_features_path = None
         self.rgb_arr = None
         self.pca = None
-        self.using_pca = False
         self.lambda_val = lambda_val
         print(f"using lambda val={self.lambda_val}")
         self.global_desc_mean = 0
@@ -263,8 +262,7 @@ class BaseTrainer:
         image2desc = {}
         if self.use_rand_indices:
             if "random" in self.order:
-                seed = int(self.order.split("-")[-1])
-                np.random.seed(seed)
+                np.random.seed(0)
                 indices = np.arange(self.global_feature_dim)
                 np.random.shuffle(indices)
                 indices = indices[: self.feature_dim]
@@ -299,6 +297,7 @@ class BaseTrainer:
                 self.pca_model = PCA(n_components=self.feature_dim, copy=False)
                 self.pca_model.fit(all_desc)
                 all_desc = self.pca_model.transform(all_desc)
+                indices = np.arange(0, self.feature_dim)
             else:
                 raise NotImplementedError
             self.global_rand_indices = indices
@@ -422,7 +421,7 @@ class BaseTrainer:
             selected_descriptors = descriptors[ind[mask]]
             if using_global_desc:
                 image_descriptor = self.image2desc[example[1]]
-                image_descriptor = self.compress_gl_descriptor(image_descriptor)
+                image_descriptor = image_descriptor[self.global_rand_indices]
 
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, image_descriptor, self.lambda_val
@@ -451,14 +450,13 @@ class BaseTrainer:
         return pid2mean_desc, pid2ind
 
     def compress_gl_descriptor(self, image_descriptor):
-        if self.order == "pca":
-            image_descriptor = self.pca_model.transform(
-                image_descriptor.reshape(1, -1)
-            ).flatten()
-
-        elif self.use_rand_indices:
+        if self.use_rand_indices:
             if self.order == "gaussian":
                 image_descriptor = self.gaussian_transformer.transform(
+                    image_descriptor.reshape(1, -1)
+                ).flatten()
+            elif self.order == "pca":
+                image_descriptor = self.pca_model.transform(
                     image_descriptor.reshape(1, -1)
                 ).flatten()
             else:
