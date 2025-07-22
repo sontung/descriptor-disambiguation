@@ -617,7 +617,6 @@ class BaseTrainer:
             features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
             features_ori = features_ori.astype(np.float32)
 
-            print(features_ori.shape, self.pid2mean_desc.shape)
             distances, feature_indices = gpu_index_flat.search(
                 features_ori, 1
             )
