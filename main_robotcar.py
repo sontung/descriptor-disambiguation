@@ -139,7 +139,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lambda_val",
         type=float,
-        default=0.3,
+        default=0.4,
     )
     parser.add_argument(
         "--local_desc",
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="salad",
+        default="megaloc",
     )
     parser.add_argument(
         "--global_desc_dim",

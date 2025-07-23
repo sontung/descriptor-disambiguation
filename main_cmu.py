@@ -92,12 +92,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--global_desc",
         type=str,
-        default="eigenplaces",
+        default="megaloc",
     )
     parser.add_argument(
         "--global_desc_dim",
         type=int,
-        default=2048,
+        default=8448,
     )
     args = parser.parse_args()
 

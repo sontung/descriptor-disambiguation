@@ -106,10 +106,11 @@ def delete():
 
     # for key1 in data:
     key1 = list(data.keys())[0]
-    for name, link in data[key1]:
-        print(name)
-        driver.get(link)
-        WebDriverWait(driver, 10).until(EC.url_changes(link))
+    for key1 in list(data.keys())[1:-1]:
+        for name, link in data[key1]:
+            print(name)
+            driver.get(link)
+            WebDriverWait(driver, 10).until(EC.url_changes(link))
 
     # for name, link in data["My RobotCar-Seasons v2 Submissions"]:
     #     if "sampler" in name.lower() or "results" in name.lower():
@@ -199,7 +200,7 @@ if __name__ == "__main__":
     # Call the main function with parsed arguments
     USERNAME, PASSWORD = args.username, args.password
     # view(USERNAME, PASSWORD)
-    # delete()
+    delete()
     output_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/results"
     files = [
         os.path.join(output_dir, f)
