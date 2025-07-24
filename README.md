@@ -21,12 +21,6 @@ python -m pip install -e .
 pip install https://github.com/kyamagu/faiss-wheels/releases/download/v1.7.3/faiss_gpu-1.7.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 ```
 
-### Otherwise, plain Conda:
-```bash
-mamba install -c pytorch -c nvidia faiss-gpu=1.8.0 pytorch=1.12.1 cudatoolkit=11.2 pytorch-cuda=11 numpy
-mamba install pycolmap h5py pykdtree poselib hloc scikit-learn
-mamba install pytorch-lightning pytorch-metric-learning prettytable
-```
 For the global descriptors, we provide the code re-written from the authors of SALAD, MixVPR, and CRICA. Download them from [here](https://drive.google.com/file/d/1AKbCzmEbWDne1Pr2ExtsOuDE1oZibhmR/view?usp=sharing) and unzip to the parent directory of this repo. An example:
 ```shell
 work/descriptor-disambiguation # this repo
@@ -42,9 +36,10 @@ We used Aachen day/night v1.1, RobotCar Seasons v2, Extended CMU Seasons, and Ca
 
 Assume the dataset is downloaded somewhere, here is an example of usage:
 ```bash
-python main_robotcar.py --dataset /work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons --local_desc "d2net" --local_desc_dim 512 --global_desc "salad" --global_desc_dim 8448 --use_global 1 --convert 1
+# default params are the strongest
+pixi run python main_aachen.py --dataset datasets/aachen_v1.1
 ```
-
+More can found at the ```scripts/``` folder.
 ## Results
 
 ![Sample Image](paper/matches_comparision_out.jpg)
