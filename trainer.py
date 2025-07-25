@@ -784,10 +784,9 @@ class CMUTrainer(BaseTrainer):
         query_results = []
         print(f"Reading global descriptors from {self.global_descriptor_test_path}")
         print(f"Reading local descriptors from {self.test_features_path}")
-
         if self.using_global_descriptors:
             result_file_name = (
-                f"results/CMU_eval"
+                f"output/{self.ds_name}/CMU_eval"
                 f"_{self.local_desc_model_name}_"
                 f"{self.global_desc_model_name}_"
                 f"{self.lambda_val}_"
@@ -795,9 +794,8 @@ class CMUTrainer(BaseTrainer):
             )
         else:
             result_file_name = (
-                f"results/CMU_eval_{self.local_desc_model_name}.txt"
+                f"output/{self.ds_name}/CMU_eval_{self.local_desc_model_name}.txt"
             )
-
         computed_images = {}
         if os.path.isfile(result_file_name):
             with open(result_file_name) as file:

@@ -51,12 +51,12 @@ def run_function(
 
     if using_global_descriptors:
         result_file = open(
-            f"output/cmu/CMU_eval_{local_desc_model}_{retrieval_model}_{global_desc_dim}_{convert}.txt",
+            f"results/CMU_eval_{local_desc_model}_{retrieval_model}_{global_desc_dim}_{convert}.txt",
             "w",
         )
     else:
         result_file = open(
-            f"output/cmu/CMU_eval_{local_desc_model}.txt",
+            f"results/CMU_eval_{local_desc_model}.txt",
             "w",
         )
     for line in results:
