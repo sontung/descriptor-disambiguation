@@ -200,7 +200,7 @@ if __name__ == "__main__":
     # Call the main function with parsed arguments
     USERNAME, PASSWORD = args.username, args.password
     # view(USERNAME, PASSWORD)
-    delete()
+    # delete()
     output_dir = "/home/n11373598/hpc-home/work/descriptor-disambiguation/results"
     files = [
         os.path.join(output_dir, f)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     # Sort files by last modified time (most recent last)
     files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
 
-    first_n = -1
+    first_n = 20
     files = files[:first_n]
     all_fields = [
         (

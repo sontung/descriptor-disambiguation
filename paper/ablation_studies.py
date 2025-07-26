@@ -77,6 +77,20 @@ aachen = {
             1.0: "84.0 / 89.2 / 94.8	61.3 / 71.7 / 80.6",
         },
     },
+    "pca": {
+        "salad": {
+            0.1: "	17.8 / 29.5 / 62.4	7.9 / 12.6 / 34.6",
+            0.2: "19.5 / 32.0 / 64.7	8.9 / 14.1 / 35.6",
+            0.3: "41.6 / 52.7 / 75.8	20.9 / 29.3 / 49.2",
+            0.4: "69.8 / 80.7 / 90.3	49.2 / 62.3 / 79.1",
+            0.5: "80.1 / 88.7 / 95.4	64.4 / 81.2 / 91.6",
+            0.6: "86.4 / 92.2 / 97.5	72.3 / 87.4 / 94.8",
+            0.7: "	86.3 / 91.7 / 97.1	71.7 / 85.9 / 93.2",
+            0.8: "	85.3 / 90.3 / 95.5	63.4 / 77.5 / 87.4",
+            0.9: "	84.8 / 90.0 / 94.5	59.2 / 72.3 / 81.7",
+            1.0: "	84.0 / 89.2 / 94.8	61.3 / 71.7 / 80.6",
+        },
+    },
 }
 
 
@@ -151,6 +165,20 @@ robotcar = {
             1.0: "60.8 / 93.8 / 99.9	11.9 / 33.6 / 49.7",
         },
     },
+    "pca": {
+        "salad": {
+            0.1: "	23.4 / 57.6 / 97.8	3.3 / 13.5 / 55.7",
+            0.2: "	48.4 / 83.7 / 99.4	6.1 / 23.1 / 64.1",
+            0.3: "	59.1 / 92.2 / 99.9	21.4 / 58.3 / 92.1",
+            0.4: "60.2 / 93.1 / 100.0	27.7 / 74.6 / 96.7",
+            0.5: "	60.9 / 93.3 / 100.0	31.7 / 80.2 / 97.9",
+            0.6: "	61.1 / 93.3 / 100.0	31.2 / 81.1 / 99.1",
+            0.7: "		61.3 / 93.8 / 100.0	31.0 / 76.9 / 99.3",
+            0.8: "	61.0 / 93.8 / 100.0	21.2 / 56.4 / 83.0",
+            0.9: "		60.4 / 93.9 / 100.0	14.9 / 38.2 / 55.0",
+            1.0: "	60.8 / 93.8 / 99.9	11.9 / 33.6 / 49.7",
+        },
+    },
 }
 
 
@@ -189,6 +217,7 @@ def main():
         "last": "v",
         "random-0": "h",
         "gaussian": "*",
+        "pca": "X",
     }
     tableau_colors = plt.get_cmap("tab10")
 
@@ -198,8 +227,9 @@ def main():
         "last": tableau_colors(8),
         "random-0": tableau_colors(9),
         "gaussian": tableau_colors(3),
+        "pca": tableau_colors(4),
     }
-    orders_ = ["first", "center", "last", "random-0", "gaussian"]
+    orders_ = ["first", "center", "last", "random-0", "gaussian", "pca"]
     plt.title("Aachen Day/Night v1.1")
     plt.axhline(y=92.1, color="r", linestyle="--", label="hloc")
     plt.axhline(y=80.3, color="b", linestyle="--", label="vanilla")
@@ -220,7 +250,7 @@ def main():
             label=order_,
             color=colors[order_],
         )
-    plt.legend(loc=4, fontsize=9, ncol=1)
+    # plt.legend(loc=4, fontsize=9, ncol=1)
 
     plt.subplot(212)
 
@@ -234,6 +264,8 @@ def main():
     plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
     plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
 
+    lines = []
+    labels = []
     for order_ in orders_:
         all_numbers = []
         for method_ in ds[order_]:
@@ -242,16 +274,47 @@ def main():
                 avg_res = find_numbers(res)
                 all_numbers.append(avg_res)
         print(order_, max(all_numbers))
-        plt.plot(
+        line, = plt.plot(
             np.arange(1, 11) / 10,
             all_numbers,
             marker=markers[order_],
             label=order_,
             color=colors[order_],
         )
-    plt.legend(loc=4, fontsize=9, ncol=1)
-    plt.tight_layout()
+        lines.append(line)
+        labels.append(order_)
 
+    hloc_line = plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
+    vanilla_line = plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
+
+    lines = lines + [hloc_line, vanilla_line]
+    labels = labels + ["hloc", "vanilla"]
+
+    ax = plt.gca()  # get current axes
+
+    # First legend (left side of the bottom)
+    legend1 = ax.legend(
+        lines[:4], labels[:4],
+        fontsize=9,
+        loc="upper center",
+        bbox_to_anchor=(0.25, -0.15),
+        ncol=2,
+        frameon=False
+    )
+    ax.add_artist(legend1)  # keep this legend
+
+    # Second legend (right side of the bottom)
+    legend2 = ax.legend(
+        lines[4:], labels[4:],
+        fontsize=9,
+        loc="upper center",
+        bbox_to_anchor=(0.75, -0.15),
+        ncol=2,
+        frameon=False
+    )
+
+    plt.subplots_adjust(bottom=0.6)
+    plt.tight_layout()
     plt.savefig(
         "ablation_order.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1
     )

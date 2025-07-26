@@ -168,7 +168,7 @@ def main():
             color=colors[method_],
             label=method_,
         )
-    plt.legend(loc=4, fontsize=9, ncol=1)
+    # plt.legend(loc=4, fontsize=9, ncol=1)
 
     plt.subplot(212)
 
@@ -178,9 +178,11 @@ def main():
     plt.xlabel(r"$\lambda$")
     plt.ylabel("\% successfully localized images")
     plt.title("RobotCar Seasons v2")
-    plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
-    plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
+    hloc_line = plt.axhline(y=78.5, color="r", linestyle="--", label="hloc")
+    vanilla_line = plt.axhline(y=58.3, color="b", linestyle="--", label="vanilla")
 
+    lines = []
+    labels = []
     for method_ in ds:
         all_numbers = []
         for param_ in ds[method_]:
@@ -188,15 +190,34 @@ def main():
             avg_res = find_numbers(res)
             all_numbers.append(avg_res)
         print(method_, max(all_numbers))
-        plt.plot(
+        line, = plt.plot(
             np.arange(1, 11) / 10,
             all_numbers,
             marker=markers[method_],
             color=colors[method_],
             label=method_,
         )
-    plt.legend(loc=4, fontsize=9, ncol=1)
+        lines.append(line)
+        labels.append(method_)
+
+    # lines = lines + [hloc_line, vanilla_line]
+    # labels = labels + ["hloc", "vanilla"]
+    ax = plt.gca()
+
+    # Plot legend for second subplot only
+    legend = ax.legend(
+        lines + [hloc_line, vanilla_line],
+        labels + ["hloc", "vanilla"],
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.3),  # Centered below the subplot
+        ncol=3,
+        fontsize=9,
+        frameon=False,
+    )
+
+    # Make room at bottom
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.3)  # Add vertical space
 
     plt.savefig(
         "ablation.pdf", format="pdf", dpi=600, bbox_inches="tight", pad_inches=0.1
