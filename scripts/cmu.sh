@@ -12,7 +12,7 @@ set -e  # Exit on error
 cd /home/n11373598/work/descriptor-disambiguation
 
 # Run the test command inside the pixi environment
-/home/n11373598/.pixi/bin/pixi run python main_cmu.py --dataset /work/qvpr/data/raw/2020VisualLocalization/Extended-CMU-Seasons --lambda_val 0.4 || {
+/home/n11373598/.pixi/bin/pixi run python main_cmu.py --dataset datasets/Extended-CMU-Seasons --lambda_val 0.4 || {
   echo "Python crashed!"
   exit 1
 }
