@@ -12,7 +12,7 @@ set -e  # Exit on error
 cd /home/n11373598/work/descriptor-disambiguation
 
 # Run the test command inside the pixi environment
-/home/n11373598/.pixi/bin/pixi run python main_robotcar.py --dataset /work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons --ablation 1 --global_desc salad || {
+/home/n11373598/.pixi/bin/pixi run python main_robotcar.py --convert 0 --dataset /work/qvpr/data/raw/2020VisualLocalization/RobotCar-Seasons --ablation 1 --global_desc salad || {
   echo "Python crashed!"
   exit 1
 }
