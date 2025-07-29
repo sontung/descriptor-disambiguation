@@ -974,3 +974,9 @@ class CambridgeLandmarksTrainer(BaseTrainer):
         global_features_h5.close()
 
         return res
+
+
+if __name__ == '__main__':
+    import torch
+
+    net = torch.hub.load("gmberton/MegaLoc", "get_trained_model").eval()
