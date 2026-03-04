@@ -1,6 +1,6 @@
 # FUSELOC: Fusing Global and Local Descriptors to Disambiguate 2D-3D Matching in Visual Localization
 ![Sample Image](paper/overview.png)
-[[Arxiv]](https://arxiv.org/abs/2408.12037)
+[[Paper]](https://openaccess.thecvf.com/content/ICCV2025W/CALIPOSE/papers/Nguyen_FUSELOC_Fusing_Global_and_Local_Descriptors_for_Fast_and_Robust_ICCVW_2025_paper.pdf)
 
 Here is the code for our paper on a simple way to disambiguate local descriptors in 2D-3D matching using global descriptors.
 
@@ -47,13 +47,10 @@ We consistently obtained significant improvement over the local-only baselines o
 
 ## Citation
 ```
-@misc{nguyen2024fuselocfusinggloballocal,
-      title={FUSELOC: Fusing Global and Local Descriptors to Disambiguate 2D-3D Matching in Visual Localization}, 
-      author={Son Tung Nguyen and Alejandro Fontan and Michael Milford and Tobias Fischer},
-      year={2024},
-      eprint={2408.12037},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2408.12037}, 
+@inproceedings{nguyen2025fuseloc,
+  title     = {FUSELOC: Fusing Global and Local Descriptors to Disambiguate 2D--3D Matching in Visual Localization},
+  author    = {Nguyen, Son Tung and Fontan, Alejandro and Milford, Michael and Fischer, Tobias},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision Workshops (ICCVW)},
+  year      = {2025}
 }
 ```
