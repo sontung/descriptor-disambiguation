@@ -111,8 +111,7 @@ class BaseTrainer:
         try:
             self.local_desc_model_name = local_desc_model.conf["name"]
         except AttributeError:
-            if type(local_desc_model) == tuple:
-                self.local_desc_model_name = "sdf2"
+            self.local_desc_model_name = local_desc_conf.name
 
         self.global_desc_model_name = (
             f"{global_desc_model.conf['name']}_{global_feature_dim}"
@@ -631,6 +630,39 @@ class BaseTrainer:
             return uv_arr, pred_scene_coords_b3, feature_indices, distances
 
         return uv_arr, pred_scene_coords_b3
+
+
+class Aachen10Trainer(BaseTrainer):
+    def collect_descriptors(self, vis=False):
+        features_h5 = self.load_local_features()
+        sfm_to_local_h5 = self.load_selected_local_features(features_h5)
+        pid2mean_desc = np.zeros(
+            (len(self.dataset.recon_points), self.feature_dim),
+            np.float64,
+        )
+        pid2count = np.zeros(len(self.dataset.recon_points))
+
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
+            features_h5,
+            sfm_to_local_h5,
+            pid2mean_desc,
+            pid2count,
+            self.using_global_descriptors,
+        )
+        print(pid2mean_desc.shape)
+
+        self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
+        self.pid2ind = pid2ind
+        for pid in pid2ind:
+            self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
+
+        np.save(
+            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
+            pid2mean_desc,
+        )
+        features_h5.close()
+        sfm_to_local_h5.close()
+        return pid2mean_desc
 
 
 class RobotCarTrainer(BaseTrainer):

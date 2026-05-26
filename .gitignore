@@ -55,3 +55,5 @@ dsacstar/build
 dsacstar/dist
 dsacstar/dsacstar.egg-info# pixi environments
 .pixi
+
+results/*

@@ -206,6 +206,7 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
                 detector_weights="L-upright", descriptor_weights="B-upright"
             )
             conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
             encoder.cuda()
         elif local_desc_model == "how":
             from how_model import HowModel
