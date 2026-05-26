@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 import dd_utils
 from ace_util import read_and_preprocess
-
+from dd_utils import load_bd_data
 BENCHMARKING_FPS = False
 NB_BENCHMARKING_FRAMES = 100
 
@@ -107,6 +107,7 @@ class BaseTrainer:
         out_dir = Path(f"output/{self.ds_name}")
         out_dir.mkdir(parents=True, exist_ok=True)
         Path("results").mkdir(exist_ok=True)
+        self.bd_h5 = "/home/minhnxh/Documents/VinRobotic/descriptor-disambiguation/descriptor_mask.h5"
 
         try:
             self.local_desc_model_name = local_desc_model.conf["name"]
@@ -138,6 +139,8 @@ class BaseTrainer:
         self.all_names = []
         self.all_image_desc_for_db_conversion = None
         self.pca_model = None
+        self.all_bd_descriptors = self.read_bd_descriptors()
+        self.all_bd_descriptors = np.vstack(self.all_bd_descriptors)
 
         if self.using_global_descriptors:
             self.image2desc = self.collect_image_descriptors()
@@ -154,6 +157,7 @@ class BaseTrainer:
         self.count = 0
         self.special_pid_list = None
         self.pid2mean_desc_vanilla = None
+
         if collect_code_book:
             self.pid2descriptors = {}
             self.pid2count = {}
@@ -242,6 +246,7 @@ class BaseTrainer:
         else:
             print(f"Cannot find {file_name1}")
             all_desc = np.zeros((len(self.dataset), self.global_feature_dim))
+
             all_names = []
             idx = 0
             with torch.no_grad():
@@ -343,6 +348,7 @@ class BaseTrainer:
                 or "salad" in self.global_desc_model_name
                 or "gcl" in self.global_desc_model_name
                 or "dino" in self.global_desc_model_name
+                or "sam3" in self.global_desc_model_name.lower()
             ):
                 image_descriptor = self.global_desc_model.process(name)
             else:
@@ -406,7 +412,8 @@ class BaseTrainer:
         dd_utils.write_to_h5_file(fd, name, dict_)
 
     def collect_descriptors_loop(
-        self, features_h5, sfm_to_local_h5, pid2mean_desc, pid2count, using_global_desc
+        self, features_h5, sfm_to_local_h5, pid2mean_desc,
+            pid2count, using_global_desc
     ):
         pid2ind = {}
         index_for_array = -1
@@ -419,12 +426,31 @@ class BaseTrainer:
             )
 
             selected_descriptors = descriptors[ind[mask]]
-            if using_global_desc:
-                image_descriptor = self.image2desc[example[1]]
-                image_descriptor = image_descriptor[self.global_rand_indices]
+            keypoints = keypoints[ind[mask]]
 
+            if using_global_desc:
+                bd_feats_h5 = h5py.File(self.bd_h5, "r")
+                bd_data = bd_feats_h5[Path(example[1]).stem]
+
+                # # load bd keypoints
+                bd_indices = bd_data["bd_indices"][:]
+                bd_keypoints= bd_data["maskls"][:]
+                bd_keypoints[:, [0, 1]] = bd_keypoints[:, [1, 0]]
+                bd_globaldesc = bd_data['globaldesc'][:]
+
+                tree = KDTree(bd_keypoints.astype(np.float32))
+                dis, near_ind = tree.query(keypoints.astype(np.float32), k=1)
+
+                mask = dis.ravel() < 1.0
+                near_ind = near_ind.ravel()[mask]
+
+                selected_bd_descriptors = bd_globaldesc[bd_indices[near_ind]]
+                t2 = np.hstack((np.zeros((selected_bd_descriptors.shape[0], 256)), selected_bd_descriptors))
+                selected_descriptors = selected_descriptors[mask]
+                keypoints = keypoints[mask]
+                selected_pid = selected_pid[mask]
                 selected_descriptors = combine_descriptors(
-                    selected_descriptors, image_descriptor, self.lambda_val
+                    selected_descriptors, t2, self.lambda_val
                 )
 
             for idx, pid in enumerate(selected_pid):
@@ -463,14 +489,42 @@ class BaseTrainer:
                 image_descriptor = image_descriptor[self.global_rand_indices]
         return image_descriptor
 
+
     def collect_descriptors(self, vis=False):
+        # Make filename sensitive to parameters that affect content
+        suffix = ""
+        if self.using_global_descriptors:
+            suffix += f"-lambda{self.lambda_val:.2f}"
+        if self.order != "random-0":
+            suffix += f"-{self.order}"
+
+        codebook_path = f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}{suffix}.npy"
+        pid2ind_path = f"output/{self.ds_name}/pid2ind-{self.local_desc_model_name}-{self.global_desc_model_name}{suffix}.pkl"
+
+        if os.path.isfile(codebook_path) and os.path.isfile(pid2ind_path):
+            print(f"✅ Loading existing codebook from {codebook_path}")
+            pid2mean_desc = np.load(codebook_path)
+
+            with open(pid2ind_path, "rb") as handle:
+                self.pid2ind = pickle.load(handle)
+
+            self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
+            for pid in self.pid2ind:
+                self.xyz_arr[self.pid2ind[pid]] = self.dataset.xyz_arr[pid]
+
+            return pid2mean_desc
+
+        print(f"⚠️  Codebook not found or outdated. Building new one: {codebook_path}")
+
+        # === Rest of the original creation logic (unchanged) ===
         features_h5 = self.load_local_features()
         sfm_to_local_h5 = self.load_selected_local_features(features_h5)
+
         pid2mean_desc = np.zeros(
-            (len(self.dataset.recon_points), self.feature_dim),
+            (self.dataset.xyz_arr.shape[0], self.feature_dim),
             np.float64,
         )
-        pid2count = np.zeros(len(self.dataset.recon_points))
+        pid2count = np.zeros(self.dataset.xyz_arr.shape[0], self.codebook_dtype)
 
         pid2mean_desc, pid2ind = self.collect_descriptors_loop(
             features_h5,
@@ -479,19 +533,18 @@ class BaseTrainer:
             pid2count,
             self.using_global_descriptors,
         )
-        print(pid2mean_desc.shape)
+        features_h5.close()
 
         self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
         self.pid2ind = pid2ind
         for pid in pid2ind:
-            self.xyz_arr[pid2ind[pid]] = self.dataset.recon_points[pid].xyz
+            self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
 
-        np.save(
-            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-{self.global_desc_model_name}.npy",
-            pid2mean_desc,
-        )
-        features_h5.close()
-        sfm_to_local_h5.close()
+        # Save
+        np.save(codebook_path, pid2mean_desc)
+        with open(pid2ind_path, "wb") as handle:
+            pickle.dump(pid2ind, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         return pid2mean_desc
 
     def process_descriptor(
@@ -503,20 +556,34 @@ class BaseTrainer:
         keypoints, descriptors, scale = dd_utils.read_kp_and_desc(name, features_h5, return_scale=True)
 
         if self.using_global_descriptors:
-            image_descriptor = dd_utils.read_global_desc(name, global_features_h5)
+            bd_feats_h5 = h5py.File(self.bd_h5, "r")
+            bd_data = bd_feats_h5[Path(name).stem]
+
+            bd_indices = bd_data["bd_indices"][:]
+            bd_keypoints = bd_data["maskls"][:]
+            bd_keypoints[:, [0, 1]] = bd_keypoints[:, [1, 0]]
+            bd_globaldesc = bd_data['globaldesc'][:]
+
+            tree = KDTree(bd_keypoints.astype(np.float32))
+            dis, near_ind = tree.query(keypoints.astype(np.float32), k=1)
+
+            mask = dis.ravel() < 1.0
+            near_ind = near_ind.ravel()[mask]
+
+            selected_bd_descriptors = bd_globaldesc[bd_indices[near_ind]]
+            keypoints = keypoints[mask]
+            descriptors = descriptors[mask]
 
             if self.convert_to_db_desc:
                 _, ind = gpu_index_flat_for_image_desc.search(
-                    image_descriptor.reshape(1, -1).astype(np.float32), 1
+                    selected_bd_descriptors.astype(np.float32), 1
                 )
-                image_descriptor = np.mean(
-                    self.all_image_desc_for_db_conversion[ind.flatten()], 0
-                )
+                selected_bd_descriptors = self.all_bd_descriptors[ind.flatten()]
 
-            image_descriptor = self.compress_gl_descriptor(image_descriptor)
+            t2 = np.hstack((np.zeros((selected_bd_descriptors.shape[0], 256)), selected_bd_descriptors))
 
             descriptors = combine_descriptors(
-                descriptors, image_descriptor, self.lambda_val
+                descriptors, t2, self.lambda_val
             )
         return keypoints, descriptors, scale
 
@@ -529,16 +596,17 @@ class BaseTrainer:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index
             res2 = faiss.StandardGpuResources()
             gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
-            gpu_index_flat_for_image_desc.add(self.all_image_desc_for_db_conversion.astype(np.float32))
+            gpu_index_flat_for_image_desc.add(self.all_bd_descriptors.astype(np.float32))
             print("Converting to DB descriptors")
             print(
-                self.all_image_desc_for_db_conversion.shape,
-                self.all_image_desc_for_db_conversion.dtype,
+                self.all_bd_descriptors.shape,
+                self.all_bd_descriptors.dtype,
             )
         else:
             gpu_index_flat_for_image_desc = None
         return gpu_index_flat, gpu_index_flat_for_image_desc
 
+    # @profile
     def evaluate(self):
         """
         write to pose file as name.jpg qw qx qy qz tx ty tz
@@ -588,6 +656,8 @@ class BaseTrainer:
                 )
                 image_id = example[2].split("/")[-1]
                 _, _, _, mask = write_pose_to_file(example, image_id, uv_arr, xyz_pred, result_file)
+                # sys.exit()
+
             end_time = time.time()
 
             # Calculate FPS
@@ -631,6 +701,22 @@ class BaseTrainer:
             return uv_arr, pred_scene_coords_b3, feature_indices, distances
 
         return uv_arr, pred_scene_coords_b3
+
+    def read_bd_descriptors(
+            self,
+    ):
+        bd_list = []
+        bd_feats_h5 = h5py.File(self.bd_h5, "r")
+
+        for example_id, example in enumerate(
+                tqdm(self.dataset, desc="Collecting point descriptors")
+        ):
+
+            bd_data = bd_feats_h5[Path(example[1]).stem]
+            bd_globaldesc = bd_data['globaldesc'][:]
+
+            bd_list.append(bd_globaldesc)
+        return bd_list
 
 
 class RobotCarTrainer(BaseTrainer):

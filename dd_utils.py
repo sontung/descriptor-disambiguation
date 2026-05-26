@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import cv2
@@ -232,9 +233,16 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
         conf_ns_retrieval = None
     elif retrieval_model == "salad":
         from salad_model import SaladModel
-
         encoder_global = SaladModel()
         conf_ns_retrieval = None
+
+    elif retrieval_model == "sam3":
+        from sam3_model import SAM3Model
+        h5_path = "/home/minhnxh/Documents/VinRobotic/descriptor-disambiguation/descriptor_mask.h5"
+        encoder_global = SAM3Model(global_desc_dim, h5_path=h5_path)
+        conf_ns_retrieval = None
+        print(f"Using SAM3 global descriptor from {h5_path}")
+
     elif retrieval_model == "gcl":
         from gcl_model import GCLModel
 
@@ -285,3 +293,36 @@ def concat_images_different_sizes(images):
     # stack images vertically
     result = cv2.hconcat(new_images)
     return result
+
+
+def load_bd_data(name, bd_h5):
+    """
+    Load SAM3 BD descriptors and corresponding keypoint info
+    """
+    img_id = "/".join(name.split("/")[-2:]) if "/" in name else Path(name).stem
+
+    try:
+        grp = bd_h5[img_id]
+    except KeyError:
+        # Fallback for flat structure (your current buggy writer)
+        if img_id in bd_h5:
+            grp = bd_h5[img_id]
+        else:
+            print(f"Warning: No BD data for {img_id}")
+            return None
+
+    # Handle both possible structures
+    if 'array1' in grp:  # your current broken writer
+        bd_indices = np.array(grp['array1'])
+        maskls = np.array(grp['array2'])  # [N_kps, 2]  -> (y, x) or (x, y)?
+        globaldesc = np.array(grp['array3'])  # [N_masks, D]
+    else:  # better structure (recommended)
+        bd_indices = np.array(grp['bd_indices'])
+        maskls = np.array(grp['maskls'])
+        globaldesc = np.array(grp['globaldesc'])
+
+    return {
+        'bd_indices': bd_indices,  # [N_bd_kps] - which mask each kp belongs to
+        'bd_kps': maskls,  # [N_bd_kps, 2] - keypoint coordinates
+        'bd_descs': globaldesc  # [N_masks, D] - descriptor per mask
+    }

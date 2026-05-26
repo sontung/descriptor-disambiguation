@@ -109,6 +109,7 @@ def run_function(
         using_global_descriptors,
         convert_to_db_desc=convert,
         lambda_val=lambda_val,
+
     )
     trainer_.evaluate()
 
@@ -118,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="datasets/aachen_v1.1",
+        default="/home/minhnxh/Documents/VinRobotic/aachen10",
         help="Path to the dataset, default: %(default)s",
     )
     parser.add_argument("--use_global", type=int, default=1)

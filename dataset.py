@@ -237,10 +237,11 @@ class CambridgeLandmarksDataset(Dataset):
 
 
 class AachenDataset(Dataset):
-    def __init__(self, ds_dir="datasets/aachen_v1.1", train=True):
+    def __init__(self, ds_dir="/home/minhnxh/Documents/VinRobotic/aachen10", train=True):
         self.ds_type = "aachen"
         self.ds_dir = ds_dir
-        self.sfm_model_dir = f"{ds_dir}/3D-models/aachen_v_1_1"
+
+        self.sfm_model_dir = f"{ds_dir}/3D-models/aachen_cvpr2018_db.nvm"
         self.images_dir_str = f"{self.ds_dir}/images_upright"
         self.images_dir = Path(self.images_dir_str)
 
@@ -253,95 +254,126 @@ class AachenDataset(Dataset):
         )
 
         if self.train:
-            self.recon_images = colmap_read.read_images_binary(
-                f"{self.sfm_model_dir}/images.bin"
-            )
-            self.recon_cameras = colmap_read.read_cameras_binary(
-                f"{self.sfm_model_dir}/cameras.bin"
-            )
-            self.recon_points = colmap_read.read_points3D_binary(
-                f"{self.sfm_model_dir}/points3D.bin"
-            )
-            self.image_name2id = {}
-            for image_id, image in self.recon_images.items():
-                self.image_name2id[image.name] = image_id
-            self.image_id2points = {}
-            self.pid2images = {}
+            # Load like RobotCar using NVM
+            (
+                self.xyz_arr,
+                self.image2points,
+                self.image2name,
+                self.image2pose,
+                self.image2info,
+                self.image2uvs,
+                self.rgb_arr,
+            ) = ace_util.read_nvm_file(self.sfm_model_dir)  # Requires ace_util to support it
+            self.name2image = {v: k for k, v in self.image2name.items()}
+            self.img_ids = list(self.image2name.keys())
 
-            Path(f"output/{self.ds_type}").mkdir(parents=True, exist_ok=True)
+            self.recon_points = self.xyz_arr
 
-            xyz_arr = np.zeros((len(self.recon_points), 3))
-            all_pids = np.zeros(len(self.recon_points), dtype=int)
-            for idx, pid in enumerate(list(self.recon_points.keys())):
-                xyz_arr[idx] = self.recon_points[pid].xyz
-                all_pids[idx] = pid
-
-            self.image_id2pids = {}
-            self.image_id2uvs = {}
-            for img_id in tqdm(self.recon_images, desc="Gathering points per image"):
-                pid_arr = self.recon_images[img_id].point3D_ids
-                mask = pid_arr >= 0
-                self.image_id2pids[img_id] = pid_arr[mask]
-                self.image_id2uvs[img_id] = self.recon_images[img_id].xys[mask]
-            self.img_ids = list(self.image_name2id.values())
+            self.database_intrinsics = self._read_database_intrinsics(
+                f"{self.ds_dir}/3D-models/database_intrinsics.txt"
+            )
         else:
+            # Query images with intrinsics
             name2params1 = read_intrinsic(self.day_intrinsic_file)
             name2params2 = read_intrinsic(self.night_intrinsic_file)
             self.name2params = {**name2params1, **name2params2}
             self.img_ids = list(self.name2params.keys())
-        return
 
-    def _load_image(self, img_id):
-        name = self.recon_images[img_id].name
+        Path(f"output/{self.ds_type}").mkdir(parents=True, exist_ok=True)
+
+    def _read_database_intrinsics(self, file_path):
+        """Helper to read intrinsics similar to RobotCar"""
+        intrinsics = {}
+        if os.path.exists(file_path):
+            with open(file_path) as f:
+                for line in f:
+                    if line.strip():
+                        parts = line.strip().split()
+                        img_name = parts[0]
+                        # Parse intrinsics (adjust based on actual format)
+                        intrinsics[img_name] = parts[1:]  # focal, etc.
+        return intrinsics
+
+    def _process_id_to_name(self, img_id):
+        if isinstance(img_id, int) and hasattr(self, 'image2name'):
+            name = self.image2name.get(img_id, str(img_id))
+        else:
+            name = str(img_id)
+
         name2 = str(self.images_dir / name)
 
-        return None, name2
-
-    def __len__(self):
-        return len(self.img_ids)
+        # Try different possible locations
+        if not Path(name2).exists():
+            # Try db subfolder
+            name2 = str(self.images_dir / "db" / Path(name).name)
+        if not Path(name2).exists() and name2.endswith(".png"):
+            name2 = name2.replace(".png", ".jpg")
+        return name2
 
     def _get_single_item(self, idx):
         if self.train:
             img_id = self.img_ids[idx]
+            image_name = self._process_id_to_name(img_id)
 
-            image, image_name = self._load_image(img_id)
-            camera_id = self.recon_images[img_id].camera_id
-            camera = self.recon_cameras[camera_id]
-            focal, cx, cy, k = camera.params
+            # Pose handling like RobotCar
+            if img_id in self.image2pose:
+                if isinstance(self.image2pose[img_id], list):
+                    qw, qx, qy, qz, tx, ty, tz = self.image2pose[img_id]
+                    # Similar transformation as RobotCar
+                    tx, ty, tz = -(
+                            Rotation.from_quat([qx, qy, qz, qw]).as_matrix()
+                            @ np.array([tx, ty, tz])
+                    )
+                    pose_mat = dd_utils.return_pose_mat_no_inv([qw, qx, qy, qz], [tx, ty, tz])
+                else:
+                    pose_mat = self.image2pose[img_id]
+            else:
+                pose_mat = np.eye(4)
+
+            image = None
             intrinsics = torch.eye(3)
+
+            # Camera params (use database intrinsics or defaults)
+            focal = 800.0  # Default for Aachen; adjust from self.database_intrinsics
+            cx, cy = 512, 384  # Typical for Aachen images
+            if img_id in self.database_intrinsics:
+                # Parse specific intrinsics if needed
+                pass
 
             intrinsics[0, 0] = focal
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
             intrinsics[1, 2] = cy
-            qvec = self.recon_images[img_id].qvec
-            tvec = self.recon_images[img_id].tvec
-            pose_inv = dd_utils.return_pose_mat_no_inv(qvec, tvec)
-            pose_inv = torch.from_numpy(pose_inv)
 
-            pid_list = self.image_id2pids[img_id]
-            uv_gt = self.image_id2uvs[img_id]
+            pid_list = self.image2points.get(img_id, [])
+            xyz_gt = self.xyz_arr[pid_list] if pid_list else None
+            uv_gt = np.array(self.image2uvs.get(img_id, []))
 
-            xyz_gt = None
+            camera = pycolmap.Camera(
+                model="SIMPLE_PINHOLE",  # or appropriate for Aachen
+                width=1024, height=768,  # Adjust based on Aachen images
+                params=[focal, cx, cy],
+            )
+
+            pose_inv = torch.from_numpy(pose_mat)
 
         else:
+            # Query handling (similar to current)
             name1 = self.img_ids[idx]
-            image_name = str(self.images_dir / name1)
+            image_name = str(self.images_dir / name1)  # Adjust for query subdir if needed
 
             cam_type, width, height, focal, cx, cy, k = self.name2params[name1]
             camera = pycolmap.Camera(
-                model=cam_type,
-                width=int(width),
-                height=int(height),
-                params=[focal, cx, cy, k],
+                model=cam_type, width=int(width), height=int(height),
+                params=[focal, cx, cy, k]
             )
 
             intrinsics = torch.eye(3)
-
             intrinsics[0, 0] = focal
             intrinsics[1, 1] = focal
             intrinsics[0, 2] = cx
             intrinsics[1, 2] = cy
+
             image = None
             img_id = name1
             pid_list = []
@@ -350,16 +382,11 @@ class AachenDataset(Dataset):
             uv_gt = None
 
         return (
-            image,
-            image_name,
-            img_id,
-            pid_list,
-            pose_inv,
-            intrinsics,
-            camera,
-            xyz_gt,
-            uv_gt,
+            image, image_name, img_id, pid_list, pose_inv,
+            intrinsics, camera, xyz_gt, uv_gt
         )
+    def __len__(self):
+        return len(self.img_ids)
 
     def __getitem__(self, idx):
         if type(idx) == list:
