@@ -1,0 +1,29 @@
+• output/sam3_information is split into two different kinds of assets:
+
+  - sam3_results_db.h5
+      - Per-database-image SAM3 segmentation results.
+      - Structure: top-level image ids like 1, 10, 1000, each with class subgroups and datasets like boxes, masks, scores.
+  - observations.json
+      - Metadata for those database observations.
+  - query_observations.json
+      - Same idea for query images.
+  - salad_global_database.h5
+      - Global descriptors, but at the observation level, not the same shape/format as output/aachen/image_desc_megaloc_8448.npy.
+  - query_descriptors.h5
+      - Query-side descriptors, also observation-level.
+  - edges.json
+      - Connectivity / graph info between observations.
+
+  What replaces what:
+
+  - segmentations.h5
+      - Aachen current code only checks the top-level HDF5 keys:
+          - see Documents/VinRobotic/descriptor-disambiguation/newscript/dataset.py:242-258
+      - Modify the code to use the new h5
+  - global desc
+      - salad_global_database.h5 is not a direct drop-in replacement for image_desc_megaloc_8448.npy.
+      - The current Aachen trainer expects image-level descriptors and builds its own cache in:
+          - Documents/VinRobotic/descriptor-disambiguation/newscript/trainer.py:282-319
+          - Documents/VinRobotic/descriptor-disambiguation/newscript/trainer.py:321-347
+      - Let the trainer
+        recompute the descriptors itself

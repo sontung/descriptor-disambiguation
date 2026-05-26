@@ -1,0 +1,34 @@
+python main_aachen.py \
+    --use_global 1 \
+    --local_desc d2net \
+    --global_desc sam3 \
+    --global_desc_dim 256 \
+
+Using d2net and sam3-256
+Using SAM3 global descriptor from /home/minhnxh/Documents/VinRobotic/descriptor-disambiguation/descriptor_mask.h5
+Reading cameras: 100%|██████████| 4328/4328 [00:00<00:00, 50854.72it/s]
+Reading points: 100%|██████████| 1652687/1652687 [00:17<00:00, 95508.65it/s]
+Using random-0 and lambda=0.4
+using lambda val=0.4
+Processes image descriptors of shape (4328, 256)
+✅ Loading existing codebook from output/aachen/codebook-d2net-sam3_256_256-lambda0.40.npy
+Converting to DB descriptors
+(4328, 256) float64
+Computing pose for test set:   0%|          | 0/922 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/minhnxh/Documents/VinRobotic/descriptor-disambiguation/trainer.py", line 742, in evaluate
+    keypoints, descriptors, scale = self.process_descriptor(
+  File "/home/minhnxh/Documents/VinRobotic/descriptor-disambiguation/trainer.py", line 611, in process_descriptor
+    bd_data = bd_feats_h5[Path(name[1]).stem]
+  File "/home/minhnxh/miniconda3/envs/env3/lib/python3.10/site-packages/h5py/_hl/group.py", line 407, in __getitem__
+    return self._get(name)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "/home/minhnxh/miniconda3/envs/env3/lib/python3.10/site-packages/h5py/_hl/group.py", line 421, in _get
+    oid = h5o.open(self.id, self._e(name), lapl=lapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5o.pyx", line 255, in h5py.h5o.open
+KeyError: "Unable to synchronously open object (object 'h' doesn't exist)"
+
+Process finished with exit code 1
