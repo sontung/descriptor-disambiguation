@@ -10,6 +10,9 @@ from kornia.feature.dedode.dedode_models import get_descriptor
 
 from d2net_all import _D2Net, process_multiscale
 
+from hloc import extractors
+from hloc.utils.base_model import dynamic_load
+
 
 # Inherit from nn.Module to natively get .eval(), .training, and proper device routing
 class D2NetDedodeEncoder(nn.Module):
@@ -124,6 +127,94 @@ class D2NetDedodeEncoder(nn.Module):
             "keypoints": keypoints_batched,
             "scores": scores.unsqueeze(0),
             "descriptors": final_descriptors,
+        }
+
+class SuperPointDedodeEncoder(nn.Module):
+    out_channels = 256
+    sparse = True
+
+    def __init__(self, cfg=None, **kwargs):
+        super().__init__()
+        self.cfg = cfg if cfg is not None else {}
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.name = "SuperPoint_dedode"
+        sp_conf = {
+            "name": "superpoint",
+            "nms_radius": self._get_cfg_param("nms_radius", 3),
+            "max_keypoints": self._get_cfg_param("max_keypoints",
+                                                 4096),
+        }
+        Model = dynamic_load(extractors, "superpoint")
+        self.detector = Model(sp_conf).eval().to(device)
+
+        descriptor_type = self._get_cfg_param("descriptor_type",
+                                              "B")
+        self.descriptor = get_descriptor(descriptor_type).to(device)
+        descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_B.pth"
+        if descriptor_type == "G":
+            descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_G.pth"
+
+        self.descriptor.load_state_dict(
+            torch.hub.load_state_dict_from_url(descriptor_url,map_location="cpu")
+        )
+
+        self.eval()
+
+
+    def forward(self, data):
+        return self.keypoint_features(data)
+
+
+    def _get_cfg_param(self, key, default):
+        if isinstance(self.cfg, dict):
+            return self.cfg.get(key, default)
+        return getattr(self.cfg, key, default)
+
+
+    def keypoint_features(self, data, n=0, generator=None):
+        assert not self.training
+
+        images = data["image"]
+        device = images.device
+        _, _, H, W = images.shape
+
+        gray = images.mean(dim=1, keepdim=True)
+
+        with torch.no_grad():
+            sp_pred = self.detector({"image": gray})
+
+        keypoints = sp_pred["keypoints"][0].to(device,
+                                               dtype=torch.float32)
+        scores = sp_pred.get("scores", torch.ones(1,
+                                                  keypoints.shape[0], device=device))[0]
+
+        if n > 0 and keypoints.shape[0] > n:
+            idx = torch.randperm(keypoints.shape[0],
+                                 generator=generator, device=device)[:n]
+            keypoints = keypoints[idx]
+            scores = scores[idx]
+
+        keypoints_batched = keypoints.unsqueeze(0)
+
+        with torch.no_grad():
+            descriptions = self.descriptor.forward(images)
+
+            wh = torch.tensor([W, H], device=device,
+                              dtype=keypoints_batched.dtype)
+            kp_norm = (keypoints_batched / wh) * 2 - 1
+            kp_grid = kp_norm.unsqueeze(1)
+
+            sampled = F.grid_sample(
+                descriptions.float(),
+                kp_grid,
+                mode="bilinear",
+                align_corners=False,
+            )
+
+        return {
+            "keypoints": keypoints_batched,
+            "scores": scores.unsqueeze(0),
+            "descriptors": sampled[:, :, 0, :].detach(),
         }
 
 
