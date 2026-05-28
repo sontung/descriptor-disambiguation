@@ -590,7 +590,12 @@ class BaseTrainer:
     def return_faiss_indices(self):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
-        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        res.setTempMemory(256 * 1024 * 1024)
+
+        co = faiss.GpuClonerOptions()
+        co.useFloat16 = True
+
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index, co)
         gpu_index_flat.add(self.pid2mean_desc.astype(np.float32))
         if self.convert_to_db_desc and self.using_global_descriptors:
             index2 = faiss.IndexFlatL2(self.global_feature_dim)  # build the index

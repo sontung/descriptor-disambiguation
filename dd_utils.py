@@ -208,6 +208,21 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             )
             conf_ns = SimpleNamespace(**{**default_conf, **conf})
             encoder.cuda()
+        elif local_desc_model == "d2net_dedode":
+            from custom_local_feats import D2NetDedodeEncoder
+
+            encoder = D2NetDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "d2_multiscale": False,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
         elif local_desc_model == "how":
             from how_model import HowModel
 
