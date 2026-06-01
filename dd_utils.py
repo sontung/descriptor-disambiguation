@@ -223,6 +223,169 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             conf_ns.name = local_desc_model
             conf_ns.grayscale = False
             conf_ns.resize_max = 1600
+
+        elif local_desc_model == "dedodev2_dedode":
+            from custom_local_feats import DeDoDeV2DedodeEncoder
+
+            encoder = DeDoDeV2DedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                    "detector_weights_path": "/home/minhnxh/Documents/VinRobotic/DeDoDe/workspace/dedode_detector_L_v2.pth",
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "superpoint_dedode":
+            from custom_local_feats import SuperPointDedodeEncoder
+
+            encoder = SuperPointDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 4096,
+                    "nms_radius": 3,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1024
+
+        elif local_desc_model == "r2d2_dedode":
+            from custom_local_feats import R2D2DedodeEncoder
+
+            encoder = R2D2DedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1024
+
+        elif local_desc_model == "disk_dedode":
+            from custom_local_feats import DiskDedodeEncoder
+
+            encoder = DiskDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "sift_dedode":
+            from custom_local_feats import SIFTDedodeEncoder
+
+            encoder = SIFTDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "detector_type": "sift",
+                    "max_keypoints": 5000,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "gftt_dedode":
+            from custom_local_feats import GoodFeaturesToTrackDedodeEncoder
+
+            encoder = GoodFeaturesToTrackDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                    "quality_level": 0.01,
+                    "min_distance": 3,
+                    "block_size": 3,
+                    "use_harris": False,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "silk_dedode":
+            from custom_local_feats import SiLKDedodeEncoder
+
+            encoder = SiLKDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                    "threshold": 1.0,
+                    "nms_dist": 0,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "affnet_dedode":
+            from custom_local_feats import AffNetDedodeEncoder
+
+            encoder = AffNetDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "aslfeat_dedode":
+            from custom_local_feats import ASLFeatDedodeEncoder
+
+            encoder = ASLFeatDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
         elif local_desc_model == "how":
             from how_model import HowModel
 

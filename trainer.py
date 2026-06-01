@@ -112,8 +112,7 @@ class BaseTrainer:
         try:
             self.local_desc_model_name = local_desc_model.conf["name"]
         except AttributeError:
-            if type(local_desc_model) == tuple:
-                self.local_desc_model_name = "sdf2"
+            self.local_desc_model_name = local_desc_conf.name
 
         self.global_desc_model_name = (
             f"{global_desc_model.conf['name']}_{global_feature_dim}"
@@ -146,7 +145,10 @@ class BaseTrainer:
             self.image2desc = self.collect_image_descriptors()
         else:
             self.image2desc = {}
-
+        # if self.using_global_descriptors:
+        #     self.global_descriptor_test_path = self.collect_image_descriptors_for_test_set()
+        # else:
+        #     self.global_descriptor_test_path = None
         self.global_descriptor_test_path = self.collect_image_descriptors_for_test_set()
         self.detect_local_features_on_test_set()
 
@@ -224,7 +226,7 @@ class BaseTrainer:
             features_h5 = h5py.File(str(self.test_features_path), "a", libver="latest")
             with torch.no_grad():
                 for example in tqdm(
-                    self.test_dataset, desc="Detecting testing features"
+                        self.test_dataset, desc="Detecting testing features"
                 ):
                     if example is None:
                         continue
@@ -421,12 +423,16 @@ class BaseTrainer:
             tqdm(self.dataset, desc="Collecting point descriptors")
         ):
             keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
-            selected_pid, mask, ind = load_selected_features_for_img(
+            selected_pid, sfm_mask, ind = load_selected_features_for_img(
                 example[1], sfm_to_local_h5
             )
+            ind = ind.astype(np.int64)
+            sfm_mask = sfm_mask.astype(bool)
 
-            selected_descriptors = descriptors[ind[mask]]
-            keypoints = keypoints[ind[mask]]
+            selected_descriptors = descriptors[ind[sfm_mask]]
+            keypoints = keypoints[ind[sfm_mask]]
+            if selected_pid.shape[0] == sfm_mask.shape[0]:
+                selected_pid = selected_pid[sfm_mask]
 
             if using_global_desc:
                 bd_feats_h5 = h5py.File(self.bd_h5, "r")
@@ -441,14 +447,14 @@ class BaseTrainer:
                 tree = KDTree(bd_keypoints.astype(np.float32))
                 dis, near_ind = tree.query(keypoints.astype(np.float32), k=1)
 
-                mask = dis.ravel() < 1.0
-                near_ind = near_ind.ravel()[mask]
+                bd_mask = dis.ravel() < 1.0
+                near_ind = near_ind.ravel()[bd_mask]
 
                 selected_bd_descriptors = bd_globaldesc[bd_indices[near_ind]]
                 t2 = np.hstack((np.zeros((selected_bd_descriptors.shape[0], 256)), selected_bd_descriptors))
-                selected_descriptors = selected_descriptors[mask]
-                keypoints = keypoints[mask]
-                selected_pid = selected_pid[mask]
+                selected_descriptors = selected_descriptors[bd_mask]
+                keypoints = keypoints[bd_mask]
+                selected_pid = selected_pid[bd_mask]
                 selected_descriptors = combine_descriptors(
                     selected_descriptors, t2, self.lambda_val
                 )
@@ -459,6 +465,7 @@ class BaseTrainer:
                     pid2ind[pid] = index_for_array
 
             idx2 = [pid2ind[pid] for pid in selected_pid]
+
             pid2mean_desc[idx2] += selected_descriptors
             pid2count[idx2] += 1
         index_for_array += 1
@@ -587,6 +594,14 @@ class BaseTrainer:
             )
         return keypoints, descriptors, scale
 
+    def free_model_memory(self):
+        self.local_desc_model = None
+        self.global_desc_model = None
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+
     def return_faiss_indices(self):
         index = faiss.IndexFlatL2(self.feature_dim)  # build the index
         res = faiss.StandardGpuResources()
@@ -618,6 +633,9 @@ class BaseTrainer:
         :return:
         """
         self.ind2pid = {ind: pid for pid, ind in self.pid2ind.items()}
+
+        self.free_model_memory()
+
         gpu_index_flat, gpu_index_flat_for_image_desc = self.return_faiss_indices()
 
         if self.using_global_descriptors:
@@ -694,9 +712,22 @@ class BaseTrainer:
             features_ori = np.ascontiguousarray(features_ori, dtype=self.codebook_dtype)
             features_ori = features_ori.astype(np.float32)
 
-            distances, feature_indices = gpu_index_flat.search(
-                features_ori, 1
-            )
+            all_distances = []
+            all_indices = []
+            chunk_size = 1024
+
+            for start in range(0, features_ori.shape[0], chunk_size):
+                end = start + chunk_size
+                d, i = gpu_index_flat.search(features_ori[start:end], 1)
+                all_distances.append(d)
+                all_indices.append(i)
+
+            distances = np.vstack(all_distances)
+            feature_indices = np.vstack(all_indices)
+
+            # distances, feature_indices = gpu_index_flat.search(
+            #     features_ori, 1
+            # )
 
         feature_indices = feature_indices.ravel()
 
