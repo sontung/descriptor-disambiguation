@@ -296,6 +296,44 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             conf_ns.grayscale = False
             conf_ns.resize_max = 1600
 
+        elif local_desc_model == "alike_dedode":
+            from custom_local_feats import ALIKEDedodeEncoder
+
+            encoder = ALIKEDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                    "weights_path": "/home/minhnxh/Documents/VinRobotic/ALIKE/models/alike-l.pth",
+                    "alike_path": "/home/minhnxh/Documents/VinRobotic/ALIKE",
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
+        elif local_desc_model == "aliked_dedode":
+            from custom_local_feats import ALIKEDDedodeEncoder
+
+            encoder = ALIKEDDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "model_name": "aliked-n16rot",
+                    "max_keypoints": 5000,
+                    "aliked_path": "/home/minhnxh/Documents/VinRobotic/ALIKED",
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
         elif local_desc_model == "disk_dedode":
             from custom_local_feats import DiskDedodeEncoder
 

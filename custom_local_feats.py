@@ -20,6 +20,25 @@ from hloc import extractors
 from hloc.utils.base_model import dynamic_load
 
 
+def _prepare_external_repo_import(repo_path, package_prefix="nets"):
+    repo_path = Path(repo_path).resolve()
+    repo_path_str = str(repo_path)
+    if repo_path_str in sys.path:
+        sys.path.remove(repo_path_str)
+    sys.path.insert(0, repo_path_str)
+
+    for name, module in list(sys.modules.items()):
+        if name != package_prefix and not name.startswith(f"{package_prefix}."):
+            continue
+        module_file = getattr(module, "__file__", None)
+        if module_file is None:
+            continue
+        try:
+            Path(module_file).resolve().relative_to(repo_path)
+        except ValueError:
+            del sys.modules[name]
+
+
 # Inherit from nn.Module to natively get .eval(), .training, and proper device routing
 class D2NetDedodeEncoder(nn.Module):
     out_channels = 256
@@ -493,6 +512,217 @@ class AcceleratedFeaturesDedodeEncoder(nn.Module):
             "descriptors": sampled[:, :, 0, :].detach(),
         }
 
+
+class ALIKEDedodeEncoder(nn.Module):
+    out_channels = 256
+    sparse = True
+
+    def __init__(self, cfg=None, **kwargs):
+        super().__init__()
+        self.cfg = cfg if cfg is not None else {}
+        self.max_keypoints = self._get_cfg_param("max_keypoints", 5000)
+        self.scores_th = self._get_cfg_param("scores_th", 0.2)
+        self.radius = self._get_cfg_param("radius", 2)
+        self.n_limit = self._get_cfg_param("n_limit", self.max_keypoints)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        alike_path = Path(
+            self._get_cfg_param(
+                "alike_path",
+                "/home/minhnxh/Documents/VinRobotic/ALIKE",
+            )
+        )
+        weights_path = Path(
+            self._get_cfg_param(
+                "weights_path",
+                alike_path / "models" / "alike-l.pth",
+            )
+        )
+        if not weights_path.exists():
+            raise FileNotFoundError(weights_path)
+
+        _prepare_external_repo_import(alike_path)
+        from nets.alike import ALIKE
+
+        self.detector = ALIKE(
+            c1=self._get_cfg_param("c1", 32),
+            c2=self._get_cfg_param("c2", 64),
+            c3=self._get_cfg_param("c3", 128),
+            c4=self._get_cfg_param("c4", 128),
+            dim=self._get_cfg_param("dim", 128),
+            agg_mode=self._get_cfg_param("agg_mode", "cat"),
+            single_head=self._get_cfg_param("single_head", False),
+            pe=self._get_cfg_param("pe", False),
+            radius=self.radius,
+            top_k=self.max_keypoints,
+            scores_th=self.scores_th,
+            n_limit=self.n_limit,
+        ).to(device)
+
+        state_dict = torch.load(weights_path, map_location=device)
+        self.detector.load_state_dict(state_dict, strict=False)
+        self.detector.eval()
+
+        descriptor_type = self._get_cfg_param("descriptor_type", "B")
+        self.descriptor = get_descriptor(descriptor_type).to(device)
+        descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_B.pth"
+        if descriptor_type == "G":
+            descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_G.pth"
+        self.descriptor.load_state_dict(
+            torch.hub.load_state_dict_from_url(descriptor_url, map_location="cpu")
+        )
+
+        self.eval()
+
+    def forward(self, data):
+        return self.keypoint_features(data)
+
+    def _get_cfg_param(self, key, default):
+        if isinstance(self.cfg, dict):
+            return self.cfg.get(key, default)
+        return getattr(self.cfg, key, default)
+
+    def keypoint_features(self, data, n=0, generator=None):
+        assert not self.training
+
+        images = data["image"]
+        device = images.device
+        _, _, H, W = images.shape
+        max_n = n if n > 0 else self.max_keypoints
+
+        with torch.no_grad():
+            descriptor_map, scores_map = self.detector.extract_dense_map(images)
+            keypoints_norm, _, scores, _ = self.detector.softdetect(scores_map, descriptor_map)
+
+        keypoints_norm = keypoints_norm[0].to(device=device, dtype=torch.float32)
+        scores = scores[0].to(device=device, dtype=torch.float32)
+
+        if max_n > 0 and keypoints_norm.shape[0] > max_n:
+            idx = torch.argsort(scores, descending=True)[:max_n]
+            keypoints_norm = keypoints_norm[idx]
+            scores = scores[idx]
+
+        if keypoints_norm.shape[0] == 0:
+            keypoints = torch.rand((100, 2), device=device) * torch.tensor([W, H], device=device)
+            scores = torch.ones((100,), device=device, dtype=torch.float32)
+            keypoints_norm = (keypoints / torch.tensor([W - 1, H - 1], device=device)) * 2 - 1
+        else:
+            wh_minus_one = torch.tensor([W - 1, H - 1], device=device, dtype=torch.float32)
+            keypoints = wh_minus_one * (keypoints_norm + 1) / 2
+
+        keypoints_batched = keypoints.unsqueeze(0)
+        with torch.no_grad():
+            descriptions = self.descriptor.forward(images)
+            sampled = F.grid_sample(
+                descriptions.float(),
+                keypoints_norm.unsqueeze(0).unsqueeze(1),
+                mode="bilinear",
+                align_corners=True,
+            )
+
+        return {
+            "keypoints": keypoints_batched,
+            "scores": scores.unsqueeze(0),
+            "descriptors": sampled[:, :, 0, :].detach(),
+        }
+
+
+class ALIKEDDedodeEncoder(nn.Module):
+    out_channels = 256
+    sparse = True
+
+    def __init__(self, cfg=None, **kwargs):
+        super().__init__()
+        self.cfg = cfg if cfg is not None else {}
+        self.max_keypoints = self._get_cfg_param("max_keypoints", 5000)
+        self.scores_th = self._get_cfg_param("scores_th", 0.2)
+        self.model_name = self._get_cfg_param("model_name", "aliked-n16rot")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        aliked_path = Path(
+            self._get_cfg_param(
+                "aliked_path",
+                "/home/minhnxh/Documents/VinRobotic/ALIKED",
+            )
+        )
+        weights_path = aliked_path / "models" / f"{self.model_name}.pth"
+        if not weights_path.exists():
+            raise FileNotFoundError(weights_path)
+
+        _prepare_external_repo_import(aliked_path)
+        from nets.aliked import ALIKED
+
+        self.detector = ALIKED(
+            model_name=self.model_name,
+            device=device,
+            top_k=self.max_keypoints,
+            scores_th=self.scores_th,
+            n_limit=self.max_keypoints,
+            load_pretrained=True,
+        )
+        self.detector.eval()
+
+        descriptor_type = self._get_cfg_param("descriptor_type", "B")
+        self.descriptor = get_descriptor(descriptor_type).to(device)
+        descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_B.pth"
+        if descriptor_type == "G":
+            descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_G.pth"
+        self.descriptor.load_state_dict(
+            torch.hub.load_state_dict_from_url(descriptor_url, map_location="cpu")
+        )
+
+        self.eval()
+
+    def forward(self, data):
+        return self.keypoint_features(data)
+
+    def _get_cfg_param(self, key, default):
+        if isinstance(self.cfg, dict):
+            return self.cfg.get(key, default)
+        return getattr(self.cfg, key, default)
+
+    def keypoint_features(self, data, n=0, generator=None):
+        assert not self.training
+
+        images = data["image"]
+        device = images.device
+        _, _, H, W = images.shape
+        max_n = n if n > 0 else self.max_keypoints
+
+        with torch.no_grad():
+            pred = self.detector(images)
+
+        keypoints_norm = pred["keypoints"][0].to(device=device, dtype=torch.float32)
+        scores = pred["scores"][0].to(device=device, dtype=torch.float32)
+
+        if max_n > 0 and keypoints_norm.shape[0] > max_n:
+            idx = torch.argsort(scores, descending=True)[:max_n]
+            keypoints_norm = keypoints_norm[idx]
+            scores = scores[idx]
+
+        if keypoints_norm.shape[0] == 0:
+            keypoints = torch.rand((100, 2), device=device) * torch.tensor([W, H], device=device)
+            scores = torch.ones((100,), device=device, dtype=torch.float32)
+            keypoints_norm = (keypoints / torch.tensor([W - 1, H - 1], device=device)) * 2 - 1
+        else:
+            wh_minus_one = torch.tensor([W - 1, H - 1], device=device, dtype=torch.float32)
+            keypoints = wh_minus_one * (keypoints_norm + 1) / 2
+
+        keypoints_batched = keypoints.unsqueeze(0)
+        with torch.no_grad():
+            descriptions = self.descriptor.forward(images)
+            sampled = F.grid_sample(
+                descriptions.float(),
+                keypoints_norm.unsqueeze(0).unsqueeze(1),
+                mode="bilinear",
+                align_corners=True,
+            )
+
+        return {
+            "keypoints": keypoints_batched,
+            "scores": scores.unsqueeze(0),
+            "descriptors": sampled[:, :, 0, :].detach(),
+        }
 
 class DiskDedodeEncoder(nn.Module):
     out_channels = 256
