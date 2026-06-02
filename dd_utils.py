@@ -277,6 +277,25 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
             conf_ns.grayscale = False
             conf_ns.resize_max = 1024
 
+        elif local_desc_model == "accelerated_features_dedode":
+            from custom_local_feats import AcceleratedFeaturesDedodeEncoder
+
+            encoder = AcceleratedFeaturesDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 5000,
+                    "detection_threshold": 0.05,
+                    "weights_path": "/home/minhnxh/Documents/VinRobotic/accelerated_features/weights/xfeat.pt",
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1600
+
         elif local_desc_model == "disk_dedode":
             from custom_local_feats import DiskDedodeEncoder
 

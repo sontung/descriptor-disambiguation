@@ -395,6 +395,105 @@ class R2D2DedodeEncoder(nn.Module):
         }
 
 
+class AcceleratedFeaturesDedodeEncoder(nn.Module):
+    out_channels = 256
+    sparse = True
+
+    def __init__(self, cfg=None, **kwargs):
+        super().__init__()
+        self.cfg = cfg if cfg is not None else {}
+        self.max_keypoints = self._get_cfg_param("max_keypoints", 5000)
+        self.detection_threshold = self._get_cfg_param("detection_threshold", 0.05)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        accelerated_features_path = Path(
+            self._get_cfg_param(
+                "accelerated_features_path",
+                "/home/minhnxh/Documents/VinRobotic/accelerated_features",
+            )
+        )
+        weights_path = Path(
+            self._get_cfg_param(
+                "weights_path",
+                accelerated_features_path / "weights" / "xfeat.pt",
+            )
+        )
+        if not weights_path.exists():
+            raise FileNotFoundError(weights_path)
+
+        af_path = str(accelerated_features_path)
+        if af_path not in sys.path:
+            sys.path.insert(0, af_path)
+
+        from modules.xfeat import XFeat
+
+        self.detector = XFeat(
+            weights=str(weights_path),
+            top_k=self.max_keypoints,
+            detection_threshold=self.detection_threshold,
+        )
+        self.detector = self.detector.eval().to(device)
+
+        descriptor_type = self._get_cfg_param("descriptor_type", "B")
+        self.descriptor = get_descriptor(descriptor_type).to(device)
+        descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_B.pth"
+        if descriptor_type == "G":
+            descriptor_url = "https://github.com/Parskatt/DeDoDe/releases/download/dedode_pretrained_models/dedode_descriptor_G.pth"
+        self.descriptor.load_state_dict(
+            torch.hub.load_state_dict_from_url(descriptor_url, map_location="cpu")
+        )
+
+        self.eval()
+
+    def forward(self, data):
+        return self.keypoint_features(data)
+
+    def _get_cfg_param(self, key, default):
+        if isinstance(self.cfg, dict):
+            return self.cfg.get(key, default)
+        return getattr(self.cfg, key, default)
+
+    def keypoint_features(self, data, n=0, generator=None):
+        assert not self.training
+
+        images = data["image"]
+        device = images.device
+        _, _, H, W = images.shape
+        max_n = n if n > 0 else self.max_keypoints
+
+        with torch.no_grad():
+            pred = self.detector.detectAndCompute(
+                images,
+                top_k=max_n,
+                detection_threshold=self.detection_threshold,
+            )[0]
+
+        keypoints = pred["keypoints"].to(device=device, dtype=torch.float32)
+        scores = pred["scores"].to(device=device, dtype=torch.float32)
+
+        if keypoints.shape[0] == 0:
+            keypoints = torch.rand((100, 2), device=device) * torch.tensor([W, H], device=device)
+            scores = torch.ones((100,), device=device, dtype=torch.float32)
+
+        keypoints_batched = keypoints.unsqueeze(0)
+        with torch.no_grad():
+            descriptions = self.descriptor.forward(images)
+            wh = torch.tensor([W, H], device=device, dtype=keypoints_batched.dtype)
+            kp_norm = (keypoints_batched / wh) * 2 - 1
+            sampled = F.grid_sample(
+                descriptions.float(),
+                kp_norm.unsqueeze(1),
+                mode="bilinear",
+                align_corners=False,
+            )
+
+        return {
+            "keypoints": keypoints_batched,
+            "scores": scores.unsqueeze(0),
+            "descriptors": sampled[:, :, 0, :].detach(),
+        }
+
+
 class DiskDedodeEncoder(nn.Module):
     out_channels = 256
     sparse = True
