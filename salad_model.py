@@ -3,6 +3,8 @@ import torchvision.transforms
 from PIL import Image
 import sys
 
+from torch import nn
+
 sys.path.append("../salad")
 from vpr_model import VPRModel as SaladVPR
 
@@ -51,6 +53,9 @@ class SaladModel:
         image_descriptor = self.model(image.unsqueeze(0).cuda())
         image_descriptor = image_descriptor.squeeze().cpu().numpy()  # 8448
         return image_descriptor
+
+
+
 
 
 if __name__ == '__main__':

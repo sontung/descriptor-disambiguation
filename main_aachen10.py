@@ -5,7 +5,7 @@ import numpy as np
 import dd_utils
 
 from dataset import AachenDataset10 as AachenDataset
-from trainer import Aachen10Trainer as BaseTrainer
+from trainer import Aachen10TrainerBD as BaseTrainer
 from main_robotcar import ABLATION_METHODS, ABLATION_METHODS_ORDER, ORDERS
 
 

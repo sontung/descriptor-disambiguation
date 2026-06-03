@@ -11,6 +11,7 @@ import h5py
 import numpy as np
 import poselib
 import torch
+from PIL import Image
 from pykdtree.kdtree import KDTree
 from sklearn.random_projection import GaussianRandomProjection
 from tqdm import tqdm
@@ -663,6 +664,196 @@ class Aachen10Trainer(BaseTrainer):
         features_h5.close()
         sfm_to_local_h5.close()
         return pid2mean_desc
+
+
+class Aachen10TrainerBD(BaseTrainer):
+    def collect_descriptors(self, vis=False):
+        features_h5 = self.load_local_features()
+        sfm_to_local_h5 = self.load_selected_local_features(features_h5)
+        pid2mean_desc = np.zeros(
+            (len(self.dataset.recon_points), self.feature_dim),
+            np.float64,
+        )
+        pid2count = np.zeros(len(self.dataset.recon_points))
+
+        pid2mean_desc, pid2ind = self.collect_descriptors_loop(
+            features_h5,
+            sfm_to_local_h5,
+            pid2mean_desc,
+            pid2count,
+            self.using_global_descriptors,
+        )
+        print(pid2mean_desc.shape)
+
+        self.xyz_arr = np.zeros((pid2mean_desc.shape[0], 3))
+        self.pid2ind = pid2ind
+        for pid in pid2ind:
+            self.xyz_arr[pid2ind[pid]] = self.dataset.xyz_arr[pid]
+
+        np.save(
+            f"output/{self.ds_name}/codebook-{self.local_desc_model_name}-bd.npy",
+            pid2mean_desc,
+        )
+        features_h5.close()
+        sfm_to_local_h5.close()
+        return pid2mean_desc
+
+    def collect_descriptors_loop(
+        self, features_h5, sfm_to_local_h5, pid2mean_desc, pid2count, using_global_desc
+    ):
+        bd_descriptors_meta = h5py.File("/home/vr/work/descriptor-disambiguation/output/db_metadata_mapping.h5", "r")
+        all_bd_descriptors = torch.load("/home/vr/work/descriptor-disambiguation/output/all_db_descriptors_matrix.pt")
+        all_bd_descriptors = all_bd_descriptors.numpy()
+        self.db_descriptors = all_bd_descriptors
+        im2mask = {}
+        for key_ in tqdm(bd_descriptors_meta):
+            meta = bd_descriptors_meta[key_]
+            im_name = meta["image_name"][()].decode('utf-8')
+            mask_pixels = meta["target_pixel"][:]
+            stem = Path(im_name).stem
+            im2mask.setdefault(stem, []).append([mask_pixels, key_])
+
+        pid2ind = {}
+        index_for_array = -1
+        for example_id, example in enumerate(
+            tqdm(self.dataset, desc="Collecting point descriptors")
+        ):
+            stem = Path(example[1]).stem
+            if stem not in im2mask:
+                continue
+            meta = im2mask[stem]
+
+            keypoints, descriptors = dd_utils.read_kp_and_desc(example[1], features_h5)
+            selected_pid, mask, ind = load_selected_features_for_img(
+                example[1], sfm_to_local_h5
+            )
+
+            selected_descriptors = descriptors[ind[mask]]
+            selected_keypoints = keypoints[ind[mask]]
+
+            image_ori = Image.open(example[1]).convert("RGB")
+            ORIG_W, ORIG_H = image_ori.size
+            y_indices, x_indices = np.indices((ORIG_W, ORIG_H))
+            ori_keypoints = np.stack([x_indices.ravel(), y_indices.ravel()], axis=1)
+            ori_keypoints[:, [0, 1]] = ori_keypoints[:, [1, 0]]
+            ori_keypoints_2 = []
+            bd_indices = []
+            for mask, bd_idx in meta:
+                ori_keypoints_2.append(ori_keypoints[mask])
+                bd_idx = int(bd_idx)
+                bd_indices.append([bd_idx]*np.sum(mask))
+
+            ori_keypoints_2 = np.vstack(ori_keypoints_2)
+            bd_indices = np.hstack(bd_indices)
+
+            tree = KDTree(ori_keypoints_2)
+            dis, indices0 = tree.query(selected_keypoints, k=1)
+            mask0 = dis < 1
+            bd_descriptors = all_bd_descriptors[bd_indices[indices0[mask0]]]
+            selected_keypoints = selected_keypoints[mask0]
+            selected_descriptors = selected_descriptors[mask0]
+            selected_pid = selected_pid[mask0]
+
+
+            selected_descriptors = combine_descriptors(
+                selected_descriptors, bd_descriptors, self.lambda_val
+            )
+
+            for idx, pid in enumerate(selected_pid):
+                if pid not in pid2ind:
+                    index_for_array += 1
+                    pid2ind[pid] = index_for_array
+
+            idx2 = [pid2ind[pid] for pid in selected_pid]
+            pid2mean_desc[idx2] += selected_descriptors
+            pid2count[idx2] += 1
+
+        index_for_array += 1
+        pid2mean_desc = pid2mean_desc[:index_for_array, :] / pid2count[
+            :index_for_array
+        ].reshape(-1, 1)
+        if pid2mean_desc.dtype != self.codebook_dtype:
+            pid2mean_desc = pid2mean_desc.astype(self.codebook_dtype)
+
+        if np.sum(np.isnan(pid2mean_desc)) > 0:
+            print(f"NaN detected in codebook: {np.sum(np.isnan(pid2mean_desc))}")
+
+        print(f"Codebook size: {round(sys.getsizeof(pid2mean_desc) / 1e9, 2)} GB")
+        print(f"Codebook dtype: {pid2mean_desc.dtype}")
+
+        self.query_bd_descriptors_meta = h5py.File("/home/vr/work/descriptor-disambiguation/output/query_metadata_mapping.h5", "r")
+        all_bd_descriptors = torch.load("/home/vr/work/descriptor-disambiguation/output/all_query_descriptors_matrix.pt")
+        self.query_bd_descriptors = all_bd_descriptors.numpy()
+        self.im2mask_query = {}
+        for key_ in tqdm(self.query_bd_descriptors_meta):
+            meta = self.query_bd_descriptors_meta[key_]
+            im_name = meta["image_name"][()].decode('utf-8')
+            mask_pixels = meta["target_pixel"][:]
+            stem = Path(im_name).stem
+            self.im2mask_query.setdefault(stem, []).append([mask_pixels, key_])
+
+        return pid2mean_desc, pid2ind
+
+    def return_faiss_indices(self):
+        index = faiss.IndexFlatL2(self.feature_dim)  # build the index
+        res = faiss.StandardGpuResources()
+        gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index)
+        gpu_index_flat.add(self.pid2mean_desc.astype(np.float32))
+
+        index2 = faiss.IndexFlatL2(256)  # build the index
+        res2 = faiss.StandardGpuResources()
+        gpu_index_flat_for_image_desc = faiss.index_cpu_to_gpu(res2, 0, index2)
+        gpu_index_flat_for_image_desc.add(self.db_descriptors.astype(np.float32))
+        print("Converting to DB descriptors")
+        print(
+            self.db_descriptors.shape,
+            self.db_descriptors.dtype,
+        )
+        return gpu_index_flat, gpu_index_flat_for_image_desc
+
+
+    def process_descriptor(
+        self, name, features_h5, global_features_h5, gpu_index_flat_for_image_desc=None
+    ):
+        """
+        process query descriptors only
+        """
+        keypoints, descriptors, scale = dd_utils.read_kp_and_desc(name, features_h5, return_scale=True)
+        img_stem = Path(name).stem
+        meta = self.im2mask_query[img_stem]
+
+        image_ori = Image.open(name).convert("RGB")
+        ORIG_W, ORIG_H = image_ori.size
+        y_indices, x_indices = np.indices((ORIG_W, ORIG_H))
+        ori_keypoints = np.stack([x_indices.ravel(), y_indices.ravel()], axis=1)
+        ori_keypoints[:, [0, 1]] = ori_keypoints[:, [1, 0]]
+        ori_keypoints_2 = []
+        bd_indices = []
+        for mask, bd_idx in meta:
+            ori_keypoints_2.append(ori_keypoints[mask])
+            bd_idx = int(bd_idx)
+            bd_indices.append([bd_idx] * np.sum(mask))
+
+        ori_keypoints_2 = np.vstack(ori_keypoints_2)
+        bd_indices = np.hstack(bd_indices)
+
+        tree = KDTree(ori_keypoints_2)
+        dis, indices0 = tree.query(keypoints, k=1)
+        mask0 = dis < 1
+        bd_descriptors = self.query_bd_descriptors[bd_indices[indices0[mask0]]]
+        keypoints = keypoints[mask0]
+        descriptors = descriptors[mask0]
+
+        if self.convert_to_db_desc:
+            _, ind = gpu_index_flat_for_image_desc.search(
+                bd_descriptors.astype(np.float32), 1
+            )
+            bd_descriptors = self.db_descriptors[ind.flatten()]
+
+        descriptors = combine_descriptors(
+            descriptors, bd_descriptors, self.lambda_val
+        )
+        return keypoints, descriptors, scale
 
 
 class RobotCarTrainer(BaseTrainer):

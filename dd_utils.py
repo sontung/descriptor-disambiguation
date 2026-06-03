@@ -218,6 +218,25 @@ def prepare_encoders(local_desc_model, retrieval_model, global_desc_dim):
 
             conf_ns = SimpleNamespace(**{**default_conf, **conf})
             encoder = XfeatModel()
+
+        elif local_desc_model == "superpoint_dedode":
+            from custom_local_feats import SuperPointDedodeEncoder
+
+            encoder = SuperPointDedodeEncoder(
+                {
+                    "descriptor_type": "B",
+                    "max_keypoints": 4096,
+                    "nms_radius": 3,
+                }
+            )
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            encoder = encoder.eval().to(device)
+
+            conf_ns = SimpleNamespace(**{**default_conf, **conf})
+            conf_ns.name = local_desc_model
+            conf_ns.grayscale = False
+            conf_ns.resize_max = 1024
+
         else:
             raise NotImplementedError
 
